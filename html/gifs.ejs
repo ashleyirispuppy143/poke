@@ -1,10 +1,23 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>pokegif</title>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+    <title>PokeGif - <%= query ? `Results for "${query}"` : 'Trending GIFs' %></title>
+    <link href="/css/yt-ukraine.svg?v=9" rel="icon">
+      
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="PokeGif!">
+    <meta property="og:description" content="Search all the Gifs u want! in a private way!">
+    <meta property="og:image" content="/static/poke-embed.webp">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:title" content="PokeGif!">
+    <meta property="twitter:description" content="Search all the Gifs u want! in a private way!">
+    <meta name="twitter:image" content="/static/poke-embed.webp">
+    
     <script>document.documentElement.classList.add('js-enabled');</script>
     <style>
     
@@ -43,14 +56,14 @@
   );
 }
 
-   @font-face {
-      font-family: "PokeTube Flex";
-      src: url("/static/robotoflex.ttf");
-      font-style: normal;
-      font-stretch: 1% 800%;
-      font-display: swap;
-    }
-    
+@font-face {
+  font-family: "PokeTube Flex";
+  src: url("/static/robotoflex.ttf");
+  font-style: normal;
+  font-stretch: 1% 800%;
+  font-display: swap;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -91,17 +104,24 @@ a {
 .js-enabled .no-js-pagination {
   display: none !important;
 }
-.material-symbols-outlined {
-  font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 24;
-  font-size: 20px;
-  user-select: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+
+ .svg-icon {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
 }
-.material-symbols-outlined.filled {
-  font-variation-settings: "FILL" 1, "wght" 500, "GRAD" 0, "opsz" 24;
+.svg-icon-large {
+  width: 24px;
+  height: 24px;
 }
+.svg-icon-xl {
+  width: 40px;
+  height: 40px;
+}
+
 .navbar {
   position: fixed;
   top: 0;
@@ -208,10 +228,10 @@ a {
   color: var(--md-on-primary-container);
   border-color: transparent;
 }
-.fav-nav-btn .material-symbols-outlined {
+.fav-nav-btn .svg-icon {
   color: var(--md-primary);
 }
-.fav-nav-btn.active .material-symbols-outlined {
+.fav-nav-btn.active .svg-icon {
   color: var(--md-on-primary-container);
 }
 .fav-badge {
@@ -235,7 +255,8 @@ a {
 }
 .hero-title {
   font-size: clamp(28px, 4vw, 40px);
-  font-weight: 600;
+  font-weight: 700;
+  font-stretch: 200%; 
   margin-bottom: 20px;
   letter-spacing: -0.5px;
   color: var(--md-text-main);
@@ -263,7 +284,6 @@ a {
 #hero-search-container .leading-icon {
   color: var(--md-text-sub);
   margin-right: 14px;
-  font-size: 24px;
 }
 #hero-search-container input[type="text"] {
   flex-grow: 1;
@@ -310,6 +330,7 @@ input::placeholder {
   padding: 0 18px;
   font-size: 13px;
 }
+
 .categories-wrapper {
   padding: 8px 32px 16px;
   max-width: 1600px;
@@ -732,7 +753,6 @@ input::placeholder {
 .m3-btn-filled {
   background: var(--md-primary);
   color: var(--md-on-primary);
-  grid-column: span 2;
 }
 .m3-btn-filled:hover {
   filter: brightness(1.06);
@@ -778,8 +798,9 @@ input::placeholder {
   align-items: center;
   gap: 5px;
 }
-.meta-card-label .material-symbols-outlined {
-  font-size: 15px;
+.meta-card-label .svg-icon {
+  width: 16px;
+  height: 16px;
   color: var(--md-primary);
 }
 .meta-card-value {
@@ -854,8 +875,7 @@ input::placeholder {
   padding: 32px 24px;
   text-align: center;
 }
-.empty-state-box .material-symbols-outlined {
-  font-size: 40px;
+.empty-state-box .svg-icon {
   color: var(--md-primary);
   margin-bottom: 12px;
 }
@@ -919,16 +939,16 @@ input::placeholder {
 <body>
     <nav class="navbar" id="main-navbar">
         <a href="/gifs" class="navbar-brand" title="Home">
-            <img src="/css/poke-logo-pride.svg?v=5" alt="poketenor">
+            <img src="/css/poke-logo-pride.svg?v=5" alt="pokegif">
         </a>
         <form id="navbar-search" action="/gifs" method="GET">
-            <span class="material-symbols-outlined search-icon">search</span>
+            <svg class="svg-icon search-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
             <input type="text" name="q" id="nav_search_input" placeholder="Search GIFs..." value="<%= query %>">
             <button type="submit" class="search-btn">Search</button>
         </form>
         <div class="navbar-actions">
             <button class="fav-nav-btn js-only" id="nav-fav-btn" onclick="showFavs()">
-                <span class="material-symbols-outlined filled">favorite</span>
+                <svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
                 <span>Favs</span>
                 <span class="fav-badge" id="fav-count-badge">0</span>
             </button>
@@ -936,9 +956,9 @@ input::placeholder {
     </nav>
 
     <div class="hero-section" id="hero-section">
-        <h2 class="hero-title">Find the perfect GIF</h2>
+        <h2 class="hero-title">Find ALL THE Gifs!</h2>
         <form id="hero-search-container" action="/gifs" method="GET">
-            <span class="material-symbols-outlined leading-icon">search</span>
+            <svg class="svg-icon leading-icon svg-icon-large" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
             <input type="text" name="q" id="search_input" placeholder="Search millions of GIFs..." value="<%= query %>">
             <button type="submit" class="search-btn">Search</button>
         </form>
@@ -948,13 +968,13 @@ input::placeholder {
         <div id="categories-container">
             <div id="static-categories">
                 <a href="/gifs" class="chip <%= !query ? 'active' : '' %>" id="chip-trending">
-                    <span class="material-symbols-outlined">local_fire_department</span>
+                    <svg class="svg-icon" viewBox="0 0 24 24"><path d="M16.85 10.39c.64 1.13.9 2.37.75 3.66-.23 1.95-1.35 3.59-3.08 4.44C13 19.16 11.39 19.46 9.8 19 8.24 18.55 7 17.5 6.38 16.03c-.63-1.5-.54-3.11.23-4.53.77-1.42 1.96-2.4 3.4-2.82l.46-.14-.24.41c-.4.71-.56 1.48-.48 2.22.06.6.3 1.16.7 1.63l.63.74.32-.9c.47-1.32 1.34-2.39 2.52-3.07.12-.07.25-.13.38-.19l-.39.11zM12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14c-2.21 0-4-1.79-4-4 0-1.85 1.28-3.41 3-3.86v-.14c0 1.1.9 2 2 2 1.1 0 2-.9 2-2 1.72.45 3 2.01 3 3.86 0 2.21-1.79 4-4 4z"/></svg>
                     Trending
                 </a>
                 <div class="dropdown">
                     <div class="chip chip-pride <%= query && ['pride','lesbian','gay','transgender','bisexual','pansexual','asexual','non-binary','queer','lgbtq+'].includes(query.toLowerCase()) ? 'active' : '' %>">
                         Pride
-                        <span class="material-symbols-outlined" style="font-size: 18px;">expand_more</span>
+                        <svg class="svg-icon" style="margin-left:4px;width:18px;height:18px;" viewBox="0 0 24 24"><path d="M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6z"/></svg>
                     </div>
                     <div class="dropdown-content">
                         <a href="/gifs?q=Pride">Pride Collection</a>
@@ -1007,13 +1027,13 @@ input::placeholder {
                         <div class="gif-overlay"><%= title %></div>
                     </a>
                     <button class="card-fav-btn js-only" data-gif-id="<%= gif.id %>" onclick="toggleFavorite(<%= JSON.stringify(gif) %>, event)">
-                        <span class="material-symbols-outlined">favorite</span>
+                        <svg class="svg-icon" viewBox="0 0 24 24"><path d="M16.5 3c-1.74 0-3.41.81-4.5 2.09C10.91 3.81 9.24 3 7.5 3 4.42 3 2 5.42 2 8.5c0 3.78 3.4 6.86 8.55 11.54L12 21.35l1.45-1.32C18.6 15.36 22 12.28 22 8.5 22 5.42 19.58 3 16.5 3zm-4.4 15.55l-.1.1-.1-.1C7.14 14.24 4 11.39 4 8.5 4 6.5 5.5 5 7.5 5c1.54 0 3.04.99 3.57 2.36h1.87C13.46 5.99 14.96 5 16.5 5c2 0 3.5 1.5 3.5 3.5 0 2.89-3.14 5.74-7.9 10.05z"/></svg>
                     </button>
                 </div>
             <% }); %>
         <% } else { %>
-            <div class="empty-state-box" style="margin-top: 40px;">
-                <span class="material-symbols-outlined">sentiment_dissatisfied</span>
+            <div class="empty-state-box" style="margin-top: 40px; grid-column: 1/-1;">
+                <svg class="svg-icon svg-icon-xl" viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm4.18-12.24l-1.06 1.06-1.06-1.06L13 8.82l1.06 1.06L15.12 11l1.06-1.06 1.06 1.06 1.06-1.06-1.12-1.12zM7.76 8.82l-1.06-1.06L5.64 8.82 4.58 7.76l1.06-1.06 1.06 1.06 1.06-1.06 1.06 1.06-1.06 1.06zM12 13.5c-2.33 0-4.31 1.46-5.11 3.5h10.22c-.8-2.04-2.78-3.5-5.11-3.5z"/></svg>
                 <p>No GIFs found. Try another search!</p>
             </div>
         <% } %>
@@ -1033,7 +1053,7 @@ input::placeholder {
     <% } %>
 
     <div id="toast">
-        <span class="material-symbols-outlined" style="font-size: 20px;">check_circle</span>
+        <svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
         <span id="toast-text">Copied to clipboard!</span>
     </div>
 
@@ -1047,20 +1067,24 @@ input::placeholder {
                     <div class="modal-top-bar">
                         <h3 id="modal-title">Loading...</h3>
                         <button class="icon-btn" onclick="closeModal()" title="Close">
-                            <span class="material-symbols-outlined">close</span>
+                            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
                         </button>
                     </div>
                     <div class="modal-actions-grid" style="margin-top: 20px;">
                         <button class="m3-btn m3-btn-filled" onclick="copyDirectGifFromModal()">
-                            <span class="material-symbols-outlined">content_copy</span>
-                            Copy GIF Link
+                            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                            Copy Link
+                        </button>
+                        <button class="m3-btn m3-btn-filled" onclick="copyProxiedGifFromModal()">
+                            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
+                            Copy Proxy Link
                         </button>
                         <button class="m3-btn m3-btn-tonal" id="modal-download-btn" onclick="downloadCurrentGif()">
-                            <span class="material-symbols-outlined">download</span>
+                            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                             Download
                         </button>
                         <button class="m3-btn m3-btn-tonal" id="modal-fav-btn" onclick="toggleFavFromModal()">
-                            <span class="material-symbols-outlined" id="modal-fav-icon">favorite</span>
+                            <svg class="svg-icon" id="modal-fav-icon" viewBox="0 0 24 24"><path d="M16.5 3c-1.74 0-3.41.81-4.5 2.09C10.91 3.81 9.24 3 7.5 3 4.42 3 2 5.42 2 8.5c0 3.78 3.4 6.86 8.55 11.54L12 21.35l1.45-1.32C18.6 15.36 22 12.28 22 8.5 22 5.42 19.58 3 16.5 3zm-4.4 15.55l-.1.1-.1-.1C7.14 14.24 4 11.39 4 8.5 4 6.5 5.5 5 7.5 5c1.54 0 3.04.99 3.57 2.36h1.87C13.46 5.99 14.96 5 16.5 5c2 0 3.5 1.5 3.5 3.5 0 2.89-3.14 5.74-7.9 10.05z"/></svg>
                             <span id="modal-fav-label">Favorite</span>
                         </button>
                     </div>
@@ -1069,15 +1093,15 @@ input::placeholder {
                     <div class="metadata-section-label">Details</div>
                     <div class="metadata-grid">
                         <div class="meta-card">
-                            <span class="meta-card-label"><span class="material-symbols-outlined">hard_drive</span>Size</span>
+                            <span class="meta-card-label"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M20 13H4c-1.1 0-2 .9-2 2v4c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2v-4c0-1.1-.9-2-2-2zM7 19c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zM20 3H4c-1.1 0-2 .9-2 2v4c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM7 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>Size</span>
                             <span class="meta-card-value" id="meta-size">--</span>
                         </div>
                         <div class="meta-card">
-                            <span class="meta-card-label"><span class="material-symbols-outlined">aspect_ratio</span>Dimensions</span>
+                            <span class="meta-card-label"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-7-9h5V8h-5v2zm-5 5h5v-2H7v2z"/></svg>Dimensions</span>
                             <span class="meta-card-value" id="meta-dims">--</span>
                         </div>
                         <div class="meta-card">
-                            <span class="meta-card-label"><span class="material-symbols-outlined">gif_box</span>Format</span>
+                            <span class="meta-card-label"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7.5 11h-2v-1h2v1H10v-3h1.5v1h-1v1h1v1zm3-3H13v4h-1.5v-4h3v1zm3-1h-3v4h1.5v-1h1v-1h-1v-1h1.5v-1z"/></svg>Format</span>
                             <span class="meta-card-value">GIF</span>
                         </div>
                     </div>
@@ -1111,7 +1135,9 @@ input::placeholder {
         window.addEventListener('DOMContentLoaded', () => {
             loadFavoritesFromStorage();
             updateFavButtonsInDOM();
-            observer.observe(document.getElementById('scroll-sentinel'));
+            
+            const sentinel = document.getElementById('scroll-sentinel');
+            if (sentinel) observer.observe(sentinel);
         });
 
         window.addEventListener('scroll', () => {
@@ -1120,6 +1146,68 @@ input::placeholder {
             if (window.scrollY > heroSection.offsetHeight - 60) navbar.classList.add('scrolled');
             else navbar.classList.remove('scrolled');
         });
+
+         function performSearch(query, updateUrl = true) {
+            currentSearchTerm = query;
+            currentSearchMode = query ? "search" : "trending";
+            nextPosition = "";
+
+            if (updateUrl) {
+                const url = query ? `/gifs?q=${encodeURIComponent(query)}` : '/gifs';
+                history.pushState({ query }, '', url);
+            }
+
+            document.getElementById('search_input').value = query;
+            document.getElementById('nav_search_input').value = query;
+            document.getElementById('page-title').innerText = query ? `Results for "${query}"` : 'Trending GIFs';
+            
+            document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+            if (!query) document.getElementById('chip-trending').classList.add('active');
+            else {
+                Array.from(document.querySelectorAll('.chip')).find(c => {
+                    if (c.textContent.trim().toLowerCase() === query.toLowerCase()) c.classList.add('active');
+                });
+            }
+            document.getElementById('nav-fav-btn').classList.remove('active');
+
+            const container = document.getElementById('gif_container');
+            container.innerHTML = "";
+            document.getElementById('scroll-sentinel').style.display = "block";
+            
+            fetchMoreGifs();
+        }
+
+        document.getElementById('navbar-search').addEventListener('submit', function(e) {
+            e.preventDefault();
+            performSearch(this.q.value.trim());
+        });
+        document.getElementById('hero-search-container').addEventListener('submit', function(e) {
+            e.preventDefault();
+            performSearch(this.q.value.trim());
+        });
+
+        document.querySelectorAll('a.chip, .dropdown-content a').forEach(a => {
+            a.addEventListener('click', function(e) {
+                e.preventDefault();
+                const href = this.getAttribute('href');
+                if (href) {
+                    const urlObj = new URL(href, window.location.origin);
+                    const q = urlObj.searchParams.get('q') || "";
+                    performSearch(q);
+                }
+            });
+        });
+
+        window.addEventListener('popstate', function(e) {
+            const urlObj = new URL(window.location.href);
+            const q = urlObj.searchParams.get('q') || "";
+            performSearch(q, false);
+        });
+
+        function getHeartSVG(isFav) {
+            if (isFav) return `<svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
+            return `<svg class="svg-icon" viewBox="0 0 24 24"><path d="M16.5 3c-1.74 0-3.41.81-4.5 2.09C10.91 3.81 9.24 3 7.5 3 4.42 3 2 5.42 2 8.5c0 3.78 3.4 6.86 8.55 11.54L12 21.35l1.45-1.32C18.6 15.36 22 12.28 22 8.5 22 5.42 19.58 3 16.5 3zm-4.4 15.55l-.1.1-.1-.1C7.14 14.24 4 11.39 4 8.5 4 6.5 5.5 5 7.5 5c1.54 0 3.04.99 3.57 2.36h1.87C13.46 5.99 14.96 5 16.5 5c2 0 3.5 1.5 3.5 3.5 0 2.89-3.14 5.74-7.9 10.05z"/></svg>`;
+        }
 
         function loadFavoritesFromStorage() {
             try {
@@ -1143,13 +1231,13 @@ input::placeholder {
                 const id = btn.getAttribute('data-gif-id');
                 const isFav = isGifFavorited(id);
                 btn.classList.toggle('is-fav', isFav);
-                btn.querySelector('.material-symbols-outlined').classList.toggle('filled', isFav);
+                btn.innerHTML = getHeartSVG(isFav);
             });
         }
 
         function toggleFavorite(gifData, event) {
             if (event) event.stopPropagation();
-            event.preventDefault();
+            if (event && event.preventDefault) event.preventDefault();
             if (!gifData || !gifData.id) return;
             const idx = favoriteGifs.findIndex(item => String(item.id) === String(gifData.id));
             let nowFav = false;
@@ -1180,7 +1268,7 @@ input::placeholder {
             document.getElementById("scroll-sentinel").style.display = "none";
             
             if (favoriteGifs.length === 0) {
-                container.innerHTML = `<div class="empty-state-box" style="margin-top: 40px; grid-column: 1/-1;"><span class="material-symbols-outlined">favorite</span><p>No favorite GIFs yet.</p></div>`;
+                container.innerHTML = `<div class="empty-state-box" style="margin-top: 40px; grid-column: 1/-1;"><svg class="svg-icon svg-icon-xl" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg><p>No favorite GIFs yet.</p></div>`;
                 return;
             }
             
@@ -1201,6 +1289,7 @@ input::placeholder {
         }
 
         function fetchMoreGifs() {
+            if (isFetching) return;
             isFetching = true;
             document.getElementById("loading").style.display = "block";
             
@@ -1212,15 +1301,26 @@ input::placeholder {
                 .then(res => res.json())
                 .then(data => {
                     const container = document.getElementById("gif_container");
-                    (data.results || []).forEach(gif => {
-                        if(!gif.media || !gif.media[0]) return;
-                        const title = getTitleJS(gif);
-                        const tinyUrl = gif.media[0].tinygif ? gif.media[0].tinygif.url : gif.media[0].gif.url;
-                        const fullUrl = gif.media[0].gif ? gif.media[0].gif.url : tinyUrl;
-                        container.appendChild(createGifCard(gif, title, tinyUrl, fullUrl));
-                    });
+                    const existingEmpty = container.querySelector('.empty-state-box');
+                    if (existingEmpty) existingEmpty.remove();
+
+                    const results = data.results || [];
+                    if (results.length === 0 && !nextPosition) {
+                        container.innerHTML = `<div class="empty-state-box" style="margin-top: 40px; grid-column: 1/-1;"><svg class="svg-icon svg-icon-xl" viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm4.18-12.24l-1.06 1.06-1.06-1.06L13 8.82l1.06 1.06L15.12 11l1.06-1.06 1.06 1.06 1.06-1.06-1.12-1.12zM7.76 8.82l-1.06-1.06L5.64 8.82 4.58 7.76l1.06-1.06 1.06 1.06 1.06-1.06 1.06 1.06-1.06 1.06zM12 13.5c-2.33 0-4.31 1.46-5.11 3.5h10.22c-.8-2.04-2.78-3.5-5.11-3.5z"/></svg><p>No GIFs found. Try another search!</p></div>`;
+                    } else {
+                        results.forEach(gif => {
+                            if(!gif.media || !gif.media[0]) return;
+                            const title = getTitleJS(gif);
+                            const tinyUrl = gif.media[0].tinygif ? gif.media[0].tinygif.url : gif.media[0].gif.url;
+                            const fullUrl = gif.media[0].gif ? gif.media[0].gif.url : tinyUrl;
+                            container.appendChild(createGifCard(gif, title, tinyUrl, fullUrl));
+                        });
+                    }
+
                     nextPosition = data.next || "";
-                    if (!nextPosition || nextPosition === "0") document.getElementById("scroll-sentinel").style.display = "none";
+                    if (!nextPosition || nextPosition === "0" || results.length === 0) document.getElementById("scroll-sentinel").style.display = "none";
+                    else document.getElementById("scroll-sentinel").style.display = "block";
+                    
                     updateFavButtonsInDOM();
                     isFetching = false;
                     document.getElementById("loading").style.display = "none";
@@ -1236,7 +1336,7 @@ input::placeholder {
             div.className = "gif-card";
             
             const a = document.createElement("a");
-            a.href = MEDIA_PROXY + fullUrl;
+            a.href = fullUrl;
             a.target = "_blank";
             a.className = "gif-link";
             a.onclick = (e) => handleModalOpen(e, gif, title);
@@ -1253,7 +1353,7 @@ input::placeholder {
             const btn = document.createElement("button");
             btn.className = "card-fav-btn js-only";
             btn.setAttribute("data-gif-id", gif.id);
-            btn.innerHTML = `<span class="material-symbols-outlined">favorite</span>`;
+            btn.innerHTML = getHeartSVG(false);
             btn.onclick = (e) => toggleFavorite(gif, e);
             
             a.appendChild(img);
@@ -1282,7 +1382,7 @@ input::placeholder {
         }
 
         function handleModalOpen(e, gif, title) {
-            e.preventDefault();
+            if (e && e.preventDefault) e.preventDefault();
             currentModalGif = gif;
             currentModalTitle = title;
             const fullObj = (gif.media && gif.media[0] && gif.media[0].gif) ? gif.media[0].gif : gif.media[0].tinygif;
@@ -1300,7 +1400,7 @@ input::placeholder {
                 const b = document.createElement("button");
                 b.className = "tag-chip";
                 b.innerHTML = `#${tag}`;
-                b.onclick = () => window.location.href = `/gifs?q=${encodeURIComponent(tag)}`;
+                b.onclick = () => performSearch(tag);
                 tagsCont.appendChild(b);
             });
             
@@ -1312,7 +1412,7 @@ input::placeholder {
         function updateModalFavButtonState(isFav) {
             const btn = document.getElementById("modal-fav-btn");
             btn.classList.toggle("is-fav", isFav);
-            document.getElementById("modal-fav-icon").classList.toggle("filled", isFav);
+            btn.querySelector('svg').outerHTML = getHeartSVG(isFav);
             document.getElementById("modal-fav-label").innerText = isFav ? "Favorited" : "Favorite";
         }
 
@@ -1330,11 +1430,19 @@ input::placeholder {
             if (e.target.id === 'gif-modal') closeModal();
         }
 
-   function copyDirectGifFromModal() {
+        function copyDirectGifFromModal() {
             if (!currentModalGif) return;
             const url = (currentModalGif.media && currentModalGif.media[0] && currentModalGif.media[0].gif) ? currentModalGif.media[0].gif.url : currentModalGif.url;
             if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(url).then(() => showToast("Copied GIF link!")).catch(() => fallbackCopy(url));
+                navigator.clipboard.writeText(url).then(() => showToast("Copied original link!")).catch(() => fallbackCopy(url));
+            } else fallbackCopy(url);
+        }
+
+        function copyProxiedGifFromModal() {
+            if (!currentModalGif) return;
+            const url = MEDIA_PROXY + ((currentModalGif.media && currentModalGif.media[0] && currentModalGif.media[0].gif) ? currentModalGif.media[0].gif.url : currentModalGif.url);
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(() => showToast("Copied proxy link!")).catch(() => fallbackCopy(url));
             } else fallbackCopy(url);
         }
 
@@ -1343,7 +1451,7 @@ input::placeholder {
             temp.value = text;
             document.body.appendChild(temp);
             temp.select();
-            try { document.execCommand("copy"); showToast("Copied GIF link!"); } catch (e) {}
+            try { document.execCommand("copy"); showToast("Copied link!"); } catch (e) {}
             document.body.removeChild(temp);
         }
 
@@ -1377,5 +1485,5 @@ input::placeholder {
 
         document.addEventListener('keydown', (e) => { if (e.key === "Escape") closeModal(); });
     </script>
-</body>
+</body> 
 </html>
