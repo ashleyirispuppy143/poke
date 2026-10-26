@@ -688,6 +688,7 @@ app.get("/playlist", async function (req, res) {
 app.get("/gifs", async function (req, res) {
     const query = req.query.q || "";
     const pos = req.query.pos || "";
+    const mediaproxy = config.media_proxy;
     const API_KEY = "3Z0688EVWYKH";
     const LIMIT = 30;
     const searchAliases = { "yaoi": "boys kissing anime" };
@@ -712,9 +713,9 @@ app.get("/gifs", async function (req, res) {
         const next = gifsData.next || "";
         const categories = (catsData.tags || []).slice(0, 15).map(t => t.searchterm);
 
-        renderTemplate(res, req, "gifs.ejs", { p, mediaproxy, results, categories, query, next });
+        renderTemplate(res, req, "gifs.ejs", { mediaproxy, results, categories, query, next });
     } catch (error) {
-        renderTemplate(res, req, "gifs.ejs", { p, mediaproxy, results: [], categories: [], query, next: "" });
+        renderTemplate(res, req, "gifs.ejs", { mediaproxy, results: [], categories: [], query, next: "" });
     }
 });
 
