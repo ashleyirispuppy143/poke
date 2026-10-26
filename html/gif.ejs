@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>pokegif test</title>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+    <script>document.documentElement.classList.add('js-enabled');</script>
+    <style>
+    
+:root {
+  --md-bg: #161113;
+  --md-surface: #22191c;
+  --md-surface-low: #1d1518;
+  --md-surface-container: #2b2124;
+  --md-surface-high: #362a2e;
+  --md-surface-highest: #423539;
+  --md-primary: #ffb1c4;
+  --md-on-primary: #541d2e;
+  --md-primary-container: #703344;
+  --md-on-primary-container: #ffd9e1;
+  --md-secondary-container: #432c33;
+  --md-on-secondary-container: #f9dbe2;
+  --md-text-main: #eedfe2;
+  --md-text-sub: #d5c2c6;
+  --md-outline: #9e8c90;
+  --md-outline-variant: #524346;
+  --radius-xl: 28px;
+  --radius-lg: 24px;
+  --radius-md: 16px;
+  --radius-pill: 100px;
+  --ease-expressive: cubic-bezier(0.2, 0, 0, 1);
+  --rainbow-grad: linear-gradient(
+    90deg,
+    #ff3b30,
+    #ff9500,
+    #ffcc00,
+    #4cd964,
+    #5ac8fa,
+    #007aff,
+    #5856d6,
+    #ff2d55
+  );
+}
+
+   @font-face {
+      font-family: "PokeTube Flex";
+      src: url("/static/robotoflex.ttf");
+      font-style: normal;
+      font-stretch: 1% 800%;
+      font-display: swap;
+    }
+    
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+::-webkit-scrollbar {
+  width: 8px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--md-bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--md-surface-highest);
+  border-radius: var(--radius-pill);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--md-outline);
+}
+body {
+  font-family: "PokeTube Flex", system-ui, -apple-system, sans-serif;
+  background-color: var(--md-bg);
+  color: var(--md-text-main);
+  overflow-y: scroll;
+  -webkit-font-smoothing: antialiased;
+}
+a {
+  text-decoration: none;
+  color: inherit;
+}
+.js-only {
+  display: none !important;
+}
+.js-enabled .js-only {
+  display: inline-flex !important;
+}
+.js-enabled .no-js-pagination {
+  display: none !important;
+}
+.material-symbols-outlined {
+  font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 24;
+  font-size: 20px;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.material-symbols-outlined.filled {
+  font-variation-settings: "FILL" 1, "wght" 500, "GRAD" 0, "opsz" 24;
+}
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 76px;
+  background-color: rgba(22, 17, 19, 0.82);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding: 0 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  z-index: 1000;
+  transition: background-color 0.25s var(--ease-expressive),
+    box-shadow 0.25s var(--ease-expressive);
+}
+.navbar.scrolled {
+  background-color: rgba(34, 25, 28, 0.94);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+}
+.navbar-brand {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius-pill);
+  transition: background-color 0.2s var(--ease-expressive);
+  flex-shrink: 0;
+}
+.navbar-brand:hover {
+  background-color: var(--md-surface-container);
+}
+.navbar-brand img {
+  height: 34px;
+  display: block;
+}
+#navbar-search {
+  display: flex;
+  align-items: center;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px) scale(0.98);
+  transition: all 0.3s var(--ease-expressive);
+  background: var(--md-surface-container);
+  border-radius: var(--radius-pill);
+  padding: 4px 6px 4px 16px;
+  width: 100%;
+  max-width: 460px;
+  border: 1px solid transparent;
+}
+#navbar-search:focus-within {
+  background: var(--md-surface-high);
+  border-color: var(--md-primary);
+}
+.navbar.scrolled #navbar-search {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+#navbar-search .search-icon {
+  color: var(--md-text-sub);
+  margin-right: 10px;
+}
+#navbar-search input {
+  background: transparent;
+  border: none;
+  color: var(--md-text-main);
+  padding: 8px 0;
+  font-size: 14px;
+  font-family: inherit;
+  width: 100%;
+  outline: none;
+}
+.navbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.fav-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 18px;
+  border-radius: var(--radius-pill);
+  background-color: var(--md-surface-container);
+  color: var(--md-text-main);
+  border: 1px solid var(--md-outline-variant);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s var(--ease-expressive);
+}
+.fav-nav-btn:hover {
+  background-color: var(--md-surface-high);
+}
+.fav-nav-btn.active {
+  background-color: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+  border-color: transparent;
+}
+.fav-nav-btn .material-symbols-outlined {
+  color: var(--md-primary);
+}
+.fav-nav-btn.active .material-symbols-outlined {
+  color: var(--md-on-primary-container);
+}
+.fav-badge {
+  background-color: var(--md-primary);
+  color: var(--md-on-primary);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  min-width: 22px;
+  text-align: center;
+}
+.hero-section {
+  padding: 108px 24px 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 820px;
+  margin: 0 auto;
+}
+.hero-title {
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 600;
+  margin-bottom: 20px;
+  letter-spacing: -0.5px;
+  color: var(--md-text-main);
+}
+#hero-search-container {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 680px;
+  height: 60px;
+  background: var(--md-surface-container);
+  border-radius: var(--radius-pill);
+  padding: 6px 8px 6px 22px;
+  transition: all 0.25s var(--ease-expressive);
+  border: 2px solid transparent;
+}
+#hero-search-container:hover {
+  background: var(--md-surface-high);
+}
+#hero-search-container:focus-within {
+  background: var(--md-surface-high);
+  border-color: var(--md-primary);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+}
+#hero-search-container .leading-icon {
+  color: var(--md-text-sub);
+  margin-right: 14px;
+  font-size: 24px;
+}
+#hero-search-container input[type="text"] {
+  flex-grow: 1;
+  font-size: 16px;
+  font-family: inherit;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--md-text-main);
+  font-weight: 400;
+  min-width: 0;
+}
+input::placeholder {
+  color: var(--md-text-sub);
+  opacity: 0.8;
+}
+.search-btn {
+  height: 44px;
+  padding: 0 24px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  border: none;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s var(--ease-expressive);
+  flex-shrink: 0;
+}
+.search-btn:hover {
+  filter: brightness(1.06);
+  box-shadow: 0 4px 12px rgba(255, 177, 196, 0.25);
+}
+.search-btn:active {
+  transform: scale(0.96);
+}
+#navbar-search .search-btn {
+  height: 36px;
+  padding: 0 18px;
+  font-size: 13px;
+}
+.categories-wrapper {
+  padding: 8px 32px 16px;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+#categories-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+#static-categories {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+#dynamic-categories {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-grow: 1;
+  padding: 4px 16px 4px 2px;
+}
+#dynamic-categories::-webkit-scrollbar {
+  display: none;
+}
+.chip {
+  height: 40px;
+  padding: 0 18px;
+  background-color: var(--md-surface-low);
+  color: var(--md-text-sub);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s var(--ease-expressive);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  outline: none;
+  user-select: none;
+  text-decoration: none;
+}
+.chip:hover {
+  background-color: var(--md-surface-container);
+  color: var(--md-text-main);
+}
+.chip:active {
+  transform: scale(0.96);
+}
+.chip.active {
+  background-color: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  border-color: transparent;
+  border-radius: var(--radius-pill);
+  padding: 0 20px;
+}
+.dropdown {
+  position: relative;
+  display: inline-flex;
+}
+.dropdown-content {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  background-color: var(--md-surface-high);
+  min-width: 220px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  border-radius: 20px;
+  border: 1px solid var(--md-outline-variant);
+  z-index: 300;
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 8px;
+}
+.dropdown-content a {
+  color: var(--md-text-main);
+  padding: 10px 16px;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 12px;
+  transition: background-color 0.15s ease;
+}
+.dropdown-content a:hover {
+  background-color: var(--md-surface-highest);
+  color: var(--md-primary);
+}
+.dropdown:hover .dropdown-content {
+  display: block;
+  animation: menuAppear 0.2s var(--ease-expressive) forwards;
+  transform-origin: top left;
+}
+@keyframes menuAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.chip-pride {
+  position: relative;
+  background-clip: padding-box;
+  border: 1px solid transparent;
+}
+.chip-pride::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  margin: -1px;
+  border-radius: inherit;
+  background: var(--rainbow-grad);
+  opacity: 0.65;
+  transition: opacity 0.25s;
+}
+.chip-pride:hover::before,
+.chip-pride.active::before {
+  opacity: 1;
+}
+.section-header {
+  max-width: 1600px;
+  margin: 8px auto 18px;
+  padding: 0 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+#page-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--md-text-main);
+  letter-spacing: -0.2px;
+  text-transform: capitalize;
+}
+#gif_container {
+  column-count: 4;
+  column-gap: 16px;
+  padding: 0 32px 48px;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+.gif-card {
+  position: relative;
+  background-color: var(--md-surface-container);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: transform 0.28s var(--ease-expressive),
+    box-shadow 0.28s var(--ease-expressive),
+    border-radius 0.28s var(--ease-expressive);
+  break-inside: avoid;
+  margin-bottom: 16px;
+  display: block;
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+.gif-link {
+  display: block;
+  cursor: pointer;
+  width: 100%;
+}
+.gif-card img {
+  width: 100%;
+  height: auto;
+  display: block;
+  min-height: 110px;
+  object-fit: cover;
+}
+.gif-card:hover {
+  transform: translateY(-4px) scale(1.01);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45);
+  border-color: var(--md-outline-variant);
+  z-index: 2;
+}
+.gif-card:active {
+  transform: scale(0.98);
+}
+.card-fav-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(22, 17, 19, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.85);
+  transition: all 0.2s var(--ease-expressive);
+  z-index: 4;
+}
+.gif-card:hover .card-fav-btn,
+.card-fav-btn.is-fav {
+  opacity: 1;
+  transform: scale(1);
+}
+.card-fav-btn.is-fav {
+  background: var(--md-primary-container);
+  color: var(--md-primary);
+  border-color: transparent;
+}
+.card-fav-btn:hover {
+  transform: scale(1.1);
+  background: var(--md-surface-high);
+}
+.card-fav-btn.is-fav:hover {
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+}
+.gif-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(
+    to top,
+    rgba(22, 17, 19, 0.92) 0%,
+    rgba(22, 17, 19, 0.45) 60%,
+    transparent 100%
+  );
+  color: var(--md-text-main);
+  padding: 36px 16px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+.gif-card:hover .gif-overlay {
+  opacity: 1;
+}
+@media (max-width: 1200px) {
+  #gif_container {
+    column-count: 3;
+  }
+}
+@media (max-width: 860px) {
+  #gif_container {
+    column-count: 2;
+    padding: 0 16px 32px;
+    column-gap: 12px;
+  }
+  .gif-card {
+    margin-bottom: 12px;
+    border-radius: 20px;
+  }
+  .categories-wrapper,
+  .section-header {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .navbar {
+    padding: 0 16px;
+    height: 68px;
+  }
+  #navbar-search {
+    display: none;
+  }
+  .hero-section {
+    padding-top: 88px;
+  }
+  .card-fav-btn {
+    opacity: 1;
+    transform: scale(1);
+    width: 34px;
+    height: 34px;
+  }
+}
+@media (max-width: 520px) {
+  #static-categories,
+  #categories-container {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  #dynamic-categories {
+    overflow-x: visible;
+  }
+}
+#gif-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(12, 8, 10, 0.78);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 2000;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  opacity: 0;
+  transition: opacity 0.25s var(--ease-expressive);
+}
+#gif-modal.show {
+  display: flex;
+  opacity: 1;
+}
+.modal-content {
+  background: var(--md-surface-container);
+  border-radius: var(--radius-xl);
+  max-width: 880px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.65);
+  position: relative;
+  transform: scale(0.92) translateY(20px);
+  transition: transform 0.3s var(--ease-expressive);
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  border: 1px solid var(--md-outline-variant);
+}
+#gif-modal.show .modal-content {
+  transform: scale(1) translateY(0);
+}
+.modal-image-container {
+  background: #100b0d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 360px;
+  max-height: 82vh;
+  padding: 24px;
+  position: relative;
+}
+#modal-img {
+  max-width: 100%;
+  max-height: 68vh;
+  object-fit: contain;
+  border-radius: 16px;
+}
+.modal-details-pane {
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 22px;
+  background: var(--md-surface-container);
+}
+.modal-top-bar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+#modal-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--md-text-main);
+  line-height: 1.3;
+  word-break: break-word;
+  text-transform: capitalize;
+}
+.icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--md-surface-high);
+  color: var(--md-text-main);
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s var(--ease-expressive);
+}
+.icon-btn:hover {
+  background: var(--md-surface-highest);
+  transform: scale(1.06);
+}
+.icon-btn:active {
+  transform: scale(0.95);
+}
+.modal-actions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.m3-btn {
+  height: 48px;
+  padding: 0 18px;
+  border-radius: var(--radius-pill);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s var(--ease-expressive);
+  white-space: nowrap;
+}
+.m3-btn:active {
+  transform: scale(0.97);
+}
+.m3-btn-filled {
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  grid-column: span 2;
+}
+.m3-btn-filled:hover {
+  filter: brightness(1.06);
+  box-shadow: 0 4px 16px rgba(255, 177, 196, 0.25);
+}
+.m3-btn-tonal {
+  background: var(--md-surface-high);
+  color: var(--md-text-main);
+}
+.m3-btn-tonal:hover {
+  background: var(--md-surface-highest);
+}
+.m3-btn-tonal.is-fav {
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+}
+.metadata-section-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--md-text-sub);
+  margin-bottom: 10px;
+}
+.metadata-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.meta-card {
+  background: var(--md-surface-low);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.meta-card-label {
+  font-size: 11px;
+  color: var(--md-text-sub);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.meta-card-label .material-symbols-outlined {
+  font-size: 15px;
+  color: var(--md-primary);
+}
+.meta-card-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--md-text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.modal-tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tag-chip {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 10px;
+  background: var(--md-surface-low);
+  border: 1px solid var(--md-outline-variant);
+  color: var(--md-text-sub);
+  font-size: 12px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.tag-chip:hover {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  border-color: transparent;
+}
+@media (max-width: 780px) {
+  .modal-content {
+    grid-template-columns: 1fr;
+    max-height: 92vh;
+  }
+  .modal-image-container {
+    min-height: 240px;
+    max-height: 45vh;
+    padding: 16px;
+  }
+  #modal-img {
+    max-height: 40vh;
+  }
+  .modal-details-pane {
+    padding: 20px;
+    gap: 18px;
+  }
+}
+#scroll-sentinel {
+  height: 40px;
+  width: 100%;
+}
+#loading {
+  display: none;
+  text-align: center;
+  color: var(--md-text-sub);
+  font-size: 15px;
+  padding: 40px 20px 80px;
+  font-weight: 500;
+}
+.empty-state-box {
+  max-width: 380px;
+  margin: 0 auto;
+  background: var(--md-surface-low);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--radius-lg);
+  padding: 32px 24px;
+  text-align: center;
+}
+.empty-state-box .material-symbols-outlined {
+  font-size: 40px;
+  color: var(--md-primary);
+  margin-bottom: 12px;
+}
+.spinner {
+  width: 38px;
+  height: 38px;
+  border: 4px solid var(--md-surface-high);
+  border-left-color: var(--md-primary);
+  border-radius: 50%;
+  animation: spin 0.85s linear infinite;
+  margin: 0 auto 14px;
+}
+@keyframes spin {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+#toast {
+  visibility: hidden;
+  min-width: 280px;
+  max-width: 90vw;
+  background: var(--md-text-main);
+  color: var(--md-bg);
+  border-radius: 14px;
+  padding: 14px 22px;
+  position: fixed;
+  z-index: 3000;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%) translateY(20px);
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.3s var(--ease-expressive);
+}
+#toast.show {
+  visibility: visible;
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+.no-js-pagination {
+  text-align: center;
+  padding: 40px;
+}
+.no-js-pagination a {
+  display: inline-block;
+  padding: 12px 24px;
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+    </style>
+</head>
+<body>
+    <nav class="navbar" id="main-navbar">
+        <a href="/gifs" class="navbar-brand" title="Home">
+            <img src="/css/poke-logo-pride.svg?v=5" alt="poketenor">
+        </a>
+        <form id="navbar-search" action="/gifs" method="GET">
+            <span class="material-symbols-outlined search-icon">search</span>
+            <input type="text" name="q" id="nav_search_input" placeholder="Search GIFs..." value="<%= query %>">
+            <button type="submit" class="search-btn">Search</button>
+        </form>
+        <div class="navbar-actions">
+            <button class="fav-nav-btn js-only" id="nav-fav-btn" onclick="showFavs()">
+                <span class="material-symbols-outlined filled">favorite</span>
+                <span>Favs</span>
+                <span class="fav-badge" id="fav-count-badge">0</span>
+            </button>
+        </div>
+    </nav>
+
+    <div class="hero-section" id="hero-section">
+        <h2 class="hero-title">Find the perfect GIF</h2>
+        <form id="hero-search-container" action="/gifs" method="GET">
+            <span class="material-symbols-outlined leading-icon">search</span>
+            <input type="text" name="q" id="search_input" placeholder="Search millions of GIFs..." value="<%= query %>">
+            <button type="submit" class="search-btn">Search</button>
+        </form>
+    </div>
+
+    <div class="categories-wrapper">
+        <div id="categories-container">
+            <div id="static-categories">
+                <a href="/gifs" class="chip <%= !query ? 'active' : '' %>" id="chip-trending">
+                    <span class="material-symbols-outlined">local_fire_department</span>
+                    Trending
+                </a>
+                <div class="dropdown">
+                    <div class="chip chip-pride <%= query && ['pride','lesbian','gay','transgender','bisexual','pansexual','asexual','non-binary','queer','lgbtq+'].includes(query.toLowerCase()) ? 'active' : '' %>">
+                        Pride
+                        <span class="material-symbols-outlined" style="font-size: 18px;">expand_more</span>
+                    </div>
+                    <div class="dropdown-content">
+                        <a href="/gifs?q=Pride">Pride Collection</a>
+                        <a href="/gifs?q=Lesbian">Lesbian</a>
+                        <a href="/gifs?q=Gay">Gay</a>
+                        <a href="/gifs?q=Transgender">Transgender</a>
+                        <a href="/gifs?q=Bisexual">Bisexual</a>
+                        <a href="/gifs?q=Pansexual">Pansexual</a>
+                        <a href="/gifs?q=Asexual">Asexual</a>
+                        <a href="/gifs?q=Non-binary">Non-binary</a>
+                        <a href="/gifs?q=Queer">Queer</a>
+                        <a href="/gifs?q=LGBTQ%2B">LGBTQ+ Magic</a>
+                    </div>
+                </div>
+                <a href="/gifs?q=Aww" class="chip <%= query.toLowerCase() === 'aww' ? 'active' : '' %>">Aww</a>
+                <a href="/gifs?q=Yuri" class="chip <%= query.toLowerCase() === 'yuri' ? 'active' : '' %>">Yuri</a>
+                <a href="/gifs?q=Comedy" class="chip <%= query.toLowerCase() === 'comedy' ? 'active' : '' %>">Comedy</a>
+            </div>
+            <div id="dynamic-categories">
+                <% categories.forEach(function(cat) { %>
+                    <a href="/gifs?q=<%= encodeURIComponent(cat) %>" class="chip <%= query.toLowerCase() === cat.toLowerCase() ? 'active' : '' %>"><%= cat %></a>
+                <% }); %>
+            </div>
+        </div>
+    </div>
+
+    <div class="section-header">
+        <h2 id="page-title"><%= query ? `Results for "${query}"` : 'Trending GIFs' %></h2>
+    </div>
+
+    <% 
+    function getTitle(gif) {
+        if (gif.title && gif.title.trim()) return gif.title;
+        if (gif.content_description && gif.content_description.trim()) return gif.content_description;
+        return "Untitled GIF";
+    }
+    %>
+
+    <div id="gif_container">
+        <% if (results && results.length > 0) { %>
+            <% results.forEach(function(gif) { 
+                if(!gif.media || !gif.media[0]) return;
+                const title = getTitle(gif);
+                const tinyUrl = gif.media[0].tinygif ? gif.media[0].tinygif.url : gif.media[0].gif.url;
+                const fullUrl = gif.media[0].gif ? gif.media[0].gif.url : tinyUrl;
+            %>
+                <div class="gif-card">
+                    <a href="<%= mediaproxy %><%= fullUrl %>" target="_blank" class="gif-link" onclick="return handleModalOpen(event, <%= JSON.stringify(gif) %>, '<%= title.replace(/'/g, "\\'") %>')">
+                        <img src="<%= mediaproxy %><%= tinyUrl %>" alt="<%= title %>" loading="lazy">
+                        <div class="gif-overlay"><%= title %></div>
+                    </a>
+                    <button class="card-fav-btn js-only" data-gif-id="<%= gif.id %>" onclick="toggleFavorite(<%= JSON.stringify(gif) %>, event)">
+                        <span class="material-symbols-outlined">favorite</span>
+                    </button>
+                </div>
+            <% }); %>
+        <% } else { %>
+            <div class="empty-state-box" style="margin-top: 40px;">
+                <span class="material-symbols-outlined">sentiment_dissatisfied</span>
+                <p>No GIFs found. Try another search!</p>
+            </div>
+        <% } %>
+    </div>
+
+    <div id="loading">
+        <div class="spinner"></div>
+        Loading GIFs...
+    </div>
+
+    <div id="scroll-sentinel"></div>
+
+    <% if (next) { %>
+        <div class="no-js-pagination">
+            <a href="/gifs?<%= query ? 'q=' + encodeURIComponent(query) + '&' : '' %>pos=<%= next %>">Next Page</a>
+        </div>
+    <% } %>
+
+    <div id="toast">
+        <span class="material-symbols-outlined" style="font-size: 20px;">check_circle</span>
+        <span id="toast-text">Copied to clipboard!</span>
+    </div>
+
+    <div id="gif-modal" onclick="handleModalClick(event)">
+        <div class="modal-content">
+            <div class="modal-image-container">
+                <img id="modal-img" src="" alt="Full GIF">
+            </div>
+            <div class="modal-details-pane">
+                <div>
+                    <div class="modal-top-bar">
+                        <h3 id="modal-title">Loading...</h3>
+                        <button class="icon-btn" onclick="closeModal()" title="Close">
+                            <span class="material-symbols-outlined">close</span>
+                        </button>
+                    </div>
+                    <div class="modal-actions-grid" style="margin-top: 20px;">
+                        <button class="m3-btn m3-btn-filled" onclick="copyDirectGifFromModal()">
+                            <span class="material-symbols-outlined">content_copy</span>
+                            Copy GIF Link
+                        </button>
+                        <button class="m3-btn m3-btn-tonal" id="modal-download-btn" onclick="downloadCurrentGif()">
+                            <span class="material-symbols-outlined">download</span>
+                            Download
+                        </button>
+                        <button class="m3-btn m3-btn-tonal" id="modal-fav-btn" onclick="toggleFavFromModal()">
+                            <span class="material-symbols-outlined" id="modal-fav-icon">favorite</span>
+                            <span id="modal-fav-label">Favorite</span>
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <div class="metadata-section-label">Details</div>
+                    <div class="metadata-grid">
+                        <div class="meta-card">
+                            <span class="meta-card-label"><span class="material-symbols-outlined">hard_drive</span>Size</span>
+                            <span class="meta-card-value" id="meta-size">--</span>
+                        </div>
+                        <div class="meta-card">
+                            <span class="meta-card-label"><span class="material-symbols-outlined">aspect_ratio</span>Dimensions</span>
+                            <span class="meta-card-value" id="meta-dims">--</span>
+                        </div>
+                        <div class="meta-card">
+                            <span class="meta-card-label"><span class="material-symbols-outlined">gif_box</span>Format</span>
+                            <span class="meta-card-value">GIF</span>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <div class="metadata-section-label">Tags</div>
+                    <div class="modal-tags-list" id="modal-tags"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const MEDIA_PROXY = "<%= mediaproxy %>";
+        const FAVS_STORAGE_KEY = "gifs_favs";
+        
+        let currentSearchTerm = "<%= query %>".replace(/&#34;/g, '"').replace(/&#39;/g, "'");
+        let currentSearchMode = currentSearchTerm ? "search" : "trending";
+        let nextPosition = "<%= next %>";
+        let isFetching = false;
+        let favoriteGifs = [];
+        let currentModalGif = null;
+        let currentModalTitle = "";
+
+        const observer = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting && !isFetching && currentSearchMode !== "favs" && nextPosition && nextPosition !== "0") {
+                fetchMoreGifs();
+            }
+        }, { root: null, rootMargin: '800px', threshold: 0.1 });
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadFavoritesFromStorage();
+            updateFavButtonsInDOM();
+            observer.observe(document.getElementById('scroll-sentinel'));
+        });
+
+        window.addEventListener('scroll', () => {
+            const navbar = document.getElementById('main-navbar');
+            const heroSection = document.getElementById('hero-section');
+            if (window.scrollY > heroSection.offsetHeight - 60) navbar.classList.add('scrolled');
+            else navbar.classList.remove('scrolled');
+        });
+
+        function loadFavoritesFromStorage() {
+            try {
+                const raw = localStorage.getItem(FAVS_STORAGE_KEY);
+                favoriteGifs = raw ? JSON.parse(raw) : [];
+            } catch (e) { favoriteGifs = []; }
+            document.getElementById("fav-count-badge").innerText = favoriteGifs.length;
+        }
+
+        function saveFavoritesToStorage() {
+            try { localStorage.setItem(FAVS_STORAGE_KEY, JSON.stringify(favoriteGifs)); } catch (e) {}
+            document.getElementById("fav-count-badge").innerText = favoriteGifs.length;
+        }
+
+        function isGifFavorited(gifId) {
+            return favoriteGifs.some(item => String(item.id) === String(gifId));
+        }
+
+        function updateFavButtonsInDOM() {
+            document.querySelectorAll('.card-fav-btn').forEach(btn => {
+                const id = btn.getAttribute('data-gif-id');
+                const isFav = isGifFavorited(id);
+                btn.classList.toggle('is-fav', isFav);
+                btn.querySelector('.material-symbols-outlined').classList.toggle('filled', isFav);
+            });
+        }
+
+        function toggleFavorite(gifData, event) {
+            if (event) event.stopPropagation();
+            event.preventDefault();
+            if (!gifData || !gifData.id) return;
+            const idx = favoriteGifs.findIndex(item => String(item.id) === String(gifData.id));
+            let nowFav = false;
+            if (idx > -1) {
+                favoriteGifs.splice(idx, 1);
+                showToast("Removed from Favs");
+            } else {
+                favoriteGifs.unshift(gifData);
+                nowFav = true;
+                showToast("Added to Favs");
+            }
+            saveFavoritesToStorage();
+            updateFavButtonsInDOM();
+            if (currentModalGif && String(currentModalGif.id) === String(gifData.id)) {
+                updateModalFavButtonState(nowFav);
+            }
+            if (currentSearchMode === "favs" && !nowFav) showFavs();
+        }
+
+        function showFavs() {
+            currentSearchMode = "favs";
+            document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+            document.getElementById('nav-fav-btn').classList.add('active');
+            document.getElementById('page-title').innerText = `Favorite GIFs (${favoriteGifs.length})`;
+            
+            const container = document.getElementById("gif_container");
+            container.innerHTML = "";
+            document.getElementById("scroll-sentinel").style.display = "none";
+            
+            if (favoriteGifs.length === 0) {
+                container.innerHTML = `<div class="empty-state-box" style="margin-top: 40px; grid-column: 1/-1;"><span class="material-symbols-outlined">favorite</span><p>No favorite GIFs yet.</p></div>`;
+                return;
+            }
+            
+            favoriteGifs.forEach(gif => {
+                if(!gif.media || !gif.media[0]) return;
+                const title = getTitleJS(gif);
+                const tinyUrl = gif.media[0].tinygif ? gif.media[0].tinygif.url : gif.media[0].gif.url;
+                const fullUrl = gif.media[0].gif ? gif.media[0].gif.url : tinyUrl;
+                container.appendChild(createGifCard(gif, title, tinyUrl, fullUrl));
+            });
+            updateFavButtonsInDOM();
+        }
+
+        function getTitleJS(gif) {
+            if (gif.title && gif.title.trim()) return gif.title;
+            if (gif.content_description && gif.content_description.trim()) return gif.content_description;
+            return "Untitled GIF";
+        }
+
+        function fetchMoreGifs() {
+            isFetching = true;
+            document.getElementById("loading").style.display = "block";
+            
+            let searchUrl = `/api/tenor?endpoint=${currentSearchMode === "trending" ? "trending" : "search"}&limit=30`;
+            if (currentSearchMode === "search") searchUrl += `&q=${encodeURIComponent(currentSearchTerm)}`;
+            if (nextPosition) searchUrl += `&pos=${nextPosition}`;
+
+            fetch(searchUrl)
+                .then(res => res.json())
+                .then(data => {
+                    const container = document.getElementById("gif_container");
+                    (data.results || []).forEach(gif => {
+                        if(!gif.media || !gif.media[0]) return;
+                        const title = getTitleJS(gif);
+                        const tinyUrl = gif.media[0].tinygif ? gif.media[0].tinygif.url : gif.media[0].gif.url;
+                        const fullUrl = gif.media[0].gif ? gif.media[0].gif.url : tinyUrl;
+                        container.appendChild(createGifCard(gif, title, tinyUrl, fullUrl));
+                    });
+                    nextPosition = data.next || "";
+                    if (!nextPosition || nextPosition === "0") document.getElementById("scroll-sentinel").style.display = "none";
+                    updateFavButtonsInDOM();
+                    isFetching = false;
+                    document.getElementById("loading").style.display = "none";
+                })
+                .catch(() => {
+                    isFetching = false;
+                    document.getElementById("loading").style.display = "none";
+                });
+        }
+
+        function createGifCard(gif, title, tinyUrl, fullUrl) {
+            const div = document.createElement("div");
+            div.className = "gif-card";
+            
+            const a = document.createElement("a");
+            a.href = MEDIA_PROXY + fullUrl;
+            a.target = "_blank";
+            a.className = "gif-link";
+            a.onclick = (e) => handleModalOpen(e, gif, title);
+            
+            const img = document.createElement("img");
+            img.src = MEDIA_PROXY + tinyUrl;
+            img.alt = title;
+            img.loading = "lazy";
+            
+            const overlay = document.createElement("div");
+            overlay.className = "gif-overlay";
+            overlay.innerText = title;
+            
+            const btn = document.createElement("button");
+            btn.className = "card-fav-btn js-only";
+            btn.setAttribute("data-gif-id", gif.id);
+            btn.innerHTML = `<span class="material-symbols-outlined">favorite</span>`;
+            btn.onclick = (e) => toggleFavorite(gif, e);
+            
+            a.appendChild(img);
+            a.appendChild(overlay);
+            div.appendChild(a);
+            div.appendChild(btn);
+            return div;
+        }
+
+        function formatBytes(bytes) {
+            if (!bytes || isNaN(bytes)) return "Unknown";
+            const kb = bytes / 1024;
+            if (kb < 1024) return `${Math.round(kb)} KB`;
+            return `${(kb / 1024).toFixed(2)} MB`;
+        }
+
+        function deriveTags(gif, title) {
+            const set = new Set();
+            if (Array.isArray(gif.tags)) gif.tags.forEach(t => { if(t) set.add(t.trim().toLowerCase()); });
+            if (currentSearchTerm) set.add(currentSearchTerm.toLowerCase());
+            if (title) title.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).forEach(w => {
+                if (w.length >= 3 && !["gif","the","and","for","with"].includes(w) && set.size < 8) set.add(w);
+            });
+            if (set.size === 0) set.add("trending");
+            return Array.from(set).slice(0, 8);
+        }
+
+        function handleModalOpen(e, gif, title) {
+            e.preventDefault();
+            currentModalGif = gif;
+            currentModalTitle = title;
+            const fullObj = (gif.media && gif.media[0] && gif.media[0].gif) ? gif.media[0].gif : gif.media[0].tinygif;
+            
+            document.getElementById("modal-title").innerText = title;
+            document.getElementById("modal-img").src = MEDIA_PROXY + fullObj.url;
+            document.getElementById("meta-size").innerText = formatBytes(fullObj.size);
+            document.getElementById("meta-dims").innerText = (Array.isArray(fullObj.dims) && fullObj.dims.length === 2) ? `${fullObj.dims[0]} × ${fullObj.dims[1]}` : "Auto";
+            
+            updateModalFavButtonState(isGifFavorited(gif.id));
+            
+            const tagsCont = document.getElementById("modal-tags");
+            tagsCont.innerHTML = "";
+            deriveTags(gif, title).forEach(tag => {
+                const b = document.createElement("button");
+                b.className = "tag-chip";
+                b.innerHTML = `#${tag}`;
+                b.onclick = () => window.location.href = `/gifs?q=${encodeURIComponent(tag)}`;
+                tagsCont.appendChild(b);
+            });
+            
+            document.getElementById("gif-modal").classList.add("show");
+            document.body.style.overflow = "hidden";
+            return false;
+        }
+
+        function updateModalFavButtonState(isFav) {
+            const btn = document.getElementById("modal-fav-btn");
+            btn.classList.toggle("is-fav", isFav);
+            document.getElementById("modal-fav-icon").classList.toggle("filled", isFav);
+            document.getElementById("modal-fav-label").innerText = isFav ? "Favorited" : "Favorite";
+        }
+
+        function toggleFavFromModal() {
+            if (currentModalGif) toggleFavorite(currentModalGif, { preventDefault: () => {}, stopPropagation: () => {} });
+        }
+
+        function closeModal() {
+            document.getElementById("gif-modal").classList.remove("show");
+            document.body.style.overflow = "scroll";
+            setTimeout(() => document.getElementById("modal-img").src = "", 250);
+        }
+
+        function handleModalClick(e) {
+            if (e.target.id === 'gif-modal') closeModal();
+        }
+
+        function copyDirectGifFromModal() {
+            if (!currentModalGif) return;
+            const url = MEDIA_PROXY + ((currentModalGif.media && currentModalGif.media[0] && currentModalGif.media[0].gif) ? currentModalGif.media[0].gif.url : currentModalGif.url);
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(() => showToast("Copied GIF link!")).catch(() => fallbackCopy(url));
+            } else fallbackCopy(url);
+        }
+
+        function fallbackCopy(text) {
+            const temp = document.createElement("textarea");
+            temp.value = text;
+            document.body.appendChild(temp);
+            temp.select();
+            try { document.execCommand("copy"); showToast("Copied GIF link!"); } catch (e) {}
+            document.body.removeChild(temp);
+        }
+
+        async function downloadCurrentGif() {
+            if (!currentModalGif) return;
+            const url = MEDIA_PROXY + ((currentModalGif.media && currentModalGif.media[0] && currentModalGif.media[0].gif) ? currentModalGif.media[0].gif.url : currentModalGif.url);
+            const slug = (currentModalTitle || "gif").toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || "gif";
+            showToast("Downloading...");
+            try {
+                const res = await fetch(url);
+                const blob = await res.blob();
+                const bUrl = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = bUrl;
+                a.download = `${slug}.gif`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(bUrl), 4000);
+            } catch (err) { window.open(url, "_blank"); }
+        }
+
+        let toastTimeout;
+        function showToast(msg) {
+            const toast = document.getElementById("toast");
+            document.getElementById("toast-text").innerText = msg;
+            toast.classList.add("show");
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => toast.classList.remove("show"), 2800);
+        }
+
+        document.addEventListener('keydown', (e) => { if (e.key === "Escape") closeModal(); });
+    </script>
+</body>
+</html>
