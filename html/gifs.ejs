@@ -1002,7 +1002,7 @@ input::placeholder {
                 const fullUrl = gif.media[0].gif ? gif.media[0].gif.url : tinyUrl;
             %>
                 <div class="gif-card">
-                    <a href="<%= mediaproxy %><%= fullUrl %>" target="_blank" class="gif-link" onclick="return handleModalOpen(event, <%= JSON.stringify(gif) %>, '<%= title.replace(/'/g, "\\'") %>')">
+                    <a href="<%= fullUrl %>" target="_blank" class="gif-link" onclick="return handleModalOpen(event, <%= JSON.stringify(gif) %>, '<%= title.replace(/'/g, "\\'") %>')">
                         <img src="<%= mediaproxy %><%= tinyUrl %>" alt="<%= title %>" loading="lazy">
                         <div class="gif-overlay"><%= title %></div>
                     </a>
