@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Poke Apps!</title>
+  <title>About Poke!</title>
   <meta name="description" content="Poke is privacy-first suite with a player, gif picker, maps, notes, calendar, weather, and more!!" />
   <meta name="theme-color" content="#151112" />
   
@@ -76,6 +76,19 @@
       border-bottom: 1px solid var(--md-sys-color-outline-variant);
       background: var(--md-sys-color-surface);
     }
+
+    .hero-mascot {
+      width: clamp(120px, 18vw, 180px);
+      height: auto;
+      margin-bottom: 16px;
+      animation: float 5s ease-in-out infinite;
+      filter: drop-shadow(0 12px 24px rgba(255, 171, 188, 0.1));
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-12px); }
+    }
     
     .hero-logo {
       width: clamp(100px, 15vw, 140px);
@@ -99,12 +112,22 @@
       margin-bottom: 28px;
       user-select: none;
       cursor: default;
+      position: relative;
+    }
+
+    .hero-title::after {
+      content: "";
+      position: absolute;
+      inset: -40px;
+      z-index: 1;
     }
 
     .hero-title .line-main {
       display: block;
       font-variation-settings: "wdth" 145, "wght" 950, "slnt" 0;
       color: var(--md-sys-color-on-surface);
+      position: relative;
+      z-index: 2;
       transition: font-variation-settings var(--spring-spatial), transform var(--spring-spatial);
       will-change: font-variation-settings, transform;
     }
@@ -118,6 +141,8 @@
       margin-top: 8px;
       padding: 4px 24px;
       border-radius: 50px;
+      position: relative;
+      z-index: 2;
       transition: font-variation-settings var(--spring-spatial), background-color 0.3s, color 0.3s, transform var(--spring-spatial);
       will-change: font-variation-settings, transform, background-color;
     }
@@ -142,12 +167,42 @@
       letter-spacing: 0.06em;
     }
 
+    .text-section {
+      padding: 64px clamp(24px, 6vw, 72px);
+      max-width: 900px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .text-section h2 {
+      font-size: clamp(2.2rem, 5vw, 3rem);
+      color: var(--md-sys-color-primary);
+      text-transform: uppercase;
+      margin-bottom: 24px;
+      font-variation-settings: "wdth" 130, "wght" 850;
+      letter-spacing: -0.01em;
+      line-height: 1.1;
+    }
+
+    .text-section p {
+      font-size: 1.15rem;
+      line-height: 1.8;
+      color: var(--md-sys-color-on-surface-variant);
+      margin-bottom: 24px;
+      font-variation-settings: "wdth" 100, "wght" 450;
+    }
+
+    .text-section p:last-child {
+      margin-bottom: 0;
+    }
+
     .section-bar {
       display: flex;
       align-items: center;
       justify-content: space-between;
       padding: 18px clamp(24px, 5vw, 72px);
       background: var(--md-sys-color-surface-dim);
+      border-top: 1px solid var(--md-sys-color-outline-variant);
       border-bottom: 1px solid var(--md-sys-color-outline-variant);
       font-size: 0.82rem;
       text-transform: uppercase;
@@ -291,7 +346,7 @@
       transform: translateX(6px);
     }
     
-     .site-footer {
+    .site-footer {
       margin-top: auto;
       padding: 64px 24px;
       text-align: center;
@@ -336,12 +391,12 @@
       text-transform: uppercase;
       letter-spacing: 0.05em;
       font-size: 0.85rem !important;
-      padding: 8px 16px;
     }
 
     @media (prefers-reduced-motion: reduce) {
       *, ::after, ::before {
         transition: none !important;
+        animation: none !important;
       }
     }
 
@@ -381,6 +436,7 @@
 <body>
 
   <header class="hero-centered">
+    <img src="/static/poke-mascot-new.webp?v=2" alt="Poke Mascot" class="hero-mascot" />
     <img src="/css/logo-poke.svg?v=5" alt="Poke Logo" class="hero-logo" />
     <h1 class="hero-title">
       <span class="line-main">Do whatever you want!</span>
@@ -388,6 +444,22 @@
     </h1>
     <p class="hero-sub">You can do these with Poke:</p>
   </header>
+
+  <section class="text-section">
+    <h2>About Poke</h2>
+    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.</p>
+    <p>Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Curabitur pretium tincidunt lacus. Nulla gravida orci a odio. Nullam varius, turpis et commodo pharetra, est eros bibendum elit, nec luctus magna felis sollicitudin mauris.</p>
+  </section>
+
+  <section class="text-section">
+    <h2>History</h2>
+    <p>Integer in mauris eu nibh euismod gravida. Duis ac tellus et risus vulputate vehicula. Donec lobortis risus a elit. Etiam tempor. Ut ullamcorper, ligula eu tempor congue, eros est euismod turpis, id tincidunt sapien risus a quam. Maecenas fermentum consequat mi.</p>
+    <p>Donec fermentum. Pellentesque malesuada nulla a mi. Duis sapien sem, aliquet nec, commodo eget, consequat quis, neque. Aliquam faucibus, elit ut dictum aliquet, felis nisl adipiscing sapien, sed malesuada diam lacus eget erat. Cras mollis scelerisque nunc. Nullam arcu.</p>
+  </section>
+
+  <div class="section-bar">
+    <span>Our Applications</span>
+  </div>
 
   <main id="apps" class="apps-directory" aria-label="Application Directory">
     
@@ -477,7 +549,7 @@
   <footer class="site-footer">
     <p class="footer-msg">Poke is where you can do all those stuff... wonder what will you be able to do in the future :3?</p>
     <p>You can see our source code here: <br/><a href="https://codeberg.org/ashleyirispuppy/poke/" target="_blank" rel="noopener">https://codeberg.org/ashleyirispuppy/poke/</a></p>
-    <p class="footer-anti-ai">Poke is proudly <strong>not</strong> AI slop.</p>
+    <p class="footer-anti-ai">Poke is proudly <strong>not</strong> AI slop</p>
   </footer>
 
   <script>
