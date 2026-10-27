@@ -1,4 +1,4 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -67,6 +67,7 @@
     }
 
     .hero-centered {
+      position: relative;
       padding: clamp(56px, 9vw, 112px) 24px clamp(40px, 6vw, 72px);
       text-align: center;
       display: flex;
@@ -75,19 +76,29 @@
       justify-content: center;
       border-bottom: 1px solid var(--md-sys-color-outline-variant);
       background: var(--md-sys-color-surface);
+      overflow: hidden;
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
     }
 
     .hero-mascot {
-      width: clamp(120px, 18vw, 180px);
+      position: absolute;
+      right: clamp(-40px, 2vw, 40px);
+      top: 50%;
+      transform: translateY(-50%);
+      width: clamp(200px, 35vw, 450px);
       height: auto;
-      margin-bottom: 16px;
-      animation: float 5s ease-in-out infinite;
+      z-index: 1;
+      opacity: 0.25;
+      pointer-events: none;
       filter: drop-shadow(0 12px 24px rgba(255, 171, 188, 0.1));
-    }
-
-    @keyframes float {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-12px); }
     }
     
     .hero-logo {
@@ -396,7 +407,6 @@
     @media (prefers-reduced-motion: reduce) {
       *, ::after, ::before {
         transition: none !important;
-        animation: none !important;
       }
     }
 
@@ -437,12 +447,14 @@
 
   <header class="hero-centered">
     <img src="/static/poke-mascot-new.webp?v=2" alt="Poke Mascot" class="hero-mascot" />
-    <img src="/css/logo-poke.svg?v=5" alt="Poke Logo" class="hero-logo" />
-    <h1 class="hero-title">
-      <span class="line-main">Do whatever you want!</span>
-      <span class="line-privately">(Privately!)</span>
-    </h1>
-    <p class="hero-sub">You can do these with Poke:</p>
+    <div class="hero-content">
+      <img src="/css/logo-poke.svg?v=5" alt="Poke Logo" class="hero-logo" />
+      <h1 class="hero-title">
+        <span class="line-main">Do whatever you want!</span>
+        <span class="line-privately">(Privately!)</span>
+      </h1>
+      <p class="hero-sub">You can do these with Poke:</p>
+    </div>
   </header>
 
   <section class="text-section">
