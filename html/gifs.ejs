@@ -5,14 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PokeGif - <%= query ? `Results for "${query}"` : 'Trending GIFs' %></title>
     <link href="/css/yt-ukraine.svg?v=9" rel="icon">
-      
-    <!-- Open Graph / Facebook -->
+  
+   <!-- Open Graph / Facebook --> 
     <meta property="og:type" content="website">
     <meta property="og:title" content="PokeGif!">
     <meta property="og:description" content="Search all the Gifs u want! in a private way!">
     <meta property="og:image" content="/static/poke-embed.webp">
-
-    <!-- Twitter -->
+    <!-- twitter --> 
     <meta property="twitter:card" content="summary_large_image">
     <meta property="twitter:title" content="PokeGif!">
     <meta property="twitter:description" content="Search all the Gifs u want! in a private way!">
@@ -203,13 +202,15 @@ a {
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
+  min-width: fit-content;
+  white-space: nowrap;
 }
 .fav-nav-btn {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   height: 44px;
-  padding: 0 16px 0 14px;  
+  padding: 0 18px;
   border-radius: var(--radius-pill);
   background-color: var(--md-surface-container);
   color: var(--md-text-main);
@@ -241,11 +242,10 @@ a {
   color: var(--md-on-primary);
   font-size: 12px;
   font-weight: 700;
-  padding: 2px 8px;
+  padding: 1px 8px;
   border-radius: var(--radius-pill);
-  min-width: 24px;
+  min-width: 22px;
   text-align: center;
-  display: inline-block;
 }
 .hero-section {
   padding: 108px 24px 28px;
@@ -566,9 +566,14 @@ input::placeholder {
   height: 100%;
   display: block;
   object-fit: cover;
+  color: transparent;
 }
 .js-enabled .gif-card img {
-  transition: opacity 0.25s ease;
+  opacity: 0;
+  transition: opacity 0.28s ease;
+}
+.js-enabled .gif-card.is-loaded img {
+  opacity: 1;
 }
 .gif-card:hover {
   transform: translateY(-4px) scale(1.01);
@@ -578,6 +583,41 @@ input::placeholder {
 }
 .gif-card:active {
   transform: scale(0.98);
+}
+body:not(.js-enabled) .js-main-link {
+  pointer-events: none;
+}
+.nojs-res-badges {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  z-index: 5;
+  transition: opacity 0.25s;
+}
+.gif-card:hover .nojs-res-badges {
+  opacity: 1;
+}
+.js-enabled .nojs-res-badges {
+  display: none !important;
+}
+.nojs-badge {
+  background: rgba(22, 17, 19, 0.85);
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  pointer-events: auto;
+}
+.nojs-badge:hover {
+  background: var(--md-primary);
+  color: var(--md-on-primary);
 }
 .card-fav-btn {
   position: absolute;
@@ -591,6 +631,7 @@ input::placeholder {
   -webkit-backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: #fff;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
@@ -616,39 +657,6 @@ input::placeholder {
 .card-fav-btn.is-fav:hover {
   background: var(--md-primary);
   color: var(--md-on-primary);
-}
-.no-js-quality-pill {
-  display: none;
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  background: rgba(22, 17, 19, 0.75);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: var(--radius-pill);
-  padding: 4px 10px;
-  font-size: 11px;
-  font-weight: 600;
-  z-index: 4;
-  opacity: 0;
-  transform: scale(0.85);
-  transition: all 0.2s var(--ease-expressive);
-}
-.gif-card:hover .no-js-quality-pill {
-  opacity: 1;
-  transform: scale(1);
-}
-.no-js-pagination .no-js-quality-pill {
-  display: inline-flex;
-}
-.no-js-quality-pill a {
-  color: var(--md-text-sub);
-  margin: 0 3px;
-  text-decoration: none;
-}
-.no-js-quality-pill a:hover, .no-js-quality-pill a.active {
-  color: var(--md-primary);
 }
 .gif-overlay {
   position: absolute;
@@ -713,9 +721,11 @@ input::placeholder {
   .hero-section {
     padding-top: 88px;
   }
-  .card-fav-btn, .no-js-quality-pill {
+  .card-fav-btn {
     opacity: 1;
     transform: scale(1);
+    width: 34px;
+    height: 34px;
   }
 }
 @media (max-width: 520px) {
@@ -783,6 +793,18 @@ input::placeholder {
   object-fit: contain;
   border-radius: 16px;
   background-color: var(--md-surface-low);
+  color: transparent;
+}
+.modal-spinner {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  border: 5px solid var(--md-surface-high);
+  border-left-color: var(--md-primary);
+  border-radius: 50%;
+  animation: spin 0.85s linear infinite;
+  display: none;
+  z-index: 10;
 }
 .modal-details-pane {
   padding: 28px;
@@ -882,31 +904,6 @@ input::placeholder {
 .m3-btn-tonal.is-fav {
   background: var(--md-primary-container);
   color: var(--md-on-primary-container);
-}
-.quality-selector-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: var(--md-surface-low);
-  border: 1px solid var(--md-outline-variant);
-  border-radius: var(--radius-pill);
-  padding: 4px;
-  margin-bottom: 12px;
-}
-.quality-tab {
-  flex: 1;
-  text-align: center;
-  padding: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-  color: var(--md-text-sub);
-  transition: all 0.2s ease;
-}
-.quality-tab.active {
-  background: var(--md-surface-high);
-  color: var(--md-primary);
 }
 .metadata-section-label {
   font-size: 12px;
@@ -1164,23 +1161,23 @@ input::placeholder {
                 if(!gif.media || !gif.media[0]) return;
                 const title = getTitle(gif);
                 const altText = (gif.content_description && gif.content_description.trim()) ? gif.content_description.trim() : title;
-                const tinyObj = gif.media[0].tinygif || gif.media[0].gif;
-                const fullObj = gif.media[0].gif || tinyObj;
-                const tinyUrl = tinyObj.url;
-                const fullUrl = fullObj.url;
-                const dims = (fullObj && Array.isArray(fullObj.dims) && fullObj.dims.length === 2) ? fullObj.dims : [220, 165];
+                
+                const fullObj = gif.media[0].gif || gif.media[0].tinygif;
+                const mediumObj = gif.media[0].mediumgif || fullObj;
+                const tinyObj = gif.media[0].tinygif || mediumObj;
+                
+                const dims = (mediumObj && Array.isArray(mediumObj.dims) && mediumObj.dims.length === 2) ? mediumObj.dims : [220, 165];
                 const w = dims[0] || 220;
                 const h = dims[1] || 165;
             %>
                 <div class="gif-card" data-aspect="<%= h / w %>">
-                    <a href="<%= fullUrl %>" target="_blank" class="gif-link" style="aspect-ratio: <%= w %> / <%= h %>;" onclick="return handleModalOpen(event, <%= JSON.stringify(gif) %>, '<%= title.replace(/\\/g, "\\\\").replace(/'/g, "\\'") %>')">
-                        <img src="<%= mediaproxy %><%= fullUrl %>" alt="<%= altText %>" width="<%= w %>" height="<%= h %>" loading="lazy" decoding="async">
+                    <a href="<%= fullObj.url %>" target="_blank" class="gif-link js-main-link" style="aspect-ratio: <%= w %> / <%= h %>;" onclick="return handleModalOpen(event, <%= JSON.stringify(gif) %>, '<%= title.replace(/\\/g, "\\\\").replace(/'/g, "\\'") %>')">
+                        <img src="<%= mediaproxy %><%= tinyObj.url %>" data-med="<%= mediaproxy %><%= mediumObj.url %>" alt="<%= altText %>" width="<%= w %>" height="<%= h %>" loading="lazy" decoding="async" onload="this.closest('.gif-card').classList.add('is-loaded'); upgradeImage(this);" onerror="this.closest('.gif-card').classList.add('is-loaded')">
                         <div class="gif-overlay"><%= title %></div>
                     </a>
-                    <div class="no-js-quality-pill">
-                        <span style="color:var(--md-text-sub)">Quality:</span>
-                        <a href="<%= fullUrl %>" class="active">HD</a>
-                        <a href="<%= tinyUrl %>">SD</a>
+                    <div class="nojs-res-badges">
+                        <a href="<%= tinyObj.url %>" target="_blank" class="nojs-badge">SD</a>
+                        <a href="<%= fullObj.url %>" target="_blank" class="nojs-badge">HD</a>
                     </div>
                     <button class="card-fav-btn js-only" data-gif-id="<%= gif.id %>" onclick="toggleFavorite(<%= JSON.stringify(gif) %>, event)">
                         <svg class="svg-icon" viewBox="0 0 24 24"><path d="M16.5 3c-1.74 0-3.41.81-4.5 2.09C10.91 3.81 9.24 3 7.5 3 4.42 3 2 5.42 2 8.5c0 3.78 3.4 6.86 8.55 11.54L12 21.35l1.45-1.32C18.6 15.36 22 12.28 22 8.5 22 5.42 19.58 3 16.5 3zm-4.4 15.55l-.1.1-.1-.1C7.14 14.24 4 11.39 4 8.5 4 6.5 5.5 5 7.5 5c1.54 0 3.04.99 3.57 2.36h1.87C13.46 5.99 14.96 5 16.5 5c2 0 3.5 1.5 3.5 3.5 0 2.89-3.14 5.74-7.9 10.05z"/></svg>
@@ -1216,6 +1213,7 @@ input::placeholder {
     <div id="gif-modal" onclick="handleModalClick(event)">
         <div class="modal-content">
             <div class="modal-image-container">
+                <div id="modal-throbber" class="modal-spinner"></div>
                 <img id="modal-img" src="" alt="Full GIF">
             </div>
             <div class="modal-details-pane">
@@ -1226,12 +1224,14 @@ input::placeholder {
                             <svg class="svg-icon" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
                         </button>
                     </div>
-                    <div style="margin-top: 20px;">
-                        <div class="quality-selector-row">
-                            <div class="quality-tab active" id="q-tab-sd" onclick="setModalQuality('sd')">SD (Fast)</div>
-                            <div class="quality-tab" id="q-tab-hd" onclick="setModalQuality('hd')">HD (High)</div>
-                        </div>
+                    
+                    <div class="metadata-section-label" style="margin-top: 18px;">Quality</div>
+                    <div class="modal-actions-grid" style="grid-template-columns: repeat(3, 1fr);">
+                        <button class="m3-btn m3-btn-tonal q-btn" id="btn-sd" onclick="setModalQuality('sd')">SD</button>
+                        <button class="m3-btn m3-btn-tonal q-btn" id="btn-md" onclick="setModalQuality('md')">Med</button>
+                        <button class="m3-btn m3-btn-tonal q-btn" id="btn-hd" onclick="setModalQuality('hd')">HD</button>
                     </div>
+                    
                     <div class="modal-actions-grid" style="margin-top: 12px;">
                         <button class="m3-btn m3-btn-filled" onclick="copyDirectGifFromModal()">
                             <svg class="svg-icon" viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
@@ -1287,11 +1287,22 @@ input::placeholder {
         let favoriteGifs = [];
         let currentModalGif = null;
         let currentModalTitle = "";
-        let currentModalQualityMode = "sd";
+        let currentGifQualities = {};
 
         let masonryColumns = [];
         let masonryHeights = [];
         let currentColumnCount = 0;
+        
+        function upgradeImage(img) {
+            const med = img.getAttribute('data-med');
+            if(!med) return;
+            const temp = new Image();
+            temp.onload = () => {
+                img.src = med;
+                img.removeAttribute('data-med');
+            };
+            temp.src = med;
+        }
 
         function getDesiredColumns() {
             if (window.innerWidth <= 860) return 2;
@@ -1559,15 +1570,12 @@ input::placeholder {
             setupMasonry(false);
             favoriteGifs.forEach(gif => {
                 if(!gif.media || !gif.media[0]) return;
-                const title = getTitleJS(gif);
-                const tinyUrl = gif.media[0].tinygif ? gif.media[0].tinygif.url : gif.media[0].gif.url;
-                const fullUrl = gif.media[0].gif ? gif.media[0].gif.url : tinyUrl;
-                appendCardToShortestColumn(createGifCard(gif, title, tinyUrl, fullUrl));
+                appendCardToShortestColumn(createGifCard(gif));
             });
             updateFavButtonsInDOM();
         }
 
-        function getTitleJS(gif) {
+         function getTitleJS(gif) {
             if (gif.title && gif.title.trim()) return gif.title.trim();
             if (gif.h1_title && gif.h1_title.trim()) return gif.h1_title.trim();
             if (gif.itemurl) {
@@ -1604,10 +1612,7 @@ input::placeholder {
                     } else {
                         results.forEach(gif => {
                             if(!gif.media || !gif.media[0]) return;
-                            const title = getTitleJS(gif);
-                            const tinyUrl = gif.media[0].tinygif ? gif.media[0].tinygif.url : gif.media[0].gif.url;
-                            const fullUrl = gif.media[0].gif ? gif.media[0].gif.url : tinyUrl;
-                            appendCardToShortestColumn(createGifCard(gif, title, tinyUrl, fullUrl));
+                            appendCardToShortestColumn(createGifCard(gif));
                         });
                     }
 
@@ -1625,10 +1630,15 @@ input::placeholder {
                 });
         }
 
-        function createGifCard(gif, title, tinyUrl, fullUrl) {
-            const tinyObj = (gif.media && gif.media[0] && gif.media[0].tinygif) ? gif.media[0].tinygif : gif.media[0].gif;
-            const fullObj = (gif.media && gif.media[0] && gif.media[0].gif) ? gif.media[0].gif : tinyObj;
-            const dims = (tinyObj && Array.isArray(tinyObj.dims) && tinyObj.dims.length === 2) ? tinyObj.dims : [220, 165];
+        function createGifCard(gif) {
+            const title = getTitleJS(gif);
+            const altText = (gif.content_description && gif.content_description.trim()) ? gif.content_description.trim() : title;
+            
+            const fullObj = gif.media[0].gif || gif.media[0].tinygif;
+            const mediumObj = gif.media[0].mediumgif || fullObj;
+            const tinyObj = gif.media[0].tinygif || mediumObj;
+            
+            const dims = (mediumObj && Array.isArray(mediumObj.dims) && mediumObj.dims.length === 2) ? mediumObj.dims : [220, 165];
             const w = dims[0] || 220;
             const h = dims[1] || 165;
 
@@ -1637,33 +1647,44 @@ input::placeholder {
             div.setAttribute("data-aspect", h / w);
             
             const a = document.createElement("a");
-            a.href = fullUrl;
+            a.href = fullObj.url;
             a.target = "_blank";
-            a.className = "gif-link";
+            a.className = "gif-link js-main-link";
             a.style.aspectRatio = `${w} / ${h}`;
             a.onclick = (e) => handleModalOpen(e, gif, title);
             
             const img = document.createElement("img");
-            img.src = MEDIA_PROXY + tinyUrl;
-            img.alt = (gif.content_description && gif.content_description.trim()) ? gif.content_description.trim() : title;
+            img.src = MEDIA_PROXY + tinyObj.url;
+            img.setAttribute('data-med', MEDIA_PROXY + mediumObj.url);
+            img.alt = altText;
             img.width = w;
             img.height = h;
             img.loading = "lazy";
             img.decoding = "async";
-            
-            img.onload = () => {
+            img.onload = function() {
                 div.classList.add("is-loaded");
-                if (fullUrl && fullUrl !== tinyUrl) {
-                    const hiRes = new Image();
-                    hiRes.onload = () => { img.src = MEDIA_PROXY + fullUrl; };
-                    hiRes.src = MEDIA_PROXY + fullUrl;
-                }
+                upgradeImage(this);
             };
             img.onerror = () => div.classList.add("is-loaded");
             
             const overlay = document.createElement("div");
             overlay.className = "gif-overlay";
             overlay.innerText = title;
+            
+            const badgesWrap = document.createElement("div");
+            badgesWrap.className = "nojs-res-badges";
+            const sdb = document.createElement("a");
+            sdb.className = "nojs-badge";
+            sdb.href = tinyObj.url;
+            sdb.target = "_blank";
+            sdb.innerText = "SD";
+            const hdb = document.createElement("a");
+            hdb.className = "nojs-badge";
+            hdb.href = fullObj.url;
+            hdb.target = "_blank";
+            hdb.innerText = "HD";
+            badgesWrap.appendChild(sdb);
+            badgesWrap.appendChild(hdb);
             
             const btn = document.createElement("button");
             btn.className = "card-fav-btn js-only";
@@ -1674,6 +1695,7 @@ input::placeholder {
             a.appendChild(img);
             a.appendChild(overlay);
             div.appendChild(a);
+            div.appendChild(badgesWrap);
             div.appendChild(btn);
             return div;
         }
@@ -1696,31 +1718,66 @@ input::placeholder {
             return Array.from(set).slice(0, 8);
         }
 
+        function setModalQuality(qual) {
+            document.querySelectorAll('.q-btn').forEach(b => {
+                b.classList.remove('m3-btn-filled');
+                b.classList.add('m3-btn-tonal');
+            });
+            const btn = document.getElementById('btn-' + qual);
+            if(btn) {
+                btn.classList.add('m3-btn-filled');
+                btn.classList.remove('m3-btn-tonal');
+            }
+            
+            const url = currentGifQualities[qual];
+            if(!url) return;
+            
+            const img = document.getElementById('modal-img');
+            const throbber = document.getElementById('modal-throbber');
+            
+            if (img.src.includes(url)) return; 
+            
+            throbber.style.display = 'block';
+            const temp = new Image();
+            temp.onload = () => {
+                if(currentGifQualities && currentGifQualities[qual] === url) {
+                    img.src = temp.src;
+                    throbber.style.display = 'none';
+                }
+            };
+            temp.src = MEDIA_PROXY + url;
+        }
+
         function handleModalOpen(e, gif, title) {
             if (e && e.preventDefault) e.preventDefault();
             const cleanTitle = getTitleJS(gif) || title;
             currentModalGif = gif;
             currentModalTitle = cleanTitle;
-            currentModalQualityMode = "hd"; 
-            updateModalQualityTabs();
             
-            const tinyObj = (gif.media && gif.media[0] && gif.media[0].tinygif) ? gif.media[0].tinygif : gif.media[0].gif;
-            const fullObj = (gif.media && gif.media[0] && gif.media[0].gif) ? gif.media[0].gif : tinyObj;
+            const fullObj = gif.media[0].gif || gif.media[0].tinygif;
+            const mediumObj = gif.media[0].mediumgif || fullObj;
+            const tinyObj = gif.media[0].tinygif || mediumObj;
+            
+            currentGifQualities = {
+                sd: tinyObj.url,
+                md: mediumObj.url,
+                hd: fullObj.url
+            };
             
             const modalImg = document.getElementById("modal-img");
-            const targetObj = tinyObj || fullObj;
-            if (Array.isArray(targetObj.dims) && targetObj.dims.length === 2) {
-                modalImg.style.aspectRatio = `${targetObj.dims[0]} / ${targetObj.dims[1]}`;
+            if (Array.isArray(fullObj.dims) && fullObj.dims.length === 2) {
+                modalImg.style.aspectRatio = `${fullObj.dims[0]} / ${fullObj.dims[1]}`;
             } else {
                 modalImg.style.aspectRatio = "";
             }
 
-            modalImg.src = MEDIA_PROXY + targetObj.url;
+            modalImg.src = MEDIA_PROXY + currentGifQualities.md;
+            setModalQuality('hd');
 
             document.getElementById("modal-title").innerText = cleanTitle;
             modalImg.alt = (gif.content_description && gif.content_description.trim()) ? gif.content_description.trim() : cleanTitle;
-            document.getElementById("meta-size").innerText = formatBytes(targetObj.size);
-            document.getElementById("meta-dims").innerText = (Array.isArray(targetObj.dims) && targetObj.dims.length === 2) ? `${targetObj.dims[0]} × ${targetObj.dims[1]}` : "Auto";
+            document.getElementById("meta-size").innerText = formatBytes(fullObj.size);
+            document.getElementById("meta-dims").innerText = (Array.isArray(fullObj.dims) && fullObj.dims.length === 2) ? `${fullObj.dims[0]} × ${fullObj.dims[1]}` : "Auto";
             
             updateModalFavButtonState(isGifFavorited(gif.id));
             
@@ -1742,30 +1799,6 @@ input::placeholder {
             return false;
         }
 
-        function setModalQuality(mode) {
-            if (!currentModalGif) return;
-            currentModalQualityMode = mode;
-            updateModalQualityTabs();
-
-            const tinyObj = (currentModalGif.media && currentModalGif.media[0] && currentModalGif.media[0].tinygif) ? currentModalGif.media[0].tinygif : currentModalGif.media[0].gif;
-            const fullObj = (currentModalGif.media && currentModalGif.media[0] && currentModalGif.media[0].gif) ? currentModalGif.media[0].gif : tinyObj;
-            const targetObj = (mode === 'hd') ? fullObj : tinyObj;
-
-            const modalImg = document.getElementById("modal-img");
-            modalImg.src = MEDIA_PROXY + targetObj.url;
-            document.getElementById("meta-size").innerText = formatBytes(targetObj.size);
-            document.getElementById("meta-dims").innerText = (Array.isArray(targetObj.dims) && targetObj.dims.length === 2) ? `${targetObj.dims[0]} × ${targetObj.dims[1]}` : "Auto";
-        }
-
-        function updateModalQualityTabs() {
-            const sdTab = document.getElementById("q-tab-sd");
-            const hdTab = document.getElementById("q-tab-hd");
-            if (sdTab && hdTab) {
-                sdTab.classList.toggle("active", currentModalQualityMode === "sd");
-                hdTab.classList.toggle("active", currentModalQualityMode === "hd");
-            }
-        }
-
         function updateModalFavButtonState(isFav) {
             const btn = document.getElementById("modal-fav-btn");
             btn.classList.toggle("is-fav", isFav);
@@ -1780,7 +1813,10 @@ input::placeholder {
         function closeModal() {
             document.getElementById("gif-modal").classList.remove("show");
             document.body.style.overflow = "scroll";
-            setTimeout(() => document.getElementById("modal-img").src = "", 250);
+            setTimeout(() => {
+                document.getElementById("modal-img").src = "";
+                document.getElementById("modal-throbber").style.display = "none";
+            }, 250);
         }
 
         function handleModalClick(e) {
@@ -1789,25 +1825,17 @@ input::placeholder {
 
         function copyDirectGifFromModal() {
             if (!currentModalGif) return;
-            const tinyObj = (currentModalGif.media && currentModalGif.media[0] && currentModalGif.media[0].tinygif) ? currentModalGif.media[0].tinygif : currentModalGif.media[0].gif;
-            const fullObj = (currentModalGif.media && currentModalGif.media[0] && currentModalGif.media[0].gif) ? currentModalGif.media[0].gif : tinyObj;
-            const targetObj = (currentModalQualityMode === 'hd') ? fullObj : tinyObj;
-            const url = targetObj.url;
-
+            const url = (currentModalGif.media && currentModalGif.media[0] && currentModalGif.media[0].gif) ? currentModalGif.media[0].gif.url : currentModalGif.url;
             if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(url).then(() => showToast(`Copied ${currentModalQualityMode.toUpperCase()} link!`)).catch(() => fallbackCopy(url));
+                navigator.clipboard.writeText(url).then(() => showToast("Copied original link!")).catch(() => fallbackCopy(url));
             } else fallbackCopy(url);
         }
 
         function copyProxiedGifFromModal() {
             if (!currentModalGif) return;
-            const tinyObj = (currentModalGif.media && currentModalGif.media[0] && currentModalGif.media[0].tinygif) ? currentModalGif.media[0].tinygif : currentModalGif.media[0].gif;
-            const fullObj = (currentModalGif.media && currentModalGif.media[0] && currentModalGif.media[0].gif) ? currentModalGif.media[0].gif : tinyObj;
-            const targetObj = (currentModalQualityMode === 'hd') ? fullObj : tinyObj;
-            const url = MEDIA_PROXY + targetObj.url;
-
+            const url = MEDIA_PROXY + ((currentModalGif.media && currentModalGif.media[0] && currentModalGif.media[0].gif) ? currentModalGif.media[0].gif.url : currentModalGif.url);
             if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(url).then(() => showToast(`Copied ${currentModalQualityMode.toUpperCase()} proxy link!`)).catch(() => fallbackCopy(url));
+                navigator.clipboard.writeText(url).then(() => showToast("Copied proxy link!")).catch(() => fallbackCopy(url));
             } else fallbackCopy(url);
         }
 
@@ -1838,20 +1866,16 @@ input::placeholder {
 
         async function downloadCurrentGif() {
             if (!currentModalGif) return;
-            const tinyObj = (currentModalGif.media && currentModalGif.media[0] && currentModalGif.media[0].tinygif) ? currentModalGif.media[0].tinygif : currentModalGif.media[0].gif;
-            const fullObj = (currentModalGif.media && currentModalGif.media[0] && currentModalGif.media[0].gif) ? currentModalGif.media[0].gif : tinyObj;
-            const targetObj = (currentModalQualityMode === 'hd') ? fullObj : tinyObj;
-            const url = MEDIA_PROXY + targetObj.url;
+            const url = MEDIA_PROXY + ((currentModalGif.media && currentModalGif.media[0] && currentModalGif.media[0].gif) ? currentModalGif.media[0].gif.url : currentModalGif.url);
             const slug = (currentModalTitle || "gif").toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || "gif";
-            
-            showToast(`Downloading ${currentModalQualityMode.toUpperCase()}...`);
+            showToast("Downloading...");
             try {
                 const res = await fetch(url);
                 const blob = await res.blob();
                 const bUrl = URL.createObjectURL(blob);
                 const a = document.createElement("a");
                 a.href = bUrl;
-                a.download = `${slug}-${currentModalQualityMode}.gif`;
+                a.download = `${slug}.gif`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
