@@ -1921,31 +1921,9 @@ html:not(.js-enabled) .js-main-link {
             document.body.removeChild(temp);
         }
 
-        async function downloadGifQuality(qual) {
+        function downloadGifQuality(qual) {
             if (!currentModalGif || !currentGifQualities[qual]) return;
-            const originalUrl = currentGifQualities[qual];
-            const url = MEDIA_PROXY ? (MEDIA_PROXY + originalUrl) : originalUrl;
-            const slug = (currentModalTitle || "gif").toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || "gif";
-            const filename = `${slug}-${qual}.gif`;
-            showToast("Downloading...");
-
-            try {
-                const res = await fetch(url, { mode: 'cors' });
-                if (!res.ok) throw new Error("Fetch failed");
-                const blob = await res.blob();
-                const bUrl = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.style.display = "none";
-                a.href = bUrl;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                setTimeout(() => URL.revokeObjectURL(bUrl), 4000);
-            } catch (err) {
-                showToast("Download failed");
-                console.error(err);
-            }
+            window.open(currentGifQualities[qual], "_blank");
         }
 
         let toastTimeout;
