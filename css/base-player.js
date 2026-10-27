@@ -297,8 +297,16 @@ window.SyncLevel = SyncLevel;
       '  cursor: pointer;',
       '  pointer-events: auto;',
       '  user-select: none;',
+      '  opacity: 1;',
+      '  visibility: visible;',
       '  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);',
-      '  transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease, opacity 0.25s ease;',
+      '  transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease, opacity 0.25s ease, visibility 0.25s ease;',
+      '}',
+      '.vjs-user-inactive.vjs-playing .alabaster-fs-desc-toggle:not(.is-expanded),',
+      '.alabaster-fs-desc-toggle.is-controls-hidden:not(.is-expanded) {',
+      '  opacity: 0 !important;',
+      '  visibility: hidden !important;',
+      '  pointer-events: none !important;',
       '}',
       '.alabaster-fs-desc-toggle:hover {',
       '  background: rgba(38, 38, 38, 0.9);',
@@ -335,6 +343,8 @@ window.SyncLevel = SyncLevel;
       '  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.72);',
       '  color: #f1f1f1;',
       '  font-family: "poketube flex", "PokeTube Flex", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;',
+      '  font-stretch: expanded;',
+      '  font-weight: 600;',
       '  pointer-events: auto;',
       '  overflow: hidden;',
       '  opacity: 0;',
@@ -356,7 +366,8 @@ window.SyncLevel = SyncLevel;
       '}',
       '.alabaster-fs-desc-heading {',
       '  font-size: 16px;',
-      '  font-weight: 700;',
+      '  font-weight: 600;',
+      '  font-stretch: expanded;',
       '  color: #ffffff;',
       '  margin: 0;',
       '  letter-spacing: -0.2px;',
@@ -389,6 +400,8 @@ window.SyncLevel = SyncLevel;
       '  border: 1px solid rgba(255, 255, 255, 0.06);',
       '  text-align: center;',
       '  user-select: none;',
+      '  font-stretch: expanded;',
+      '  font-weight: 600;',
       '}',
       '.alabaster-fs-desc-stat-item {',
       '  display: flex;',
@@ -400,7 +413,8 @@ window.SyncLevel = SyncLevel;
       '}',
       '.alabaster-fs-desc-stat-val {',
       '  font-size: 17px;',
-      '  font-weight: 700;',
+      '  font-weight: 600;',
+      '  font-stretch: expanded;',
       '  color: #ffffff;',
       '  line-height: 1.2;',
       '  letter-spacing: -0.2px;',
@@ -408,6 +422,7 @@ window.SyncLevel = SyncLevel;
       '.alabaster-fs-desc-stat-lbl {',
       '  font-size: 12px;',
       '  font-weight: 600;',
+      '  font-stretch: expanded;',
       '  color: #dcdcdc;',
       '  line-height: 1.2;',
       '}',
@@ -416,11 +431,17 @@ window.SyncLevel = SyncLevel;
       '  overflow-y: auto;',
       '  overflow-x: hidden;',
       '  font-size: 14px;',
+      '  font-weight: 600;',
+      '  font-stretch: expanded;',
       '  line-height: 1.58;',
       '  color: #e2e2e2;',
       '  word-break: break-word;',
       '  user-select: text;',
       '  flex: 1 1 auto;',
+      '}',
+      '.alabaster-fs-desc-body * {',
+      '  font-weight: 600;',
+      '  font-stretch: expanded;',
       '}',
       '.alabaster-fs-desc-body::-webkit-scrollbar {',
       '  width: 6px;',
@@ -438,7 +459,8 @@ window.SyncLevel = SyncLevel;
       '.alabaster-fs-desc-body a {',
       '  color: #3ea6ff;',
       '  text-decoration: none;',
-      '  font-weight: 500;',
+      '  font-weight: 600;',
+      '  font-stretch: expanded;',
       '}',
       '.alabaster-fs-desc-body a:hover {',
       '  text-decoration: underline;',
@@ -487,6 +509,23 @@ window.SyncLevel = SyncLevel;
       var fsDescDrawer = null;
       var fsDescBody = null;
       var isFsDescOpen = false;
+
+      var syncDescToggleWithUserActivity = function() {
+        if (!fsDescToggle || !rootEl) return;
+        var inactive = Boolean(
+          (typeof player.userActive === 'function' && !player.userActive()) ||
+          rootEl.classList.contains('vjs-user-inactive')
+        );
+        var playing = Boolean(
+          !player.paused() ||
+          rootEl.classList.contains('vjs-playing')
+        );
+        if (inactive && playing && !isFsDescOpen) {
+          fsDescToggle.classList.add('is-controls-hidden');
+        } else {
+          fsDescToggle.classList.remove('is-controls-hidden');
+        }
+      };
 
       var updateTitleBarDescVisibility = function(isFs) {
         if (!rootEl) return;
@@ -659,6 +698,7 @@ window.SyncLevel = SyncLevel;
           if (isFsDescOpen) {
             populateDescriptionVerbatim();
             fsDescToggle.classList.add('is-expanded');
+            fsDescToggle.classList.remove('is-controls-hidden');
             fsDescToggle.setAttribute('aria-expanded', 'true');
             fsDescDrawer.style.display = 'flex';
             compat.raf(function() {
@@ -667,6 +707,7 @@ window.SyncLevel = SyncLevel;
           } else {
             fsDescToggle.classList.remove('is-expanded');
             fsDescToggle.setAttribute('aria-expanded', 'false');
+            syncDescToggleWithUserActivity();
             fsDescDrawer.classList.remove('is-visible');
             setTimeout(function() {
               if (!isFsDescOpen && fsDescDrawer) {
@@ -702,6 +743,12 @@ window.SyncLevel = SyncLevel;
 
         rootEl.appendChild(fsDescToggle);
         rootEl.appendChild(fsDescDrawer);
+
+        player.on('useractive', syncDescToggleWithUserActivity);
+        player.on('userinactive', syncDescToggleWithUserActivity);
+        player.on('play', syncDescToggleWithUserActivity);
+        player.on('playing', syncDescToggleWithUserActivity);
+        player.on('pause', syncDescToggleWithUserActivity);
       }
 
       var loopInd = document.getElementById('loopedIndicator');
@@ -840,9 +887,11 @@ window.SyncLevel = SyncLevel;
           var hasDescriptionNode = Boolean(document.querySelector('.descriptionHtml'));
           if (isFs && hasDescriptionNode) {
             fsDescToggle.style.display = 'inline-flex';
+            syncDescToggleWithUserActivity();
           } else {
             fsDescToggle.style.display = 'none';
             fsDescToggle.classList.remove('is-expanded');
+            fsDescToggle.classList.remove('is-controls-hidden');
             fsDescToggle.setAttribute('aria-expanded', 'false');
             fsDescDrawer.classList.remove('is-visible');
             fsDescDrawer.style.display = 'none';
