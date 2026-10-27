@@ -64,7 +64,7 @@
   font-display: swap;
 }
 
-*, *::before, *::after {
+* {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -584,6 +584,9 @@ input::placeholder {
 }
 .gif-card:active {
   transform: scale(0.98);
+}
+body:not(.js-enabled) .js-main-link {
+  pointer-events: none;
 }
 .nojs-res-badges {
   position: absolute;
@@ -1220,7 +1223,7 @@ input::placeholder {
             <div class="modal-image-container">
                 <div id="modal-loading" class="modal-loading-overlay hidden">
                     <div class="spinner"></div>
-                    <span>Loading HD GIF...</span>
+                    <span>Loading gif...</span>
                 </div>
                 <img id="modal-img" src="" alt="Full GIF" decoding="async">
             </div>
@@ -1315,7 +1318,6 @@ input::placeholder {
         }
 
         function handleModalOpenEncoded(e, gifEncoded, titleEncoded) {
-            if (e) e.preventDefault();
             let gif, title;
             try {
                 gif = JSON.parse(decodeURIComponent(gifEncoded));
@@ -1748,7 +1750,7 @@ input::placeholder {
         }
 
         function handleModalOpen(e, gif, title) {
-            if (e) e.preventDefault();
+            if (e && e.preventDefault) e.preventDefault();
             const cleanTitle = getTitleJS(gif) || title;
             currentModalGif = gif;
             currentModalTitle = cleanTitle;
@@ -1888,7 +1890,19 @@ input::placeholder {
                 a.click();
                 document.body.removeChild(a);
                 setTimeout(() => URL.revokeObjectURL(bUrl), 4000);
-            } catch (err) { window.open(url, "_blank"); }
+            } catch (err) {
+                try {
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `${slug}-${qual}.gif`;
+                    a.target = "_blank";
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                } catch (e) {
+                    window.open(url, "_blank");
+                }
+            }
         }
 
         let toastTimeout;
