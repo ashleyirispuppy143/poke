@@ -108,6 +108,8 @@
       filter: drop-shadow(0 4px 24px rgba(255, 171, 188, 0.15));
       transition: transform var(--spring-spatial), filter var(--spring-spatial);
       will-change: transform;
+      position: relative;
+      z-index: 3;
     }
 
     .hero-logo:hover {
@@ -124,13 +126,9 @@
       user-select: none;
       cursor: default;
       position: relative;
-    }
-
-    .hero-title::after {
-      content: "";
-      position: absolute;
-      inset: -40px;
-      z-index: 1;
+      width: 100%;
+      max-width: 1200px;
+      padding: 12px 0;
     }
 
     .hero-title .line-main {
@@ -141,6 +139,7 @@
       z-index: 2;
       transition: font-variation-settings var(--spring-spatial), transform var(--spring-spatial);
       will-change: font-variation-settings, transform;
+      pointer-events: none;
     }
 
     .hero-title .line-privately {
@@ -156,6 +155,7 @@
       z-index: 2;
       transition: font-variation-settings var(--spring-spatial), background-color 0.3s, color 0.3s, transform var(--spring-spatial);
       will-change: font-variation-settings, transform, background-color;
+      pointer-events: none;
     }
 
     .hero-title:hover .line-main {
