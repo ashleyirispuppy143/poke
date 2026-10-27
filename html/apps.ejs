@@ -36,7 +36,7 @@
       --md-sys-color-outline: #544346;
       --md-sys-color-outline-variant: #382c2e;
 
-       --spring-fast: 0.35s cubic-bezier(0.22, 1.35, 0.36, 1);
+      --spring-fast: 0.35s cubic-bezier(0.22, 1.35, 0.36, 1);
       --spring-spatial: 0.55s cubic-bezier(0.18, 1.15, 0.3, 1);
     }
 
@@ -66,7 +66,7 @@
       color: var(--md-sys-color-on-primary);
     }
 
-     .hero-centered {
+    .hero-centered {
       padding: clamp(56px, 9vw, 112px) 24px clamp(40px, 6vw, 72px);
       text-align: center;
       display: flex;
@@ -76,6 +76,20 @@
       border-bottom: 1px solid var(--md-sys-color-outline-variant);
       background: var(--md-sys-color-surface);
     }
+    
+    .hero-logo {
+      width: clamp(100px, 15vw, 140px);
+      height: auto;
+      margin-bottom: 32px;
+      filter: drop-shadow(0 4px 24px rgba(255, 171, 188, 0.15));
+      transition: transform var(--spring-spatial), filter var(--spring-spatial);
+      will-change: transform;
+    }
+
+    .hero-logo:hover {
+      transform: scale(1.08) rotate(-4deg);
+      filter: drop-shadow(0 8px 32px rgba(255, 171, 188, 0.25));
+    }
 
     .hero-title {
       font-size: clamp(3rem, 8.5vw, 8.2rem);
@@ -84,13 +98,15 @@
       letter-spacing: -0.03em;
       margin-bottom: 28px;
       user-select: none;
+      cursor: default;
     }
 
     .hero-title .line-main {
       display: block;
-      font-variation-settings: "wdth" 145, "wght" 950;
+      font-variation-settings: "wdth" 145, "wght" 950, "slnt" 0;
       color: var(--md-sys-color-on-surface);
-      transition: font-variation-settings var(--spring-spatial);
+      transition: font-variation-settings var(--spring-spatial), transform var(--spring-spatial);
+      will-change: font-variation-settings, transform;
     }
 
     .hero-title .line-privately {
@@ -100,18 +116,22 @@
       text-transform: none;
       letter-spacing: 0.01em;
       margin-top: 8px;
-      padding: 0 16px;
-      transition: font-variation-settings var(--spring-spatial), background-color 0.2s, color 0.2s;
+      padding: 4px 24px;
+      border-radius: 50px;
+      transition: font-variation-settings var(--spring-spatial), background-color 0.3s, color 0.3s, transform var(--spring-spatial);
+      will-change: font-variation-settings, transform, background-color;
     }
 
     .hero-title:hover .line-main {
-      font-variation-settings: "wdth" 85, "wght" 400;
+      font-variation-settings: "wdth" 85, "wght" 400, "slnt" 0;
+      transform: translateY(-4px);
     }
 
     .hero-title:hover .line-privately {
       font-variation-settings: "wdth" 150, "wght" 950, "slnt" 0;
       background: var(--md-sys-color-primary);
       color: var(--md-sys-color-on-primary);
+      transform: translateY(4px) scale(1.05) rotate(-2deg);
     }
 
     .hero-sub {
@@ -122,7 +142,7 @@
       letter-spacing: 0.06em;
     }
 
-     .section-bar {
+    .section-bar {
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -136,7 +156,7 @@
       font-variation-settings: "wdth" 125, "wght" 700;
     }
 
-     .apps-directory {
+    .apps-directory {
       display: flex;
       flex-direction: column;
       width: 100%;
@@ -270,6 +290,57 @@
       border-color: var(--md-sys-color-on-surface);
       transform: translateX(6px);
     }
+    
+    /* Footer Styling */
+    .site-footer {
+      margin-top: auto;
+      padding: 64px 24px;
+      text-align: center;
+      background: var(--md-sys-color-surface-dim);
+      border-top: 1px solid var(--md-sys-color-outline-variant);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .site-footer p {
+      color: var(--md-sys-color-on-surface-variant);
+      font-size: 0.95rem;
+      line-height: 1.5;
+      max-width: 600px;
+    }
+
+    .site-footer a {
+      color: var(--md-sys-color-primary);
+      text-decoration: none;
+      font-weight: 600;
+      transition: color 0.2s, text-decoration 0.2s;
+    }
+
+    .site-footer a:hover {
+      color: var(--md-sys-color-on-surface);
+      text-decoration: underline;
+    }
+
+    .footer-msg {
+      font-size: 1.15rem !important;
+      color: var(--md-sys-color-on-surface) !important;
+      font-variation-settings: "wdth" 105, "wght" 550;
+      margin-bottom: 12px;
+    }
+
+    .footer-anti-ai {
+      margin-top: 16px;
+      font-variation-settings: "wdth" 110, "wght" 700;
+      color: var(--md-sys-color-primary) !important;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.85rem !important;
+      padding: 8px 16px;
+      background: var(--md-sys-color-surface-container-high);
+      border-radius: 8px;
+    }
 
     @media (prefers-reduced-motion: reduce) {
       *, ::after, ::before {
@@ -313,9 +384,10 @@
 <body>
 
   <header class="hero-centered">
+    <img src="/css/logo-poke.svg?v=5" alt="Poke Logo" class="hero-logo" />
     <h1 class="hero-title">
       <span class="line-main">Do whatever you want!</span>
-      <span class="line-privately">(Privetly!)</span>
+      <span class="line-privately">(Privately!)</span>
     </h1>
     <p class="hero-sub">You can do these with Poke:</p>
   </header>
@@ -404,6 +476,12 @@
     </a>
 
   </main>
+
+  <footer class="site-footer">
+    <p class="footer-msg">Poke is where you can do all those stuff... wonder what will you be able to do in the future :3?</p>
+    <p>You can see our source code here: <br/><a href="https://codeberg.org/ashleyirispuppy/poke/" target="_blank" rel="noopener">https://codeberg.org/ashleyirispuppy/poke/</a></p>
+    <p class="footer-anti-ai"><i class="fa-solid fa-ban" style="margin-right: 6px;"></i>Poke is proudly <strong>not</strong> AI slop.</p>
+  </footer>
 
   <script>
     (function(){
