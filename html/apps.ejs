@@ -108,8 +108,6 @@
       filter: drop-shadow(0 4px 24px rgba(255, 171, 188, 0.15));
       transition: transform var(--spring-spatial), filter var(--spring-spatial);
       will-change: transform;
-      position: relative;
-      z-index: 3;
     }
 
     .hero-logo:hover {
@@ -119,16 +117,13 @@
 
     .hero-title {
       font-size: clamp(3rem, 8.5vw, 8.2rem);
-      line-height: 0.9;
+      line-height: 0.95;
       text-transform: uppercase;
       letter-spacing: -0.03em;
-      margin-bottom: 28px;
+      margin-bottom: 32px;
       user-select: none;
       cursor: default;
       position: relative;
-      width: 100%;
-      max-width: 1200px;
-      padding: 12px 0;
     }
 
     .hero-title .line-main {
@@ -137,37 +132,21 @@
       color: var(--md-sys-color-on-surface);
       position: relative;
       z-index: 2;
-      transition: font-variation-settings var(--spring-spatial), transform var(--spring-spatial);
-      will-change: font-variation-settings, transform;
-      pointer-events: none;
     }
 
     .hero-title .line-privately {
       display: inline-block;
-      font-variation-settings: "wdth" 40, "wght" 350, "slnt" -10;
-      color: var(--md-sys-color-primary);
-      text-transform: none;
-      letter-spacing: 0.01em;
-      margin-top: 8px;
-      padding: 4px 24px;
-      border-radius: 50px;
-      position: relative;
-      z-index: 2;
-      transition: font-variation-settings var(--spring-spatial), background-color 0.3s, color 0.3s, transform var(--spring-spatial);
-      will-change: font-variation-settings, transform, background-color;
-      pointer-events: none;
-    }
-
-    .hero-title:hover .line-main {
-      font-variation-settings: "wdth" 85, "wght" 400, "slnt" 0;
-      transform: translateY(-4px);
-    }
-
-    .hero-title:hover .line-privately {
       font-variation-settings: "wdth" 150, "wght" 950, "slnt" 0;
       background: var(--md-sys-color-primary);
       color: var(--md-sys-color-on-primary);
-      transform: translateY(4px) scale(1.05) rotate(-2deg);
+      text-transform: none;
+      letter-spacing: 0.01em;
+      margin-top: 14px;
+      padding: 6px 28px;
+      border-radius: 50px;
+      transform: rotate(-2deg);
+      position: relative;
+      z-index: 2;
     }
 
     .hero-sub {
@@ -178,33 +157,60 @@
       letter-spacing: 0.06em;
     }
 
-    .text-section {
-      padding: 64px clamp(24px, 6vw, 72px);
-      max-width: 900px;
-      margin: 0 auto;
-      text-align: center;
+    /* Editorial Split Grid for About & History */
+    .story-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      width: 100%;
+      background: var(--md-sys-color-surface);
     }
 
-    .text-section h2 {
-      font-size: clamp(2.2rem, 5vw, 3rem);
+    .story-card {
+      padding: clamp(40px, 6vw, 80px) clamp(24px, 5vw, 72px);
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      position: relative;
+    }
+
+    .story-card:first-child {
+      border-right: 1px solid var(--md-sys-color-outline-variant);
+    }
+
+    .story-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
+    }
+
+    .story-card h2 {
+      font-size: clamp(2rem, 3.8vw, 2.85rem);
       color: var(--md-sys-color-primary);
       text-transform: uppercase;
-      margin-bottom: 24px;
-      font-variation-settings: "wdth" 130, "wght" 850;
-      letter-spacing: -0.01em;
-      line-height: 1.1;
+      font-variation-settings: "wdth" 135, "wght" 900;
+      letter-spacing: -0.02em;
+      line-height: 1;
     }
 
-    .text-section p {
-      font-size: 1.15rem;
-      line-height: 1.8;
+    .story-body {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .story-body p {
+      font-size: 1.1rem;
+      line-height: 1.75;
       color: var(--md-sys-color-on-surface-variant);
-      margin-bottom: 24px;
       font-variation-settings: "wdth" 100, "wght" 450;
     }
 
-    .text-section p:last-child {
-      margin-bottom: 0;
+    .story-body p:first-child {
+      color: var(--md-sys-color-on-surface);
+      font-size: 1.2rem;
+      font-variation-settings: "wdth" 102, "wght" 550;
     }
 
     .section-bar {
@@ -426,6 +432,16 @@
       }
     }
 
+    @media (max-width: 900px) {
+      .story-grid {
+        grid-template-columns: 1fr;
+      }
+      .story-card:first-child {
+        border-right: none;
+        border-bottom: 1px solid var(--md-sys-color-outline-variant);
+      }
+    }
+
     @media (max-width: 640px) {
       .app-row {
         grid-template-columns: 64px 1fr 48px;
@@ -457,17 +473,27 @@
     </div>
   </header>
 
-  <section class="text-section">
-    <h2>About Poke</h2>
-    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.</p>
-    <p>Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Curabitur pretium tincidunt lacus. Nulla gravida orci a odio. Nullam varius, turpis et commodo pharetra, est eros bibendum elit, nec luctus magna felis sollicitudin mauris.</p>
-  </section>
+  <div class="story-grid">
+    <section class="story-card">
+      <div class="story-header">
+        <h2>About Poke</h2>
+      </div>
+      <div class="story-body">
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+        <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Curabitur pretium tincidunt lacus. Nulla gravida orci a odio.</p>
+      </div>
+    </section>
 
-  <section class="text-section">
-    <h2>History</h2>
-    <p>Integer in mauris eu nibh euismod gravida. Duis ac tellus et risus vulputate vehicula. Donec lobortis risus a elit. Etiam tempor. Ut ullamcorper, ligula eu tempor congue, eros est euismod turpis, id tincidunt sapien risus a quam. Maecenas fermentum consequat mi.</p>
-    <p>Donec fermentum. Pellentesque malesuada nulla a mi. Duis sapien sem, aliquet nec, commodo eget, consequat quis, neque. Aliquam faucibus, elit ut dictum aliquet, felis nisl adipiscing sapien, sed malesuada diam lacus eget erat. Cras mollis scelerisque nunc. Nullam arcu.</p>
-  </section>
+    <section class="story-card">
+      <div class="story-header">
+        <h2>History</h2>
+      </div>
+      <div class="story-body">
+        <p>Integer in mauris eu nibh euismod gravida. Duis ac tellus et risus vulputate vehicula. Donec lobortis risus a elit. Etiam tempor. Ut ullamcorper, ligula eu tempor congue, eros est euismod turpis, id tincidunt sapien risus a quam.</p>
+        <p>Donec fermentum. Pellentesque malesuada nulla a mi. Duis sapien sem, aliquet nec, commodo eget, consequat quis, neque. Aliquam faucibus, elit ut dictum aliquet, felis nisl adipiscing sapien, sed malesuada diam lacus eget erat. Cras mollis scelerisque nunc.</p>
+      </div>
+    </section>
+  </div>
 
   <div class="section-bar">
     <span>Our Applications</span>
