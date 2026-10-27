@@ -1920,7 +1920,7 @@ html:not(.js-enabled) .js-main-link {
             try { document.execCommand("copy"); showToast("Copied link!"); } catch (e) {}
             document.body.removeChild(temp);
         }
- 
+
         async function downloadGifQuality(qual) {
             if (!currentModalGif || !currentGifQualities[qual]) return;
             const originalUrl = currentGifQualities[qual];
@@ -1929,7 +1929,7 @@ html:not(.js-enabled) .js-main-link {
             const filename = `${slug}-${qual}.gif`;
             showToast("Downloading...");
 
-             const fetchAndDownload = async (targetUrl) => {
+            const fetchAndDownload = async (targetUrl) => {
                 const res = await fetch(targetUrl);
                 if (!res.ok) throw new Error("Fetch failed");
                 const blob = await res.blob();
@@ -1949,7 +1949,7 @@ html:not(.js-enabled) .js-main-link {
             } catch (err) {
                 const a = document.createElement("a");
                 a.style.display = "none";
-                a.href = originalUrl;
+                a.href = url;
                 a.download = filename;
                 document.body.appendChild(a);
                 a.click();
