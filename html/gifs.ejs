@@ -1920,35 +1920,40 @@ html:not(.js-enabled) .js-main-link {
             try { document.execCommand("copy"); showToast("Copied link!"); } catch (e) {}
             document.body.removeChild(temp);
         }
-
+ 
         async function downloadGifQuality(qual) {
             if (!currentModalGif || !currentGifQualities[qual]) return;
-            const url = MEDIA_PROXY + currentGifQualities[qual];
+            const originalUrl = currentGifQualities[qual];
+            const url = MEDIA_PROXY ? (MEDIA_PROXY + originalUrl) : originalUrl;
             const slug = (currentModalTitle || "gif").toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || "gif";
+            const filename = `${slug}-${qual}.gif`;
             showToast("Downloading...");
-            try {
-                const res = await fetch(url);
+
+             const fetchAndDownload = async (targetUrl) => {
+                const res = await fetch(targetUrl);
+                if (!res.ok) throw new Error("Fetch failed");
                 const blob = await res.blob();
                 const bUrl = URL.createObjectURL(blob);
                 const a = document.createElement("a");
+                a.style.display = "none";
                 a.href = bUrl;
-                a.download = `${slug}-${qual}.gif`;
+                a.download = filename;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
                 setTimeout(() => URL.revokeObjectURL(bUrl), 4000);
+            };
+
+            try {
+                await fetchAndDownload(url);
             } catch (err) {
-                try {
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = `${slug}-${qual}.gif`;
-                    a.target = "_blank";
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                } catch (e) {
-                    window.open(url, "_blank");
-                }
+                const a = document.createElement("a");
+                a.style.display = "none";
+                a.href = originalUrl;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
             }
         }
 
