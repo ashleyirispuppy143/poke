@@ -3,396 +3,435 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Poke — Apps ✧</title>
-  <meta name="description" content="Poke is free software: a privacy-first suite with a player, translator, maps, notes, calendar, and more." />
-  <meta name="theme-color" content="#1e1e2e" />
+  <title>Poke Apps!</title>
+  <meta name="description" content="Poke is privacy-first suite with a player, gif picker, maps, notes, calendar, weather, and more!!" />
+  <meta name="theme-color" content="#151112" />
   
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700;800&family=Nunito:wght@500;700;800&display=swap" rel="stylesheet">
   <link href="https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css" rel="stylesheet" />
   
   <style>
+    @font-face {
+      font-family: "PokeTube Flex";
+      src: url("/static/robotoflex.ttf");
+      font-style: normal;
+      font-stretch: 1% 800%;
+      font-display: swap;
+    }
+
     :root {
-      /* Catppuccin Mocha */
-      --ctp-base: #1e1e2e;
-      --ctp-mantle: #181825;
-      --ctp-crust: #11111b;
-      --ctp-surface0: #313244;
-      --ctp-surface1: #45475a;
-      --ctp-surface2: #585b70;
-      --ctp-text: #cdd6f4;
-      --ctp-subtext0: #a6adc8;
-      --ctp-subtext1: #bac2de;
-      --ctp-pink: #f5c2e7;
-      --ctp-mauve: #cba6f7;
-      --ctp-green: #a6e3a1;
+      --md-sys-color-primary: #ffabbc;
+      --md-sys-color-on-primary: #3b0917;
+      --md-sys-color-primary-container: #561d2b;
+      --md-sys-color-on-primary-container: #ffd9df;
+      
+      --md-sys-color-surface: #151112;
+      --md-sys-color-surface-dim: #100c0d;
+      --md-sys-color-surface-container-low: #1e191a;
+      --md-sys-color-surface-container: #241d1f;
+      --md-sys-color-surface-container-high: #2f2628;
+      --md-sys-color-surface-container-highest: #3b3033;
+      
+      --md-sys-color-on-surface: #f2dfe1;
+      --md-sys-color-on-surface-variant: #c4afb2;
+      --md-sys-color-outline: #544346;
+      --md-sys-color-outline-variant: #382c2e;
 
-      /* M3 but softer/kawaii */
-      --md-radius-l: 36px;
-      --md-radius-m: 24px;
-      --md-radius-s: 16px;
-      --md-elevation: 0 8px 16px rgba(17, 17, 27, 0.2), 0 2px 6px rgba(245, 194, 231, 0.05);
-      --transition: 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); /* Bouncy cute transition */
+      /* Android 16 Expressive Spring Physics */
+      --spring-fast: 0.35s cubic-bezier(0.22, 1.35, 0.36, 1);
+      --spring-spatial: 0.55s cubic-bezier(0.18, 1.15, 0.3, 1);
     }
 
-    * { box-sizing: border-box; }
-    
-    html, body { height: 100%; }
-    
-    body {
+    * {
+      box-sizing: border-box;
       margin: 0;
-      color: var(--ctp-text);
-      /* Cute, rounded typography */
-      font-family: 'Nunito', ui-sans-serif, system-ui, sans-serif;
-      background-color: var(--ctp-base);
-      /* Polka dot overlay + Soft radial gradients */
-      background-image: 
-        radial-gradient(var(--ctp-surface0) 2px, transparent 2px),
-        radial-gradient(circle at 10% 40%, rgba(245, 194, 231, 0.08) 0%, transparent 40%),
-        radial-gradient(circle at 90% 60%, rgba(203, 166, 247, 0.08) 0%, transparent 40%);
-      background-size: 24px 24px, 100% 100%, 100% 100%;
-      background-attachment: fixed;
-      overflow-x: hidden;
-      line-height: 1.6;
+      padding: 0;
     }
 
-    .dashboard {
-      display: grid;
-      grid-template-columns: 400px 1fr;
-      gap: 36px;
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 48px;
+    html {
+      background-color: var(--md-sys-color-surface);
+      color: var(--md-sys-color-on-surface);
+      font-family: "PokeTube Flex", system-ui, -apple-system, sans-serif;
+      scroll-behavior: smooth;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
       min-height: 100dvh;
-      align-items: start;
-    }
-
-    .hero-pane {
-      position: sticky;
-      top: 48px;
+      overflow-x: hidden;
       display: flex;
       flex-direction: column;
-      background: var(--ctp-mantle);
-      padding: 48px 40px;
-      border-radius: var(--md-radius-l);
-      box-shadow: var(--md-elevation);
-      border: 3px solid rgba(245, 194, 231, 0.08);
+    }
+
+    ::selection {
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
+    }
+
+    /* Top Centered Expressive Hero */
+    .hero-centered {
+      padding: clamp(56px, 9vw, 112px) 24px clamp(40px, 6vw, 72px);
       text-align: center;
-    }
-
-    h1.title {
-      margin: 0 0 16px 0;
-      font-family: 'M PLUS Rounded 1c', sans-serif;
-      font-weight: 800;
-      font-size: clamp(36px, 4vw, 52px);
-      background: linear-gradient(135deg, var(--ctp-pink), var(--ctp-mauve));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      letter-spacing: -1px;
-      position: relative;
-    }
-
-    h1.title::before, h1.title::after {
-      content: "✧";
-      position: absolute;
-      font-size: 24px;
-      color: var(--ctp-pink);
-      -webkit-text-fill-color: var(--ctp-pink);
-      opacity: 0.6;
-    }
-
-    h1.title::before { top: -10px; left: -10px; }
-    h1.title::after { bottom: -5px; right: -10px; transform: scale(0.8); }
-
-    .subtitle {
-      margin: 0 0 40px 0;
-      color: var(--ctp-subtext1);
-      font-size: 1.15rem;
-      font-weight: 700;
-    }
-
-    .cta-column {
       display: flex;
       flex-direction: column;
-      gap: 16px;
-      margin-top: auto;
-    }
-
-    .cta {
-      display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 12px;
-      text-decoration: none;
-      padding: 0 32px;
-      height: 56px;
-      border-radius: 9999px; /* Pill shape */
-      font-weight: 800;
-      font-size: 16px;
-      transition: var(--transition);
-      border: 3px solid transparent;
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
+      background: var(--md-sys-color-surface);
     }
 
-    .cta.primary {
-      background: var(--ctp-pink);
-      color: var(--ctp-crust);
-      box-shadow: 0 4px 12px rgba(245, 194, 231, 0.3);
+    .hero-title {
+      font-size: clamp(3rem, 8.5vw, 8.2rem);
+      line-height: 0.9;
+      text-transform: uppercase;
+      letter-spacing: -0.03em;
+      margin-bottom: 28px;
+      user-select: none;
     }
 
-    .cta.primary:hover {
-      transform: translateY(-4px) scale(1.02);
-      box-shadow: 0 8px 20px rgba(245, 194, 231, 0.4);
+    .hero-title .line-main {
+      display: block;
+      font-variation-settings: "wdth" 145, "wght" 950;
+      color: var(--md-sys-color-on-surface);
+      transition: font-variation-settings var(--spring-spatial);
     }
 
-    .cta.ghost {
-      background: rgba(245, 194, 231, 0.05);
-      color: var(--ctp-pink);
-      border-color: rgba(245, 194, 231, 0.2);
+    .hero-title .line-privately {
+      display: inline-block;
+      font-variation-settings: "wdth" 40, "wght" 350, "slnt" -10;
+      color: var(--md-sys-color-primary);
+      text-transform: none;
+      letter-spacing: 0.01em;
+      margin-top: 8px;
+      padding: 0 16px;
+      transition: font-variation-settings var(--spring-spatial), background-color 0.2s, color 0.2s;
     }
 
-    .cta.ghost:hover {
-      background: rgba(245, 194, 231, 0.1);
-      transform: translateY(-4px) scale(1.02);
-      border-color: var(--ctp-pink);
+    .hero-title:hover .line-main {
+      font-variation-settings: "wdth" 85, "wght" 400;
     }
 
-    .apps {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 24px;
+    .hero-title:hover .line-privately {
+      font-variation-settings: "wdth" 150, "wght" 950, "slnt" 0;
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
     }
 
-    .card {
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      text-decoration: none;
-      color: var(--ctp-text);
-      background: var(--ctp-surface0);
-      border-radius: var(--md-radius-m);
-      padding: 28px;
-      transition: var(--transition);
-      border: 3px solid rgba(255, 255, 255, 0.02);
+    .hero-sub {
+      font-size: clamp(1.1rem, 2vw, 1.5rem);
+      color: var(--md-sys-color-on-surface-variant);
+      font-variation-settings: "wdth" 115, "wght" 650;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
     }
 
-    .card:hover {
-      background: var(--ctp-surface1);
-      transform: translateY(-6px) scale(1.02);
-      border-color: rgba(245, 194, 231, 0.3);
-      box-shadow: var(--md-elevation);
-    }
-
-    .card:focus-visible {
-      outline: 4px solid var(--ctp-pink);
-      outline-offset: 4px;
-      border-radius: var(--md-radius-m);
-    }
-
-    .row {
+     .section-bar {
       display: flex;
       align-items: center;
-      gap: 20px;
-      margin-bottom: 16px;
+      justify-content: space-between;
+      padding: 18px clamp(24px, 5vw, 72px);
+      background: var(--md-sys-color-surface-dim);
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--md-sys-color-on-surface-variant);
+      font-variation-settings: "wdth" 125, "wght" 700;
     }
-    
-    .badge {
+
+    /* Full-Bleed Architectural App Index */
+    .apps-directory {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+    }
+
+    .app-row {
+      display: grid;
+      grid-template-columns: 90px 88px minmax(240px, 1.2fr) 1.5fr 96px;
+      align-items: center;
+      text-decoration: none;
+      color: var(--md-sys-color-on-surface);
+      background: var(--md-sys-color-surface);
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
+      min-height: 116px;
+      padding: 16px clamp(16px, 4vw, 56px);
+      position: relative;
+      transition: background-color 0.2s ease, padding var(--spring-fast);
+    }
+
+    .app-row::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 0;
+      background: var(--md-sys-color-primary);
+      transition: width var(--spring-fast);
+    }
+
+    .app-row:hover,
+    .app-row:focus-visible {
+      background: var(--md-sys-color-surface-container);
+      outline: none;
+    }
+
+    .app-row:hover::before,
+    .app-row:focus-visible::before {
+      width: 10px;
+    }
+
+    .app-index {
+      font-size: 1.05rem;
+      color: var(--md-sys-color-on-surface-variant);
+      font-variation-settings: "wdth" 60, "wght" 600;
+      transition: font-variation-settings var(--spring-fast), color 0.2s;
+    }
+
+    .app-row:hover .app-index,
+    .app-row:focus-visible .app-index {
+      color: var(--md-sys-color-primary);
+      font-variation-settings: "wdth" 140, "wght" 900;
+    }
+
+    .app-shape {
+      width: 60px;
+      height: 60px;
+      background: var(--md-sys-color-surface-container-high);
+      color: var(--md-sys-color-primary);
       display: grid;
       place-items: center;
-      width: 56px;
-      height: 56px;
-      border-radius: 50%; /* Perfect circles for softer look */
-      background: var(--ctp-base);
-      color: var(--ctp-pink);
-      font-size: 24px;
-      transition: var(--transition);
-      box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+      font-size: 1.4rem;
+      border-radius: 14px;
+      transition: border-radius var(--spring-fast), background-color 0.2s, color 0.2s, transform var(--spring-fast);
     }
 
-    .card:hover .badge {
-      background: var(--ctp-pink);
-      color: var(--ctp-crust);
-      transform: rotate(-10deg) scale(1.1);
+    .app-row:hover .app-shape,
+    .app-row:focus-visible .app-shape {
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
+      border-radius: 50%;
+      transform: scale(1.08) rotate(-6deg);
     }
 
-    .name {
-      font-family: 'M PLUS Rounded 1c', sans-serif;
-      font-weight: 800;
-      font-size: 1.3rem;
-      letter-spacing: 0.2px;
-      color: var(--ctp-text);
-    }
-
-    .hint {
-      color: var(--ctp-subtext0);
-      font-size: 1rem;
-      font-weight: 500;
-    }
-
-    .ext {
-      position: absolute;
-      top: 24px;
-      right: 24px;
-      color: var(--ctp-surface2);
-      transition: var(--transition);
-      font-size: 14px;
-    }
-
-    .card:hover .ext {
-      color: var(--ctp-pink);
-      transform: translate(2px, -2px);
-    }
-
-    .e2e-badge {
-      position: absolute;
-      top: 24px;
-      right: 24px;
-      background: rgba(166, 227, 161, 0.15);
-      color: var(--ctp-green);
-      font-size: 12px;
-      font-weight: 800;
-      padding: 6px 14px;
-      border-radius: 9999px;
+    .app-name {
+      font-size: clamp(2rem, 3.6vw, 3.35rem);
       text-transform: uppercase;
-      letter-spacing: 0.5px;
-      border: 2px solid rgba(166, 227, 161, 0.3);
+      line-height: 0.95;
+      letter-spacing: -0.02em;
+      font-variation-settings: "wdth" 90, "wght" 780;
+      transition: font-variation-settings var(--spring-spatial), color 0.2s, transform var(--spring-fast);
+      padding-right: 24px;
+    }
+
+    .app-row:hover .app-name,
+    .app-row:focus-visible .app-name {
+      font-variation-settings: "wdth" 148, "wght" 950;
+      color: var(--md-sys-color-primary);
+    }
+
+    .app-desc {
+      font-size: 1.05rem;
+      color: var(--md-sys-color-on-surface-variant);
+      font-variation-settings: "wdth" 98, "wght" 450;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding-right: 16px;
+    }
+
+    .app-tag {
+      display: inline-block;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      padding: 4px 8px;
+      background: var(--md-sys-color-primary-container);
+      color: var(--md-sys-color-on-primary-container);
+      border-radius: 4px;
+      font-variation-settings: "wdth" 130, "wght" 800;
+      letter-spacing: 0.05em;
+      flex-shrink: 0;
+    }
+
+    .app-go {
+      justify-self: end;
+      width: 52px;
+      height: 52px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--md-sys-color-outline);
+      border-radius: 10px;
+      color: var(--md-sys-color-on-surface-variant);
+      font-size: 1.1rem;
+      transition: all var(--spring-fast);
+    }
+
+    .app-row:hover .app-go,
+    .app-row:focus-visible .app-go {
+      background: var(--md-sys-color-on-surface);
+      color: var(--md-sys-color-surface);
+      border-color: var(--md-sys-color-on-surface);
+      transform: translateX(6px);
     }
 
     @media (prefers-reduced-motion: reduce) {
-      *, ::after, ::before { transition: none !important; animation: none !important; }
+      *, ::after, ::before {
+        transition: none !important;
+      }
     }
-    
-    @media (max-width: 900px) {
-      .dashboard { grid-template-columns: 1fr; padding: 24px; gap: 32px; }
-      .hero-pane { position: relative; top: 0; padding: 40px 24px; }
-      .cta-column { flex-direction: row; flex-wrap: wrap; margin-top: 32px; }
-      .cta { flex: 1; min-width: max-content; }
+
+    @media (max-width: 1080px) {
+      .app-row {
+        grid-template-columns: 52px 72px 1fr 56px;
+        row-gap: 8px;
+        padding: 22px 24px;
+      }
+      .app-desc {
+        grid-column: 3 / 5;
+        padding-top: 4px;
+      }
+      .app-go {
+        grid-column: 4;
+        grid-row: 1;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .app-row {
+        grid-template-columns: 64px 1fr 48px;
+      }
+      .app-index {
+        display: none;
+      }
+      .app-desc {
+        grid-column: 2 / 4;
+      }
+      .app-go {
+        grid-column: 3;
+        grid-row: 1;
+      }
     }
   </style>
 </head>
 <body>
 
-  <div class="dashboard">
+  <header class="hero-centered">
+    <h1 class="hero-title">
+      <span class="line-main">Do whatever you want!</span>
+      <span class="line-privately">(Privetly!)</span>
+    </h1>
+    <p class="hero-sub">You can do these with Poke:</p>
+  </header>
+
+  <main id="apps" class="apps-directory" aria-label="Application Directory">
     
-    <aside class="hero-pane" aria-labelledby="title">
-      <h1 id="title" class="title">Poke Apps</h1>
-      <p class="subtitle">YouTube front-end, translator, maps, notes, calendar, and more! Designed with privacy in mind ♡</p>
-      
-      <div class="cta-column">
-        <a class="cta primary" href="/app">
-          <i class="fa-solid fa-compass"></i> Discover!
-        </a>
-        <a class="cta ghost" href="#apps">
-          <i class="fa-solid fa-grid-2"></i> Browse Apps
-        </a>
-      </div>
-    </aside>
+    <a class="app-row" href="/app">
+      <span class="app-index">01</span>
+      <span class="app-shape"><i class="fa-solid fa-play"></i></span>
+      <span class="app-name">Watch</span>
+      <span class="app-desc">
+        The biggest part of Poke - the best-looking YouTube front end ever!
+      </span>
+      <span class="app-go"><i class="fa-solid fa-arrow-right"></i></span>
+    </a>
 
-    <main id="apps" class="apps" aria-label="Apps">
-      
-      <a class="card" href="/game-hub" aria-label="Games">
-        <div class="row">
-          <span class="badge"><i class="fa-solid fa-gamepad"></i></span>
-          <span class="name">Games</span>
-        </div>
-        <span class="hint">Amazing games :3</span>
-      </a>
+    <a class="app-row" href="/game-hub">
+      <span class="app-index">02</span>
+      <span class="app-shape"><i class="fa-solid fa-gamepad"></i></span>
+      <span class="app-name">Games</span>
+      <span class="app-desc">
+        Amazing games :3
+      </span>
+      <span class="app-go"><i class="fa-solid fa-arrow-right"></i></span>
+    </a>
 
-      <a class="card" href="/translate" aria-label="Translate">
-        <div class="row">
-          <span class="badge"><i class="fa-solid fa-language"></i></span>
-          <span class="name">Translate</span>
-        </div>
-        <span class="hint">Fast & accurate free software translation!!</span>
-      </a>
+    <a class="app-row" href="/gifs">
+      <span class="app-index">03</span>
+      <span class="app-shape"><i class="fa-solid fa-images"></i></span>
+      <span class="app-name">GIF Picker</span>
+      <span class="app-desc">
+        Fast &amp; private free software GIF finder!!
+      </span>
+      <span class="app-go"><i class="fa-solid fa-arrow-right"></i></span>
+    </a>
 
-      <a class="card" href="/map" aria-label="Maps">
-        <div class="row">
-          <span class="badge"><i class="fa-solid fa-map-location-dot"></i></span>
-          <span class="name">Maps</span>
-        </div>
-        <span class="hint">A good map-view for the web!</span>
-      </a>
+    <a class="app-row" href="/weather">
+      <span class="app-index">04</span>
+      <span class="app-shape"><i class="fa-solid fa-cloud-sun-rain"></i></span>
+      <span class="app-name">Weather</span>
+      <span class="app-desc">
+        Check local weather forecasts privately!
+      </span>
+      <span class="app-go"><i class="fa-solid fa-arrow-right"></i></span>
+    </a>
 
-      <a class="card" href="https://social.poketube.fun" target="_blank" rel="noopener" aria-label="Fediverse">
-        <span class="ext"><i class="fa-solid fa-arrow-up-right-from-square"></i></span>
-        <div class="row">
-          <span class="badge"><i class="fa-brands fa-mastodon"></i></span>
-          <span class="name">Fediverse</span>
-        </div>
-        <span class="hint">Poke Social community</span>
-      </a>
+    <a class="app-row" href="/map">
+      <span class="app-index">05</span>
+      <span class="app-shape"><i class="fa-solid fa-map-location-dot"></i></span>
+      <span class="app-name">Maps</span>
+      <span class="app-desc">
+        A good map-view for the web!
+      </span>
+      <span class="app-go"><i class="fa-solid fa-arrow-right"></i></span>
+    </a>
 
-      <a class="card" href="/calendar" aria-label="Calendar">
-        <div class="row">
-          <span class="badge"><i class="fa-solid fa-calendar"></i></span>
-          <span class="name">Calendar</span>
-        </div>
-        <span class="hint">NO javascript!!! calendar :3</span>
-      </a>
+    <a class="app-row" href="https://social.poketube.fun" target="_blank" rel="noopener">
+      <span class="app-index">06</span>
+      <span class="app-shape"><i class="fa-brands fa-mastodon"></i></span>
+      <span class="app-name">Fediverse</span>
+      <span class="app-desc">
+        Poke Social community
+      </span>
+      <span class="app-go"><i class="fa-solid fa-arrow-up-right-from-square"></i></span>
+    </a>
 
-      <a class="card" href="/notepad" aria-label="Pokepad">
-        <span class="e2e-badge">E2E</span>
-        <div class="row">
-          <span class="badge"><i class="fa-solid fa-memo-pad"></i></span>
-          <span class="name">Pokepad!</span>
-        </div>
-        <span class="hint">End-to-End Encrypted Feature rich web Notepad!</span>
-      </a>
+    <a class="app-row" href="/calendar">
+      <span class="app-index">07</span>
+      <span class="app-shape"><i class="fa-solid fa-calendar"></i></span>
+      <span class="app-name">Calendar</span>
+      <span class="app-desc">
+        NO javascript!!! calendar :3
+      </span>
+      <span class="app-go"><i class="fa-solid fa-arrow-right"></i></span>
+    </a>
 
-      <a class="card" href="/app" aria-label="Watch">
-        <div class="row">
-          <span class="badge"><i class="fa-solid fa-play"></i></span>
-          <span class="name">Watch</span>
-        </div>
-        <span class="hint">The biggest part of Poke - the best-looking YouTube front end ever!</span>
-      </a>
+    <a class="app-row" href="/notepad">
+      <span class="app-index">08</span>
+      <span class="app-shape"><i class="fa-solid fa-memo-pad"></i></span>
+      <span class="app-name">Pokepad!</span>
+      <span class="app-desc">
+        <span class="app-tag">E2E</span>
+        End-to-End Encrypted Feature rich web Notepad!
+      </span>
+      <span class="app-go"><i class="fa-solid fa-arrow-right"></i></span>
+    </a>
 
-      <a class="card" href="/settings" aria-label="Settings">
-        <div class="row">
-          <span class="badge"><i class="fa-solid fa-gear"></i></span>
-          <span class="name">Settings</span>
-        </div>
-        <span class="hint">Settings lol idk wha to tell ya mate</span>
-      </a>
-
-    </main>
-  </div>
+  </main>
 
   <script>
     (function(){
-      const cards = Array.from(document.querySelectorAll('.card'));
-      cards.forEach(c => c.tabIndex = 0);
-      
-      const getGridCols = () => {
-        const grid = document.querySelector('.apps');
-        if (!grid) return 1;
-        const colWidth = 280;
-        const gap = 24;
-        const available = grid.clientWidth;
-        return Math.floor((available + gap) / (colWidth + gap)) || 1;
-      };
-
-      cards.forEach((el, idx) => {
-        el.addEventListener('keydown', e => {
-          const cols = getGridCols();
-          let t = null;
-          
-          if(e.key === 'ArrowRight') t = (idx + 1) % cards.length;
-          else if(e.key === 'ArrowLeft') t = (idx - 1 + cards.length) % cards.length;
-          else if(e.key === 'ArrowDown') t = Math.min(cards.length - 1, idx + cols);
-          else if(e.key === 'ArrowUp') t = Math.max(0, idx - cols);
-          else if(e.key === 'Home') t = 0;
-          else if(e.key === 'End') t = cards.length - 1;
-          else if(e.key === 'Enter' || e.key === ' ') { 
-            e.preventDefault(); 
-            el.click(); 
-            return; 
+      const rows = Array.from(document.querySelectorAll('.app-row'));
+      rows.forEach((row, idx) => {
+        row.tabIndex = 0;
+        row.addEventListener('keydown', e => {
+          let targetIdx = null;
+          if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+            targetIdx = (idx + 1) % rows.length;
+          } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+            targetIdx = (idx - 1 + rows.length) % rows.length;
+          } else if (e.key === 'Home') {
+            targetIdx = 0;
+          } else if (e.key === 'End') {
+            targetIdx = rows.length - 1;
+          } else if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            row.click();
+            return;
           }
-          
-          if(t !== null){ 
-            e.preventDefault(); 
-            cards[t].focus(); 
+
+          if (targetIdx !== null) {
+            e.preventDefault();
+            rows[targetIdx].focus();
           }
         });
       });
