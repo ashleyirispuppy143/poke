@@ -582,12 +582,14 @@ input::placeholder {
   border-color: var(--md-outline-variant);
   z-index: 2;
 }
-.gif-card:active {
+.gif-card:hover {
   transform: scale(0.98);
 }
-body:not(.js-enabled) .js-main-link {
+
+html:not(.js-enabled) .js-main-link {
   pointer-events: none;
 }
+
 .nojs-res-badges {
   position: absolute;
   top: 10px;
