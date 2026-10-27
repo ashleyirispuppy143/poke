@@ -105,7 +105,7 @@ a {
   display: none !important;
 }
 
- .svg-icon {
+.svg-icon {
   width: 20px;
   height: 20px;
   fill: currentColor;
@@ -407,7 +407,7 @@ input::placeholder {
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
   border-radius: 20px;
   border: 1px solid var(--md-outline-variant);
-  z-index: 300;
+  z-index: 1200;
   max-height: 360px;
   overflow-y: auto;
   padding: 8px;
@@ -428,10 +428,23 @@ input::placeholder {
   background-color: var(--md-surface-highest);
   color: var(--md-primary);
 }
-.dropdown:hover .dropdown-content {
+@media (hover: hover) and (pointer: fine) {
+  .dropdown:hover .dropdown-content {
+    display: block;
+    animation: menuAppear 0.2s var(--ease-expressive) forwards;
+    transform-origin: top left;
+  }
+}
+.dropdown.open .dropdown-content {
   display: block;
   animation: menuAppear 0.2s var(--ease-expressive) forwards;
   transform-origin: top left;
+}
+.dropdown.open .chip-pride svg {
+  transform: rotate(180deg);
+}
+.chip-pride svg {
+  transition: transform 0.2s var(--ease-expressive);
 }
 @keyframes menuAppear {
   from {
@@ -460,7 +473,8 @@ input::placeholder {
   transition: opacity 0.25s;
 }
 .chip-pride:hover::before,
-.chip-pride.active::before {
+.chip-pride.active::before,
+.dropdown.open .chip-pride::before {
   opacity: 1;
 }
 .section-header {
@@ -580,6 +594,7 @@ input::placeholder {
   overflow: hidden;
   text-overflow: ellipsis;
   pointer-events: none;
+  text-transform: capitalize;
 }
 .gif-card:hover .gif-overlay {
   opacity: 1;
@@ -622,11 +637,14 @@ input::placeholder {
   }
 }
 @media (max-width: 520px) {
-  #static-categories,
   #categories-container {
     overflow-x: auto;
     scrollbar-width: none;
   }
+  #categories-container::-webkit-scrollbar {
+    display: none;
+  }
+  #static-categories,
   #dynamic-categories {
     overflow-x: visible;
   }
@@ -750,6 +768,9 @@ input::placeholder {
 .m3-btn:active {
   transform: scale(0.97);
 }
+.m3-btn-span-2 {
+  grid-column: 1 / -1;
+}
 .m3-btn-filled {
   background: var(--md-primary);
   color: var(--md-on-primary);
@@ -757,6 +778,16 @@ input::placeholder {
 .m3-btn-filled:hover {
   filter: brightness(1.06);
   box-shadow: 0 4px 16px rgba(255, 177, 196, 0.25);
+}
+.m3-btn-discord {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  border: 1px solid var(--md-outline-variant);
+}
+.m3-btn-discord:hover {
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+  border-color: transparent;
 }
 .m3-btn-tonal {
   background: var(--md-surface-high);
@@ -970,12 +1001,12 @@ input::placeholder {
                 <a href="/gifs" class="chip <%= !query ? 'active' : '' %>" id="chip-trending">
                     🔥 Trending
                 </a>
-                <div class="dropdown">
-                    <div class="chip chip-pride <%= query && ['pride','lesbian','gay','transgender','bisexual','pansexual','asexual','non-binary','queer','lgbtq+'].includes(query.toLowerCase()) ? 'active' : '' %>">
+                <div class="dropdown" id="pride-dropdown">
+                    <button type="button" class="chip chip-pride <%= query && ['pride','lesbian','gay','transgender','bisexual','pansexual','asexual','non-binary','queer','lgbtq+'].includes(query.toLowerCase()) ? 'active' : '' %>" id="pride-dropdown-btn" onclick="togglePrideDropdown(event)" aria-expanded="false">
                         Pride
                         <svg class="svg-icon" style="margin-left:4px;width:18px;height:18px;" viewBox="0 0 24 24"><path d="M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6z"/></svg>
-                    </div>
-                    <div class="dropdown-content">
+                    </button>
+                    <div class="dropdown-content" id="pride-dropdown-menu">
                         <a href="/gifs?q=Pride">Pride Collection</a>
                         <a href="/gifs?q=Lesbian">Lesbian</a>
                         <a href="/gifs?q=Gay">Gay</a>
@@ -1006,8 +1037,15 @@ input::placeholder {
 
     <% 
     function getTitle(gif) {
-        if (gif.title && gif.title.trim()) return gif.title;
-        if (gif.content_description && gif.content_description.trim()) return gif.content_description;
+        if (gif.title && gif.title.trim()) return gif.title.trim();
+        if (gif.h1_title && gif.h1_title.trim()) return gif.h1_title.trim();
+        if (gif.itemurl) {
+            const match = gif.itemurl.match(/\/view\/(.+?)(?:-gif)?-\d+$/i);
+            if (match && match[1]) {
+                return decodeURIComponent(match[1]).replace(/-/g, ' ');
+            }
+        }
+        if (gif.content_description && gif.content_description.trim()) return gif.content_description.trim();
         return "Untitled GIF";
     }
     %>
@@ -1017,12 +1055,13 @@ input::placeholder {
             <% results.forEach(function(gif) { 
                 if(!gif.media || !gif.media[0]) return;
                 const title = getTitle(gif);
+                const altText = (gif.content_description && gif.content_description.trim()) ? gif.content_description.trim() : title;
                 const tinyUrl = gif.media[0].tinygif ? gif.media[0].tinygif.url : gif.media[0].gif.url;
                 const fullUrl = gif.media[0].gif ? gif.media[0].gif.url : tinyUrl;
             %>
                 <div class="gif-card">
-                    <a href="<%= fullUrl %>" target="_blank" class="gif-link" onclick="return handleModalOpen(event, <%= JSON.stringify(gif) %>, '<%= title.replace(/'/g, "\\'") %>')">
-                        <img src="<%= mediaproxy %><%= tinyUrl %>" alt="<%= title %>" loading="lazy">
+                    <a href="<%= fullUrl %>" target="_blank" class="gif-link" onclick="return handleModalOpen(event, <%= JSON.stringify(gif) %>, '<%= title.replace(/\\/g, "\\\\").replace(/'/g, "\\'") %>')">
+                        <img src="<%= mediaproxy %><%= tinyUrl %>" alt="<%= altText %>" loading="lazy">
                         <div class="gif-overlay"><%= title %></div>
                     </a>
                     <button class="card-fav-btn js-only" data-gif-id="<%= gif.id %>" onclick="toggleFavorite(<%= JSON.stringify(gif) %>, event)">
@@ -1077,6 +1116,10 @@ input::placeholder {
                         <button class="m3-btn m3-btn-filled" onclick="copyProxiedGifFromModal()">
                             <svg class="svg-icon" viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
                             Copy Proxy Link
+                        </button>
+                        <button class="m3-btn m3-btn-discord m3-btn-span-2" onclick="copyDiscordLinkFromModal()">
+                            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+                            Copy Discord Link
                         </button>
                         <button class="m3-btn m3-btn-tonal" id="modal-download-btn" onclick="downloadCurrentGif()">
                             <svg class="svg-icon" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
@@ -1140,12 +1183,53 @@ input::placeholder {
             const heroSection = document.getElementById('hero-section');
             if (window.scrollY > heroSection.offsetHeight - 60) navbar.classList.add('scrolled');
             else navbar.classList.remove('scrolled');
+
+            closePrideDropdown();
+        }, { passive: true });
+
+         function togglePrideDropdown(e) {
+            e.stopPropagation();
+            const dropdown = document.getElementById('pride-dropdown');
+            const btn = document.getElementById('pride-dropdown-btn');
+            const menu = document.getElementById('pride-dropdown-menu');
+            const isOpen = dropdown.classList.toggle('open');
+            btn.setAttribute('aria-expanded', isOpen);
+
+            if (isOpen) {
+                 if (window.innerWidth <= 768) {
+                    const rect = btn.getBoundingClientRect();
+                    menu.style.position = 'fixed';
+                    menu.style.top = `${rect.bottom + 8}px`;
+                    menu.style.left = `${Math.max(12, Math.min(rect.left, window.innerWidth - 232))}px`;
+                } else {
+                    menu.style.position = '';
+                    menu.style.top = '';
+                    menu.style.left = '';
+                }
+            }
+        }
+
+        function closePrideDropdown() {
+            const dropdown = document.getElementById('pride-dropdown');
+            const btn = document.getElementById('pride-dropdown-btn');
+            if (dropdown && dropdown.classList.contains('open')) {
+                dropdown.classList.remove('open');
+                if (btn) btn.setAttribute('aria-expanded', 'false');
+            }
+        }
+
+        document.addEventListener('click', (e) => {
+            const dropdown = document.getElementById('pride-dropdown');
+            if (dropdown && !dropdown.contains(e.target)) {
+                closePrideDropdown();
+            }
         });
 
-         function performSearch(query, updateUrl = true) {
+        function performSearch(query, updateUrl = true) {
             currentSearchTerm = query;
             currentSearchMode = query ? "search" : "trending";
             nextPosition = "";
+            closePrideDropdown();
 
             if (updateUrl) {
                 const url = query ? `/gifs?q=${encodeURIComponent(query)}` : '/gifs';
@@ -1161,7 +1245,11 @@ input::placeholder {
             document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
             if (!query) document.getElementById('chip-trending').classList.add('active');
             else {
-                Array.from(document.querySelectorAll('.chip')).find(c => {
+                const prideTerms = ['pride','lesbian','gay','transgender','bisexual','pansexual','asexual','non-binary','queer','lgbtq+'];
+                if (prideTerms.includes(query.toLowerCase())) {
+                    document.getElementById('pride-dropdown-btn').classList.add('active');
+                }
+                Array.from(document.querySelectorAll('.chip')).forEach(c => {
                     if (c.textContent.trim().toLowerCase() === query.toLowerCase()) c.classList.add('active');
                 });
             }
@@ -1186,6 +1274,7 @@ input::placeholder {
         document.querySelectorAll('a.chip, .dropdown-content a').forEach(a => {
             a.addEventListener('click', function(e) {
                 e.preventDefault();
+                closePrideDropdown();
                 const href = this.getAttribute('href');
                 if (href) {
                     const urlObj = new URL(href, window.location.origin);
@@ -1281,9 +1370,16 @@ input::placeholder {
             updateFavButtonsInDOM();
         }
 
-        function getTitleJS(gif) {
-            if (gif.title && gif.title.trim()) return gif.title;
-            if (gif.content_description && gif.content_description.trim()) return gif.content_description;
+         function getTitleJS(gif) {
+            if (gif.title && gif.title.trim()) return gif.title.trim();
+            if (gif.h1_title && gif.h1_title.trim()) return gif.h1_title.trim();
+            if (gif.itemurl) {
+                const match = gif.itemurl.match(/\/view\/(.+?)(?:-gif)?-\d+$/i);
+                if (match && match[1]) {
+                    return decodeURIComponent(match[1]).replace(/-/g, ' ');
+                }
+            }
+            if (gif.content_description && gif.content_description.trim()) return gif.content_description.trim();
             return "Untitled GIF";
         }
 
@@ -1342,7 +1438,7 @@ input::placeholder {
             
             const img = document.createElement("img");
             img.src = MEDIA_PROXY + tinyUrl;
-            img.alt = title;
+            img.alt = (gif.content_description && gif.content_description.trim()) ? gif.content_description.trim() : title;
             img.loading = "lazy";
             
             const overlay = document.createElement("div");
@@ -1374,7 +1470,7 @@ input::placeholder {
             if (Array.isArray(gif.tags)) gif.tags.forEach(t => { if(t) set.add(t.trim().toLowerCase()); });
             if (currentSearchTerm) set.add(currentSearchTerm.toLowerCase());
             if (title) title.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).forEach(w => {
-                if (w.length >= 3 && !["gif","the","and","for","with"].includes(w) && set.size < 8) set.add(w);
+                if (w.length >= 3 && !["gif","the","and","for","with","untitled"].includes(w) && set.size < 8) set.add(w);
             });
             if (set.size === 0) set.add("trending");
             return Array.from(set).slice(0, 8);
@@ -1382,12 +1478,14 @@ input::placeholder {
 
         function handleModalOpen(e, gif, title) {
             if (e && e.preventDefault) e.preventDefault();
+            const cleanTitle = getTitleJS(gif) || title;
             currentModalGif = gif;
-            currentModalTitle = title;
+            currentModalTitle = cleanTitle;
             const fullObj = (gif.media && gif.media[0] && gif.media[0].gif) ? gif.media[0].gif : gif.media[0].tinygif;
             
-            document.getElementById("modal-title").innerText = title;
+            document.getElementById("modal-title").innerText = cleanTitle;
             document.getElementById("modal-img").src = MEDIA_PROXY + fullObj.url;
+            document.getElementById("modal-img").alt = (gif.content_description && gif.content_description.trim()) ? gif.content_description.trim() : cleanTitle;
             document.getElementById("meta-size").innerText = formatBytes(fullObj.size);
             document.getElementById("meta-dims").innerText = (Array.isArray(fullObj.dims) && fullObj.dims.length === 2) ? `${fullObj.dims[0]} × ${fullObj.dims[1]}` : "Auto";
             
@@ -1395,11 +1493,14 @@ input::placeholder {
             
             const tagsCont = document.getElementById("modal-tags");
             tagsCont.innerHTML = "";
-            deriveTags(gif, title).forEach(tag => {
+            deriveTags(gif, cleanTitle).forEach(tag => {
                 const b = document.createElement("button");
                 b.className = "tag-chip";
                 b.innerHTML = `#${tag}`;
-                b.onclick = () => performSearch(tag);
+                b.onclick = () => {
+                    closeModal();
+                    performSearch(tag);
+                };
                 tagsCont.appendChild(b);
             });
             
@@ -1442,6 +1543,22 @@ input::placeholder {
             const url = MEDIA_PROXY + ((currentModalGif.media && currentModalGif.media[0] && currentModalGif.media[0].gif) ? currentModalGif.media[0].gif.url : currentModalGif.url);
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(url).then(() => showToast("Copied proxy link!")).catch(() => fallbackCopy(url));
+            } else fallbackCopy(url);
+        }
+
+        function copyDiscordLinkFromModal() {
+            if (!currentModalGif) return;
+            let url = "";
+            if (currentModalGif.itemurl && currentModalGif.itemurl.includes("tenor.com/view/")) {
+                url = currentModalGif.itemurl;
+            } else if (currentModalGif.url && currentModalGif.url.includes("tenor.com/view/")) {
+                url = currentModalGif.url;
+            } else {
+                const slug = (currentModalTitle || "gif").toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || "gif";
+                url = `https://tenor.com/view/${slug}-gif-${currentModalGif.id}`;
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(() => showToast("Copied Discord link!")).catch(() => fallbackCopy(url));
             } else fallbackCopy(url);
         }
 
