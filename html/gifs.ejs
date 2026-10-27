@@ -1180,7 +1180,7 @@ body:not(.js-enabled) .js-main-link {
             %>
                 <div class="gif-card" data-aspect="<%= h / w %>">
                     <a href="<%= fullObj.url %>" target="_blank" class="gif-link js-main-link" style="aspect-ratio: <%= w %> / <%= h %>;" data-gif="<%= encodeURIComponent(JSON.stringify(gif)) %>" data-title="<%= encodeURIComponent(title) %>" onclick="return handleModalOpenEncoded(event, this.dataset.gif, this.dataset.title)">
-                        <img src="<%= mediaproxy %><%= tinyObj.url %>" data-med="<%= mediaproxy %><%= mediumObj.url %>" alt="<%= altText %>" width="<%= w %>" height="<%= h %>" loading="lazy" decoding="async" onload="this.closest('.gif-card').classList.add('is-loaded'); upgradeImage(this);" onerror="this.closest('.gif-card').classList.add('is-loaded')">
+                        <img data-src="<%= mediaproxy %><%= tinyObj.url %>" data-med="<%= mediaproxy %><%= mediumObj.url %>" alt="<%= altText %>" width="<%= w %>" height="<%= h %>" decoding="async" class="lazy-gif" onerror="this.closest('.gif-card').classList.add('is-loaded')">
                         <div class="gif-overlay"><%= title %></div>
                     </a>
                     <div class="nojs-res-badges">
@@ -1305,6 +1305,8 @@ body:not(.js-enabled) .js-main-link {
         let masonryColumns = [];
         let masonryHeights = [];
         let currentColumnCount = 0;
+
+        let lazyImageObserver = null;
         
         function upgradeImage(img) {
             const med = img.getAttribute('data-med');
@@ -1315,6 +1317,38 @@ body:not(.js-enabled) .js-main-link {
                 img.src = med;
             };
             temp.src = med;
+        }
+
+        function setupLazyObserver() {
+            if ('IntersectionObserver' in window) {
+                lazyImageObserver = new IntersectionObserver((entries, observer) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            const img = entry.target;
+                            const src = img.getAttribute('data-src');
+                            if (src) {
+                                img.src = src;
+                                img.removeAttribute('data-src');
+                            }
+                            lazyImageObserver.unobserve(img);
+                        }
+                    });
+                }, { rootMargin: '200px 0px' });
+            }
+        }
+
+        function observeImages() {
+            if (!lazyImageObserver) setupLazyObserver();
+            if (lazyImageObserver) {
+                document.querySelectorAll('img.lazy-gif[data-src]').forEach(img => {
+                    lazyImageObserver.observe(img);
+                });
+            } else {
+                document.querySelectorAll('img.lazy-gif[data-src]').forEach(img => {
+                    img.src = img.getAttribute('data-src');
+                    img.removeAttribute('data-src');
+                });
+            }
         }
 
         function handleModalOpenEncoded(e, gifEncoded, titleEncoded) {
@@ -1370,9 +1404,10 @@ body:not(.js-enabled) .js-main-link {
 
             existingCards.forEach(card => {
                 const img = card.querySelector('img');
-                if (img && img.complete) card.classList.add('is-loaded');
+                if (img && (img.complete || !img.getAttribute('data-src'))) card.classList.add('is-loaded');
                 appendCardToShortestColumn(card);
             });
+            observeImages();
         }
 
         function appendCardToShortestColumn(card) {
@@ -1408,6 +1443,7 @@ body:not(.js-enabled) .js-main-link {
         }, { root: null, rootMargin: '800px', threshold: 0.1 });
 
         window.addEventListener('DOMContentLoaded', () => {
+            setupLazyObserver();
             setupMasonry(true);
             loadFavoritesFromStorage();
             updateFavButtonsInDOM();
@@ -1652,6 +1688,7 @@ body:not(.js-enabled) .js-main-link {
                     else document.getElementById("scroll-sentinel").style.display = "block";
                     
                     updateFavButtonsInDOM();
+                    observeImages();
                     isFetching = false;
                     document.getElementById("loading").style.display = "none";
                 })
@@ -1685,13 +1722,13 @@ body:not(.js-enabled) .js-main-link {
             a.onclick = (e) => handleModalOpen(e, gif, title);
             
             const img = document.createElement("img");
-            img.src = MEDIA_PROXY + tinyObj.url;
+            img.setAttribute('data-src', MEDIA_PROXY + tinyObj.url);
             img.setAttribute('data-med', MEDIA_PROXY + mediumObj.url);
             img.alt = altText;
             img.width = w;
             img.height = h;
-            img.loading = "lazy";
             img.decoding = "async";
+            img.className = "lazy-gif";
             img.onload = function() {
                 div.classList.add("is-loaded");
                 upgradeImage(this);
