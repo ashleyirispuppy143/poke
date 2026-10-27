@@ -1317,24 +1317,26 @@ body:not(.js-enabled) .js-main-link {
             temp.src = med;
         }
 
-        function handleModalOpenEncoded(e, gifEncoded, titleEncoded) {
-            let gif, title;
+function handleModalOpenEncoded(e, gifEncoded, titleEncoded) {
             try {
-                gif = JSON.parse(decodeURIComponent(gifEncoded));
-                title = decodeURIComponent(titleEncoded);
+                const gif = JSON.parse(decodeURIComponent(gifEncoded));
+                const title = decodeURIComponent(titleEncoded);
+                return handleModalOpen(e, gif, title);
             } catch (err) {
-                return false;
+                console.error("Failed to open modal:", err);
+                return true; 
             }
-            return handleModalOpen(e, gif, title);
         }
         
         function toggleFavoriteEncoded(gifEncoded, event) {
             try {
                 const gif = JSON.parse(decodeURIComponent(gifEncoded));
                 toggleFavorite(gif, event);
-            } catch (err) {}
+            } catch (err) {
+                console.error("Failed to toggle favorite:", err);
+            }
         }
-
+        
         function getDesiredColumns() {
             if (window.innerWidth <= 860) return 2;
             if (window.innerWidth <= 1200) return 3;
