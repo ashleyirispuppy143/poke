@@ -64,7 +64,7 @@
   font-display: swap;
 }
 
-* {
+*, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -584,9 +584,6 @@ input::placeholder {
 }
 .gif-card:active {
   transform: scale(0.98);
-}
-body:not(.js-enabled) .js-main-link {
-  pointer-events: none;
 }
 .nojs-res-badges {
   position: absolute;
@@ -1317,26 +1314,25 @@ body:not(.js-enabled) .js-main-link {
             temp.src = med;
         }
 
-function handleModalOpenEncoded(e, gifEncoded, titleEncoded) {
+        function handleModalOpenEncoded(e, gifEncoded, titleEncoded) {
+            if (e) e.preventDefault();
+            let gif, title;
             try {
-                const gif = JSON.parse(decodeURIComponent(gifEncoded));
-                const title = decodeURIComponent(titleEncoded);
-                return handleModalOpen(e, gif, title);
+                gif = JSON.parse(decodeURIComponent(gifEncoded));
+                title = decodeURIComponent(titleEncoded);
             } catch (err) {
-                console.error("Failed to open modal:", err);
-                return true; 
+                return false;
             }
+            return handleModalOpen(e, gif, title);
         }
         
         function toggleFavoriteEncoded(gifEncoded, event) {
             try {
                 const gif = JSON.parse(decodeURIComponent(gifEncoded));
                 toggleFavorite(gif, event);
-            } catch (err) {
-                console.error("Failed to toggle favorite:", err);
-            }
+            } catch (err) {}
         }
-        
+
         function getDesiredColumns() {
             if (window.innerWidth <= 860) return 2;
             if (window.innerWidth <= 1200) return 3;
@@ -1752,7 +1748,7 @@ function handleModalOpenEncoded(e, gifEncoded, titleEncoded) {
         }
 
         function handleModalOpen(e, gif, title) {
-            if (e && e.preventDefault) e.preventDefault();
+            if (e) e.preventDefault();
             const cleanTitle = getTitleJS(gif) || title;
             currentModalGif = gif;
             currentModalTitle = cleanTitle;
