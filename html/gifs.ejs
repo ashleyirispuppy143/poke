@@ -1352,6 +1352,7 @@ body:not(.js-enabled) .js-main-link {
         }
 
         function handleModalOpenEncoded(e, gifEncoded, titleEncoded) {
+            if (e) e.preventDefault();
             let gif, title;
             try {
                 gif = JSON.parse(decodeURIComponent(gifEncoded));
@@ -1719,7 +1720,14 @@ body:not(.js-enabled) .js-main-link {
             a.target = "_blank";
             a.className = "gif-link js-main-link";
             a.style.aspectRatio = `${w} / ${h}`;
-            a.onclick = (e) => handleModalOpen(e, gif, title);
+            
+            const gifJsonStr = encodeURIComponent(JSON.stringify(gif));
+            const titleStr = encodeURIComponent(title);
+            a.setAttribute('data-gif', gifJsonStr);
+            a.setAttribute('data-title', titleStr);
+            a.onclick = function(e) {
+                return handleModalOpenEncoded(e, this.dataset.gif, this.dataset.title);
+            };
             
             const img = document.createElement("img");
             img.setAttribute('data-src', MEDIA_PROXY + tinyObj.url);
@@ -1787,7 +1795,7 @@ body:not(.js-enabled) .js-main-link {
         }
 
         function handleModalOpen(e, gif, title) {
-            if (e && e.preventDefault) e.preventDefault();
+            if (e) e.preventDefault();
             const cleanTitle = getTitleJS(gif) || title;
             currentModalGif = gif;
             currentModalTitle = cleanTitle;
