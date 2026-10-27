@@ -1929,8 +1929,8 @@ html:not(.js-enabled) .js-main-link {
             const filename = `${slug}-${qual}.gif`;
             showToast("Downloading...");
 
-            const fetchAndDownload = async (targetUrl) => {
-                const res = await fetch(targetUrl);
+            try {
+                const res = await fetch(url, { mode: 'cors' });
                 if (!res.ok) throw new Error("Fetch failed");
                 const blob = await res.blob();
                 const bUrl = URL.createObjectURL(blob);
@@ -1942,18 +1942,9 @@ html:not(.js-enabled) .js-main-link {
                 a.click();
                 document.body.removeChild(a);
                 setTimeout(() => URL.revokeObjectURL(bUrl), 4000);
-            };
-
-            try {
-                await fetchAndDownload(url);
             } catch (err) {
-                const a = document.createElement("a");
-                a.style.display = "none";
-                a.href = url;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
+                showToast("Download failed");
+                console.error(err);
             }
         }
 
