@@ -239,12 +239,12 @@ window.SyncLevel = SyncLevel;
 
   var metadataParser = (function() {
     var skin = '(?:\\uFE0F|\\uD83C[\\uDFFB-\\uDFFF])*';
-    var count = '[\\d][\\d.,]*[KMBTkmbt]?';
+    var count = '([\\d][\\d.,]*[KMBTkmbt]?)';
     var divider = '[|\\s\\u2022\\u00B7\\u2013\\u2014-]+';
     var up = '\\uD83D\\uDC4D' + skin + '\\s*' + count;
     var down = '\\uD83D\\uDC4E' + skin + '\\s*' + count;
     var views = '(?:' + divider + '\\uD83D\\uDCC8' + skin + '\\s*' + count + '(?:\\s*(?:Views?|Watch(?:e[sd])?|Plays?))?)?';
-    var age = '(?:' + divider + '(?:\\uD83D[\\uDDD3\\uDCC5\\uDCC6\\uDDD2])' + skin + '\\s*\\d+\\s*(?:second|minute|hour|day|week|month|year)s?\\s*ago)?';
+    var age = '(?:' + divider + '(?:\\uD83D[\\uDDD3\\uDCC5\\uDCC6\\uDDD2])' + skin + '\\s*(\\d+\\s*(?:second|minute|hour|day|week|month|year)s?\\s*ago))?';
     var pattern = new RegExp(up + divider + down + views + age, 'i');
 
     return {
@@ -259,6 +259,10 @@ window.SyncLevel = SyncLevel;
         return {
           title: title.trim(),
           description: stats,
+          likes: matched && matched[1] ? matched[1].trim() : '',
+          dislikes: matched && matched[2] ? matched[2].trim() : '',
+          views: matched && matched[3] ? matched[3].trim() : '',
+          age: matched && matched[4] ? matched[4].trim() : '',
           artworkUrl: proxiedThumb,
           author: author
         };
@@ -319,11 +323,11 @@ window.SyncLevel = SyncLevel;
       '  top: 70px;',
       '  right: 34px;',
       '  bottom: 92px;',
-      '  width: clamp(310px, 28vw, 410px);',
+      '  width: clamp(320px, 28vw, 420px);',
       '  z-index: 42;',
       '  display: none;',
       '  flex-direction: column;',
-      '  background: rgba(15, 15, 15, 0.88);',
+      '  background: rgba(15, 15, 15, 0.9);',
       '  backdrop-filter: blur(28px);',
       '  -webkit-backdrop-filter: blur(28px);',
       '  border: 1px solid rgba(255, 255, 255, 0.12);',
@@ -373,6 +377,39 @@ window.SyncLevel = SyncLevel;
       '.alabaster-fs-desc-close:hover {',
       '  background: rgba(255, 255, 255, 0.12);',
       '  color: #ffffff;',
+      '}',
+      '.alabaster-fs-desc-stats {',
+      '  display: flex;',
+      '  align-items: center;',
+      '  justify-content: space-around;',
+      '  padding: 14px 16px;',
+      '  margin: 0 0 16px 0;',
+      '  background: rgba(255, 255, 255, 0.05);',
+      '  border-radius: 12px;',
+      '  border: 1px solid rgba(255, 255, 255, 0.06);',
+      '  text-align: center;',
+      '  user-select: none;',
+      '}',
+      '.alabaster-fs-desc-stat-item {',
+      '  display: flex;',
+      '  flex-direction: column;',
+      '  align-items: center;',
+      '  justify-content: center;',
+      '  flex: 1 1 0;',
+      '  gap: 2px;',
+      '}',
+      '.alabaster-fs-desc-stat-val {',
+      '  font-size: 17px;',
+      '  font-weight: 700;',
+      '  color: #ffffff;',
+      '  line-height: 1.2;',
+      '  letter-spacing: -0.2px;',
+      '}',
+      '.alabaster-fs-desc-stat-lbl {',
+      '  font-size: 12px;',
+      '  font-weight: 600;',
+      '  color: #dcdcdc;',
+      '  line-height: 1.2;',
       '}',
       '.alabaster-fs-desc-body {',
       '  padding: 16px 20px 22px 20px;',
@@ -451,6 +488,23 @@ window.SyncLevel = SyncLevel;
       var fsDescBody = null;
       var isFsDescOpen = false;
 
+      var updateTitleBarDescVisibility = function(isFs) {
+        if (!rootEl) return;
+        var descNodes = rootEl.querySelectorAll('.vjs-title-bar-description');
+        for (var i = 0; i < descNodes.length; i++) {
+          var dNode = descNodes[i];
+          if (!isFs || !info.description || isFsDescOpen) {
+            dNode.style.setProperty('display', 'none', 'important');
+            dNode.style.setProperty('visibility', 'hidden', 'important');
+            dNode.style.setProperty('opacity', '0', 'important');
+          } else {
+            dNode.style.removeProperty('display');
+            dNode.style.removeProperty('visibility');
+            dNode.style.removeProperty('opacity');
+          }
+        }
+      };
+
       if (rootEl && !rootEl.querySelector('.alabaster-fs-desc-toggle')) {
         fsDescToggle = document.createElement('button');
         fsDescToggle.type = 'button';
@@ -497,15 +551,110 @@ window.SyncLevel = SyncLevel;
 
         var populateDescriptionVerbatim = function() {
           var sourceNode = document.querySelector('.descriptionHtml');
-          if (sourceNode) {
-            fsDescBody.innerHTML = sourceNode.innerHTML;
-            return true;
+          if (!sourceNode) return false;
+
+          var tempContainer = document.createElement('div');
+          tempContainer.innerHTML = sourceNode.innerHTML;
+
+          var dyxLinks = tempContainer.querySelectorAll('a.dyx-fallback, a[href*="dyx="]');
+          for (var i = 0; i < dyxLinks.length; i++) {
+            var link = dyxLinks[i];
+            var next = link.nextSibling;
+            while (next) {
+              if (next.nodeType === 3 && !next.textContent.trim()) {
+                var toRemoveText = next;
+                next = next.nextSibling;
+                if (toRemoveText.parentNode) toRemoveText.parentNode.removeChild(toRemoveText);
+              } else if (next.nodeType === 1 && next.tagName.toLowerCase() === 'br') {
+                var toRemoveBr = next;
+                next = next.nextSibling;
+                if (toRemoveBr.parentNode) toRemoveBr.parentNode.removeChild(toRemoveBr);
+              } else {
+                break;
+              }
+            }
+            if (link.parentNode) link.parentNode.removeChild(link);
           }
-          return false;
+
+          var allLinks = tempContainer.querySelectorAll('a');
+          for (var j = 0; j < allLinks.length; j++) {
+            var aEl = allLinks[j];
+            if (aEl.textContent && aEl.textContent.toLowerCase().indexOf('open dyslexic mode') !== -1) {
+              var nxt = aEl.nextSibling;
+              while (nxt) {
+                if (nxt.nodeType === 3 && !nxt.textContent.trim()) {
+                  var rmTxt = nxt;
+                  nxt = nxt.nextSibling;
+                  if (rmTxt.parentNode) rmTxt.parentNode.removeChild(rmTxt);
+                } else if (nxt.nodeType === 1 && nxt.tagName.toLowerCase() === 'br') {
+                  var rmBr = nxt;
+                  nxt = nxt.nextSibling;
+                  if (rmBr.parentNode) rmBr.parentNode.removeChild(rmBr);
+                } else {
+                  break;
+                }
+              }
+              if (aEl.parentNode) aEl.parentNode.removeChild(aEl);
+            }
+          }
+
+          while (tempContainer.firstChild) {
+            var fc = tempContainer.firstChild;
+            if (fc.nodeType === 3 && !fc.textContent.trim()) {
+              tempContainer.removeChild(fc);
+            } else if (fc.nodeType === 1 && fc.tagName.toLowerCase() === 'br') {
+              tempContainer.removeChild(fc);
+            } else {
+              break;
+            }
+          }
+
+          fsDescBody.innerHTML = '';
+
+          var freshMeta = metadataParser.read();
+          if (freshMeta.views || freshMeta.likes || freshMeta.dislikes) {
+            var statsBar = document.createElement('div');
+            statsBar.className = 'alabaster-fs-desc-stats';
+
+            var addStatCol = function(val, label) {
+              if (!val) return;
+              var item = document.createElement('div');
+              item.className = 'alabaster-fs-desc-stat-item';
+              var vEl = document.createElement('div');
+              vEl.className = 'alabaster-fs-desc-stat-val';
+              vEl.textContent = val;
+              var lEl = document.createElement('div');
+              lEl.className = 'alabaster-fs-desc-stat-lbl';
+              lEl.textContent = label;
+              item.appendChild(vEl);
+              item.appendChild(lEl);
+              statsBar.appendChild(item);
+            };
+
+            addStatCol(freshMeta.views, 'Views');
+            addStatCol(freshMeta.likes, 'Likes');
+            addStatCol(freshMeta.dislikes, 'Dislikes');
+
+            fsDescBody.appendChild(statsBar);
+          }
+
+          var contentWrapper = document.createElement('div');
+          contentWrapper.innerHTML = tempContainer.innerHTML;
+          fsDescBody.appendChild(contentWrapper);
+
+          return true;
         };
 
         var setDrawerState = function(open) {
           isFsDescOpen = Boolean(open);
+          var isFsNow = Boolean(
+            (typeof player.isFullscreen === 'function' && player.isFullscreen()) ||
+            document.fullscreenElement ||
+            document.webkitFullscreenElement ||
+            rootEl.classList.contains('vjs-fullscreen')
+          );
+          updateTitleBarDescVisibility(isFsNow);
+
           if (!fsDescToggle || !fsDescDrawer) return;
           if (isFsDescOpen) {
             populateDescriptionVerbatim();
@@ -666,7 +815,12 @@ window.SyncLevel = SyncLevel;
           document.webkitFullscreenElement ||
           rootEl.classList.contains('vjs-fullscreen')
         );
-        var titleBars = rootEl.querySelectorAll('.vjs-title-bar, .vjs-title-bar-title, .vjs-title-bar-description');
+
+        if (!isFs) {
+          isFsDescOpen = false;
+        }
+
+        var titleBars = rootEl.querySelectorAll('.vjs-title-bar, .vjs-title-bar-title');
         for (var i = 0; i < titleBars.length; i++) {
           var node = titleBars[i];
           if (!isFs) {
@@ -677,11 +831,10 @@ window.SyncLevel = SyncLevel;
             node.style.removeProperty('display');
             node.style.removeProperty('visibility');
             node.style.removeProperty('opacity');
-            if (node.classList.contains('vjs-title-bar-description') && !info.description) {
-              node.style.setProperty('display', 'none', 'important');
-            }
           }
         }
+
+        updateTitleBarDescVisibility(isFs);
 
         if (fsDescToggle && fsDescDrawer) {
           var hasDescriptionNode = Boolean(document.querySelector('.descriptionHtml'));
@@ -689,7 +842,6 @@ window.SyncLevel = SyncLevel;
             fsDescToggle.style.display = 'inline-flex';
           } else {
             fsDescToggle.style.display = 'none';
-            isFsDescOpen = false;
             fsDescToggle.classList.remove('is-expanded');
             fsDescToggle.setAttribute('aria-expanded', 'false');
             fsDescDrawer.classList.remove('is-visible');
