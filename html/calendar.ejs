@@ -56,10 +56,17 @@
       background: var(--md-sys-color-background);
       color: var(--md-sys-color-on-surface);
       font-family: var(--font-body);
-      min-height: 100vh;
+      min-height: 100dvh;
       display: flex;
       flex-direction: column;
       -webkit-font-smoothing: antialiased;
+    }
+
+    @media (min-width: 769px) and (min-height: 640px) {
+      body {
+        height: 100dvh;
+        overflow: hidden;
+      }
     }
 
     .navbar {
@@ -67,15 +74,16 @@
       flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      padding: 16px 32px;
+      padding: 10px 24px;
       background: var(--md-sys-color-surface);
-      gap: 16px;
+      gap: 12px;
+      flex-shrink: 0;
     }
 
     .brand {
       display: flex;
       align-items: center;
-      padding: 8px 16px 8px 8px;
+      padding: 6px 12px 6px 6px;
       border-radius: var(--radius-full);
       transition: background 0.2s var(--spring-easing);
     }
@@ -85,7 +93,7 @@
     }
 
     .brand img {
-      height: 32px;
+      height: 28px;
       width: auto;
       display: block;
     }
@@ -94,13 +102,13 @@
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
-      font-size: 0.85rem;
+      font-size: 0.8rem;
     }
 
     .year-info span {
       background: var(--md-sys-color-surface-container-high);
       color: var(--md-sys-color-on-surface-variant);
-      padding: 8px 16px;
+      padding: 6px 14px;
       border-radius: var(--radius-full);
       display: inline-flex;
       align-items: center;
@@ -118,11 +126,12 @@
       width: 100%;
       max-width: 1600px;
       margin: 0 auto;
-      padding: 8px 32px 32px;
+      padding: 4px 24px 16px;
       flex: 1;
+      min-height: 0;
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      gap: 12px;
     }
 
     .toolbar {
@@ -131,20 +140,21 @@
       justify-content: space-between;
       align-items: center;
       background: var(--md-sys-color-surface-container-low);
-      padding: 16px 24px;
-      border-radius: var(--radius-xl);
-      gap: 16px;
+      padding: 10px 20px;
+      border-radius: var(--radius-lg);
+      gap: 12px;
+      flex-shrink: 0;
     }
 
     .toolbar-left {
       display: flex;
       align-items: center;
-      gap: 20px;
+      gap: 16px;
       flex-wrap: wrap;
     }
 
     .month-title {
-      font-size: clamp(1.5rem, 3vw, 2.25rem);
+      font-size: clamp(1.25rem, 2.2vw, 1.75rem);
       font-weight: 500;
       margin: 0;
       color: var(--md-sys-color-on-surface);
@@ -164,13 +174,13 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 40px;
-      height: 40px;
+      width: 34px;
+      height: 34px;
       border-radius: var(--radius-full);
       text-decoration: none;
       color: var(--md-sys-color-on-surface);
       transition: all 0.2s var(--spring-easing);
-      font-size: 0.95rem;
+      font-size: 0.9rem;
       user-select: none;
     }
 
@@ -186,7 +196,7 @@
 
     .date-form {
       display: flex;
-      gap: 12px;
+      gap: 10px;
       align-items: center;
     }
 
@@ -194,10 +204,11 @@
       background: var(--md-sys-color-surface-container-high);
       border: 1px solid transparent;
       color: var(--md-sys-color-on-surface);
-      padding: 10px 20px;
+      padding: 8px 16px;
+      height: 38px;
       border-radius: var(--radius-full);
       font-family: inherit;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       font-weight: 500;
       outline: none;
       transition: all 0.2s var(--spring-easing);
@@ -219,14 +230,14 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      padding: 10px 24px;
-      height: 44px;
+      padding: 8px 20px;
+      height: 38px;
       border-radius: var(--radius-full);
       font-weight: 500;
       text-decoration: none;
       cursor: pointer;
       border: none;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       font-family: inherit;
       letter-spacing: 0.2px;
       transition: all 0.2s var(--spring-easing);
@@ -258,31 +269,37 @@
 
     .calendar-table {
       width: 100%;
+      height: 100%;
+      min-height: 0;
       border-collapse: separate;
-      border-spacing: 8px;
+      border-spacing: 6px;
       table-layout: fixed;
       flex: 1;
       background: var(--md-sys-color-surface-container-low);
-      padding: 16px;
+      padding: 10px;
       border-radius: var(--radius-xl);
     }
 
-    .calendar-table th {
-      padding: 8px 0 12px 0;
+    .calendar-table thead th {
+      padding: 2px 0 6px 0;
       color: var(--md-sys-color-on-surface-variant);
-      font-size: 0.8rem;
+      font-size: 0.75rem;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 1px;
       text-align: center;
+      height: 24px;
+    }
+
+    .calendar-table tbody tr {
+      height: 1%;
     }
 
     .calendar-table td {
-      height: clamp(95px, 13vh, 160px);
       vertical-align: top;
       background: var(--md-sys-color-surface-container-high);
       border-radius: var(--radius-md);
-      padding: 10px;
+      padding: 8px;
       transition: all 0.2s var(--spring-easing);
       position: relative;
       overflow: hidden;
@@ -313,19 +330,19 @@
     .day-header {
       display: flex;
       justify-content: flex-start;
-      margin-bottom: 8px;
+      margin-bottom: 4px;
     }
 
     .day-num {
       display: flex;
       align-items: center;
       justify-content: center;
-      min-width: 32px;
-      height: 32px;
-      padding: 0 8px;
+      min-width: 28px;
+      height: 28px;
+      padding: 0 6px;
       border-radius: var(--radius-full);
       font-weight: 500;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       color: var(--md-sys-color-on-surface);
       transition: all 0.2s var(--spring-easing);
     }
@@ -345,9 +362,9 @@
       display: none;
       background-color: var(--md-sys-color-primary-container);
       color: var(--md-sys-color-on-primary-container);
-      padding: 6px 12px;
-      border-radius: var(--radius-sm);
-      font-size: 0.8rem;
+      padding: 4px 10px;
+      border-radius: var(--radius-xs);
+      font-size: 0.75rem;
       font-weight: 500;
       text-align: left;
       white-space: nowrap;
@@ -437,20 +454,20 @@
 
     @media (max-width: 1024px) {
       .navbar {
-        padding: 16px 20px;
+        padding: 10px 16px;
       }
       .main-wrapper {
-        padding: 8px 20px 24px;
+        padding: 4px 16px 16px;
       }
       .calendar-table {
-        border-spacing: 6px;
-        padding: 12px;
+        border-spacing: 5px;
+        padding: 8px;
       }
     }
 
     @media (max-width: 768px) {
       .navbar {
-        padding: 12px 16px;
+        padding: 10px 12px;
       }
       .years {
         width: 100%;
@@ -466,14 +483,14 @@
       }
       .main-wrapper {
         padding: 4px 12px 16px;
-        gap: 12px;
+        gap: 10px;
       }
       .toolbar {
         flex-direction: column;
         align-items: stretch;
-        padding: 16px;
+        padding: 12px;
         border-radius: var(--radius-lg);
-        gap: 12px;
+        gap: 10px;
       }
       .toolbar-left {
         justify-content: space-between;
@@ -489,18 +506,22 @@
         width: 100%;
       }
       .calendar-table {
+        height: auto;
         border-spacing: 4px;
-        padding: 8px;
+        padding: 6px;
         border-radius: var(--radius-lg);
       }
-      .calendar-table th {
+      .calendar-table thead th {
         font-size: 0.7rem;
-        padding: 4px 0 8px 0;
+        padding: 4px 0 6px 0;
         letter-spacing: 0.5px;
       }
+      .calendar-table tbody tr {
+        height: auto;
+      }
       .calendar-table td {
-        height: clamp(68px, 11vh, 95px);
-        padding: 6px;
+        height: clamp(64px, 10dvh, 90px);
+        padding: 4px;
         border-radius: var(--radius-sm);
       }
       .calendar-table td:not(:empty):hover {
@@ -509,7 +530,7 @@
       }
       .day-header {
         justify-content: center;
-        margin-bottom: 4px;
+        margin-bottom: 2px;
       }
       .day-num {
         min-width: 24px;
@@ -519,7 +540,7 @@
       }
       .note-indicator {
         font-size: 0.65rem;
-        padding: 3px 6px;
+        padding: 2px 5px;
         border-radius: 6px;
         text-align: center;
       }
