@@ -64,7 +64,7 @@
   font-display: swap;
 }
 
-* {
+- {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -527,14 +527,6 @@ input::placeholder {
 .gif-card {
   position: relative;
   background-color: var(--md-surface-container);
-  background-image: linear-gradient(
-    90deg,
-    var(--md-surface-container) 25%,
-    var(--md-surface-high) 50%,
-    var(--md-surface-container) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.6s infinite linear;
   border-radius: var(--radius-lg);
   overflow: hidden;
   transition: transform 0.28s var(--ease-expressive),
@@ -546,7 +538,17 @@ input::placeholder {
   width: 100%;
   border: 1px solid rgba(255, 255, 255, 0.04);
 }
-.gif-card.is-loaded {
+.js-enabled .gif-card {
+  background-image: linear-gradient(
+    90deg,
+    var(--md-surface-container) 25%,
+    var(--md-surface-high) 50%,
+    var(--md-surface-container) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s infinite linear;
+}
+.js-enabled .gif-card.is-loaded {
   animation: none;
   background-image: none;
 }
@@ -561,10 +563,12 @@ input::placeholder {
   height: 100%;
   display: block;
   object-fit: cover;
+}
+.js-enabled .gif-card img {
   opacity: 0;
   transition: opacity 0.28s ease;
 }
-.gif-card.is-loaded img {
+.js-enabled .gif-card.is-loaded img {
   opacity: 1;
 }
 .gif-card:hover {
@@ -1105,17 +1109,15 @@ input::placeholder {
                 if(!gif.media || !gif.media[0]) return;
                 const title = getTitle(gif);
                 const altText = (gif.content_description && gif.content_description.trim()) ? gif.content_description.trim() : title;
-                const tinyObj = gif.media[0].tinygif || gif.media[0].gif;
-                const fullObj = gif.media[0].gif || tinyObj;
-                const tinyUrl = tinyObj.url;
+                const fullObj = gif.media[0].gif || gif.media[0].tinygif;
                 const fullUrl = fullObj.url;
-                const dims = (tinyObj && Array.isArray(tinyObj.dims) && tinyObj.dims.length === 2) ? tinyObj.dims : ((fullObj && Array.isArray(fullObj.dims) && fullObj.dims.length === 2) ? fullObj.dims : [220, 165]);
+                const dims = (fullObj && Array.isArray(fullObj.dims) && fullObj.dims.length === 2) ? fullObj.dims : [220, 165];
                 const w = dims[0] || 220;
                 const h = dims[1] || 165;
             %>
                 <div class="gif-card" data-aspect="<%= h / w %>">
                     <a href="<%= fullUrl %>" target="_blank" class="gif-link" style="aspect-ratio: <%= w %> / <%= h %>;" onclick="return handleModalOpen(event, <%= JSON.stringify(gif) %>, '<%= title.replace(/\\/g, "\\\\").replace(/'/g, "\\'") %>')">
-                        <img src="<%= mediaproxy %><%= tinyUrl %>" alt="<%= altText %>" width="<%= w %>" height="<%= h %>" loading="lazy" decoding="async" onload="this.closest('.gif-card').classList.add('is-loaded')" onerror="this.closest('.gif-card').classList.add('is-loaded')">
+                        <img src="<%= mediaproxy %><%= fullUrl %>" alt="<%= altText %>" width="<%= w %>" height="<%= h %>" loading="lazy" decoding="async" onload="this.closest('.gif-card').classList.add('is-loaded')" onerror="this.closest('.gif-card').classList.add('is-loaded')">
                         <div class="gif-overlay"><%= title %></div>
                     </a>
                     <button class="card-fav-btn js-only" data-gif-id="<%= gif.id %>" onclick="toggleFavorite(<%= JSON.stringify(gif) %>, event)">
@@ -1489,9 +1491,8 @@ input::placeholder {
             favoriteGifs.forEach(gif => {
                 if(!gif.media || !gif.media[0]) return;
                 const title = getTitleJS(gif);
-                const tinyUrl = gif.media[0].tinygif ? gif.media[0].tinygif.url : gif.media[0].gif.url;
-                const fullUrl = gif.media[0].gif ? gif.media[0].gif.url : tinyUrl;
-                appendCardToShortestColumn(createGifCard(gif, title, tinyUrl, fullUrl));
+                const fullUrl = gif.media[0].gif ? gif.media[0].gif.url : gif.media[0].tinygif.url;
+                appendCardToShortestColumn(createGifCard(gif, title, fullUrl, fullUrl));
             });
             updateFavButtonsInDOM();
         }
@@ -1534,9 +1535,8 @@ input::placeholder {
                         results.forEach(gif => {
                             if(!gif.media || !gif.media[0]) return;
                             const title = getTitleJS(gif);
-                            const tinyUrl = gif.media[0].tinygif ? gif.media[0].tinygif.url : gif.media[0].gif.url;
-                            const fullUrl = gif.media[0].gif ? gif.media[0].gif.url : tinyUrl;
-                            appendCardToShortestColumn(createGifCard(gif, title, tinyUrl, fullUrl));
+                            const fullUrl = gif.media[0].gif ? gif.media[0].gif.url : gif.media[0].tinygif.url;
+                            appendCardToShortestColumn(createGifCard(gif, title, fullUrl, fullUrl));
                         });
                     }
 
@@ -1554,12 +1554,9 @@ input::placeholder {
                 });
         }
 
-        function createGifCard(gif, title, tinyUrl, fullUrl) {
-            const tinyObj = (gif.media && gif.media[0] && gif.media[0].tinygif) ? gif.media[0].tinygif : gif.media[0].gif;
-            const fullObj = (gif.media && gif.media[0] && gif.media[0].gif) ? gif.media[0].gif : tinyObj;
-            const dims = (tinyObj && Array.isArray(tinyObj.dims) && tinyObj.dims.length === 2)
-                ? tinyObj.dims
-                : ((fullObj && Array.isArray(fullObj.dims) && fullObj.dims.length === 2) ? fullObj.dims : [220, 165]);
+        function createGifCard(gif, title, thumbUrl, fullUrl) {
+            const fullObj = (gif.media && gif.media[0] && gif.media[0].gif) ? gif.media[0].gif : gif.media[0].tinygif;
+            const dims = (fullObj && Array.isArray(fullObj.dims) && fullObj.dims.length === 2) ? fullObj.dims : [220, 165];
             const w = dims[0] || 220;
             const h = dims[1] || 165;
 
@@ -1575,7 +1572,7 @@ input::placeholder {
             a.onclick = (e) => handleModalOpen(e, gif, title);
             
             const img = document.createElement("img");
-            img.src = MEDIA_PROXY + tinyUrl;
+            img.src = MEDIA_PROXY + fullUrl;
             img.alt = (gif.content_description && gif.content_description.trim()) ? gif.content_description.trim() : title;
             img.width = w;
             img.height = h;
@@ -1624,8 +1621,7 @@ input::placeholder {
             const cleanTitle = getTitleJS(gif) || title;
             currentModalGif = gif;
             currentModalTitle = cleanTitle;
-            const tinyObj = (gif.media && gif.media[0] && gif.media[0].tinygif) ? gif.media[0].tinygif : gif.media[0].gif;
-            const fullObj = (gif.media && gif.media[0] && gif.media[0].gif) ? gif.media[0].gif : tinyObj;
+            const fullObj = (gif.media && gif.media[0] && gif.media[0].gif) ? gif.media[0].gif : gif.media[0].tinygif;
             
             const modalImg = document.getElementById("modal-img");
             if (Array.isArray(fullObj.dims) && fullObj.dims.length === 2) {
@@ -1634,17 +1630,7 @@ input::placeholder {
                 modalImg.style.aspectRatio = "";
             }
 
-            modalImg.src = MEDIA_PROXY + (tinyObj ? tinyObj.url : fullObj.url);
-            if (fullObj && fullObj.url && (!tinyObj || fullObj.url !== tinyObj.url)) {
-                const hiRes = new Image();
-                const targetUrl = MEDIA_PROXY + fullObj.url;
-                hiRes.onload = () => {
-                    if (currentModalGif && String(currentModalGif.id) === String(gif.id)) {
-                        modalImg.src = targetUrl;
-                    }
-                };
-                hiRes.src = targetUrl;
-            }
+            modalImg.src = MEDIA_PROXY + fullObj.url;
 
             document.getElementById("modal-title").innerText = cleanTitle;
             modalImg.alt = (gif.content_description && gif.content_description.trim()) ? gif.content_description.trim() : cleanTitle;
