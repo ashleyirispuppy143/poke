@@ -51,6 +51,8 @@ window.SyncLevel = SyncLevel;
   const qs = new URLSearchParams(window.location.search);
   const qua = qs.get("quality") || "";
   const FS_PERSIST_KEY = 'alabaster_persist_fs';
+  const VOL_PERSIST_KEY = 'alabaster_volume';
+  const MUTE_PERSIST_KEY = 'alabaster_muted';
 
   var config = {
     minPlayBuffer: 0.25,
@@ -238,6 +240,47 @@ window.SyncLevel = SyncLevel;
     }
   };
 
+  function setupVolumePersistence(player, videoEl, audioEl) {
+    var restoring = true;
+    try {
+      var savedVol = localStorage.getItem(VOL_PERSIST_KEY);
+      var savedMute = localStorage.getItem(MUTE_PERSIST_KEY);
+      if (savedVol !== null) {
+        var v = parseFloat(savedVol);
+        if (!isNaN(v) && isFinite(v)) {
+          var clamped = Math.max(0, Math.min(1, v));
+          if (typeof player.volume === 'function') player.volume(clamped);
+          if (videoEl) videoEl.volume = clamped;
+          if (audioEl) audioEl.volume = clamped;
+        }
+      }
+      if (savedMute !== null) {
+        var m = savedMute === '1' || savedMute === 'true';
+        if (typeof player.muted === 'function') player.muted(m);
+        if (videoEl) videoEl.muted = m;
+        if (audioEl) audioEl.muted = m;
+      }
+    } catch (_) {}
+    setTimeout(function() { restoring = false; }, 120);
+
+    var saveCurrentVolume = function() {
+      if (restoring) return;
+      try {
+        var curVol = typeof player.volume === 'function' ? player.volume() : (videoEl ? videoEl.volume : 1);
+        var curMute = typeof player.muted === 'function' ? player.muted() : (videoEl ? videoEl.muted : false);
+        if (typeof curVol === 'number' && !isNaN(curVol)) {
+          localStorage.setItem(VOL_PERSIST_KEY, String(curVol));
+        }
+        localStorage.setItem(MUTE_PERSIST_KEY, curMute ? '1' : '0');
+      } catch (_) {}
+    };
+
+    player.on('volumechange', saveCurrentVolume);
+    if (videoEl) {
+      videoEl.addEventListener('volumechange', saveCurrentVolume, false);
+    }
+  }
+
   var metadataParser = (function() {
     var skin = '(?:\\uFE0F|\\uD83C[\\uDFFB-\\uDFFF])*';
     var count = '([\\d][\\d.,]*[KMBTkmbt]?)';
@@ -401,6 +444,27 @@ window.SyncLevel = SyncLevel;
     var styleEl = document.createElement('style');
     styleEl.id = 'alabaster-fs-desc-styles';
     styleEl.textContent = [
+      'body.alabaster-body-fs-lock, html.alabaster-body-fs-lock {',
+      '  overflow: hidden !important;',
+      '  width: 100% !important;',
+      '  height: 100% !important;',
+      '}',
+      '.video-js.alabaster-persisted-fs {',
+      '  position: fixed !important;',
+      '  inset: 0 !important;',
+      '  top: 0 !important;',
+      '  left: 0 !important;',
+      '  right: 0 !important;',
+      '  bottom: 0 !important;',
+      '  width: 100vw !important;',
+      '  height: 100vh !important;',
+      '  max-width: 100vw !important;',
+      '  max-height: 100vh !important;',
+      '  z-index: 2147483647 !important;',
+      '  background: #000 !important;',
+      '  margin: 0 !important;',
+      '  padding: 0 !important;',
+      '}',
       '.alabaster-fs-desc-toggle {',
       '  position: absolute;',
       '  top: 22px;',
@@ -876,28 +940,63 @@ window.SyncLevel = SyncLevel;
           getNativeFsElement() ||
           (typeof player.isFullscreen === 'function' && player.isFullscreen()) ||
           rootEl.classList.contains('vjs-fullscreen') ||
-          rootEl.classList.contains('vjs-full-window')
+          rootEl.classList.contains('vjs-full-window') ||
+          rootEl.classList.contains('alabaster-persisted-fs')
         );
+      };
+
+      var applyPseudoFullscreen = function(enable) {
+        if (!rootEl) return;
+        if (enable) {
+          if (typeof player.enterFullWindow === 'function') {
+            try { player.enterFullWindow(); } catch (_) {}
+          }
+          rootEl.classList.add('alabaster-persisted-fs');
+          rootEl.classList.add('vjs-fullscreen');
+          rootEl.classList.add('vjs-full-window');
+          document.documentElement.classList.add('alabaster-body-fs-lock');
+          if (document.body) document.body.classList.add('alabaster-body-fs-lock');
+          if (typeof player.isFullscreen === 'function') {
+            try { player.isFullscreen(true); } catch (_) {}
+          }
+        } else {
+          if (typeof player.exitFullWindow === 'function') {
+            try { player.exitFullWindow(); } catch (_) {}
+          }
+          rootEl.classList.remove('alabaster-persisted-fs');
+          rootEl.classList.remove('vjs-fullscreen');
+          rootEl.classList.remove('vjs-full-window');
+          document.documentElement.classList.remove('alabaster-body-fs-lock');
+          if (document.body) document.body.classList.remove('alabaster-body-fs-lock');
+          if (typeof player.isFullscreen === 'function') {
+            try { player.isFullscreen(false); } catch (_) {}
+          }
+        }
+      };
+
+      var tryNativeElementFullscreen = function() {
+        if (!rootEl || getNativeFsElement()) return Promise.resolve();
+        var req = rootEl.requestFullscreen || rootEl.webkitRequestFullscreen || rootEl.mozRequestFullScreen || rootEl.msRequestFullscreen;
+        if (typeof req === 'function') {
+          try {
+            var p = req.call(rootEl);
+            if (p && typeof p.then === 'function') return p;
+          } catch (_) {}
+        }
+        return Promise.reject();
       };
 
       var origExitFs = typeof player.exitFullscreen === 'function' ? player.exitFullscreen.bind(player) : null;
       player.exitFullscreen = function() {
+        try { localStorage.removeItem(FS_PERSIST_KEY); } catch (_) {}
+        try { sessionStorage.removeItem(FS_PERSIST_KEY); } catch (_) {}
+        applyPseudoFullscreen(false);
         if (getNativeFsElement()) {
           try {
-            var p = origExitFs ? origExitFs() : (document.exitFullscreen ? document.exitFullscreen() : null);
+            var exitFn = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+            var p = origExitFs ? origExitFs() : (exitFn ? exitFn.call(document) : null);
             if (p && typeof p.catch === 'function') p.catch(function() {});
-            return p;
           } catch (_) {}
-        }
-        if (typeof player.exitFullWindow === 'function') {
-          try { player.exitFullWindow(); } catch (_) {}
-        }
-        if (rootEl) {
-          rootEl.classList.remove('vjs-fullscreen');
-          rootEl.classList.remove('vjs-full-window');
-        }
-        if (typeof player.isFullscreen === 'function') {
-          try { player.isFullscreen(false); } catch (_) {}
         }
         player.trigger('fullscreenchange');
         return Promise.resolve();
@@ -905,68 +1004,93 @@ window.SyncLevel = SyncLevel;
 
       var origReqFs = typeof player.requestFullscreen === 'function' ? player.requestFullscreen.bind(player) : null;
       player.requestFullscreen = function() {
+        try { localStorage.setItem(FS_PERSIST_KEY, '1'); } catch (_) {}
+        applyPseudoFullscreen(true);
         try {
           if (origReqFs) {
             var p = origReqFs();
             if (p && typeof p.catch === 'function') {
               p.catch(function() {
-                if (typeof player.enterFullWindow === 'function') {
-                  try { player.enterFullWindow(); } catch (_) {}
-                }
-                if (rootEl) rootEl.classList.add('vjs-fullscreen');
-                player.trigger('fullscreenchange');
+                tryNativeElementFullscreen().catch(function() {
+                  applyPseudoFullscreen(true);
+                  player.trigger('fullscreenchange');
+                });
               });
             }
             return p;
           }
-        } catch (_) {
-          if (typeof player.enterFullWindow === 'function') {
-            try { player.enterFullWindow(); } catch (_) {}
-          }
-          if (rootEl) rootEl.classList.add('vjs-fullscreen');
+        } catch (_) {}
+        tryNativeElementFullscreen().catch(function() {
+          applyPseudoFullscreen(true);
           player.trigger('fullscreenchange');
-        }
+        });
+        player.trigger('fullscreenchange');
         return Promise.resolve();
       };
 
       var tryRestorePersistentFullscreen = function() {
         var wantFs = false;
         try {
-          wantFs = sessionStorage.getItem(FS_PERSIST_KEY) === '1';
+          wantFs = localStorage.getItem(FS_PERSIST_KEY) === '1' || sessionStorage.getItem(FS_PERSIST_KEY) === '1';
         } catch (_) {}
         if (!wantFs) return;
-        try { sessionStorage.removeItem(FS_PERSIST_KEY); } catch (_) {}
 
-        if (typeof player.enterFullWindow === 'function') {
-          try { player.enterFullWindow(); } catch (_) {}
-        }
-        if (rootEl) {
-          rootEl.classList.add('vjs-fullscreen');
-        }
-        player.trigger('fullscreenchange');
+        var attemptAllFullscreenMethods = function() {
+          applyPseudoFullscreen(true);
+          player.trigger('fullscreenchange');
+          tryNativeElementFullscreen().then(function() {
+            applyPseudoFullscreen(true);
+            player.trigger('fullscreenchange');
+          }).catch(function() {});
+        };
+
+        attemptAllFullscreenMethods();
+        setTimeout(attemptAllFullscreenMethods, 50);
+        setTimeout(attemptAllFullscreenMethods, 250);
+        player.one('loadedmetadata', attemptAllFullscreenMethods);
+        player.one('play', attemptAllFullscreenMethods);
 
         var upgradeToNativeOnGesture = function(evt) {
           if (evt && evt.target && evt.target.closest && evt.target.closest('.vjs-fullscreen-control')) {
             document.removeEventListener('click', upgradeToNativeOnGesture, true);
+            document.removeEventListener('touchend', upgradeToNativeOnGesture, true);
             document.removeEventListener('keydown', upgradeToNativeOnGesture, true);
             return;
           }
-          if (!checkIsPlayerFullscreen()) {
+          var stillWantFs = false;
+          try {
+            stillWantFs = localStorage.getItem(FS_PERSIST_KEY) === '1' || checkIsPlayerFullscreen();
+          } catch (_) {
+            stillWantFs = checkIsPlayerFullscreen();
+          }
+          if (!stillWantFs) {
             document.removeEventListener('click', upgradeToNativeOnGesture, true);
+            document.removeEventListener('touchend', upgradeToNativeOnGesture, true);
             document.removeEventListener('keydown', upgradeToNativeOnGesture, true);
             return;
           }
-          if (!getNativeFsElement() && rootEl && rootEl.requestFullscreen) {
-            try {
-              var p = rootEl.requestFullscreen();
-              if (p && typeof p.catch === 'function') p.catch(function() {});
-            } catch (_) {}
+          if (evt && evt.key === 'Escape') {
+            player.exitFullscreen();
+            document.removeEventListener('click', upgradeToNativeOnGesture, true);
+            document.removeEventListener('touchend', upgradeToNativeOnGesture, true);
+            document.removeEventListener('keydown', upgradeToNativeOnGesture, true);
+            return;
           }
-          document.removeEventListener('click', upgradeToNativeOnGesture, true);
-          document.removeEventListener('keydown', upgradeToNativeOnGesture, true);
+          if (!getNativeFsElement()) {
+            tryNativeElementFullscreen().then(function() {
+              document.removeEventListener('click', upgradeToNativeOnGesture, true);
+              document.removeEventListener('touchend', upgradeToNativeOnGesture, true);
+              document.removeEventListener('keydown', upgradeToNativeOnGesture, true);
+            }).catch(function() {});
+          } else {
+            document.removeEventListener('click', upgradeToNativeOnGesture, true);
+            document.removeEventListener('touchend', upgradeToNativeOnGesture, true);
+            document.removeEventListener('keydown', upgradeToNativeOnGesture, true);
+          }
         };
 
         document.addEventListener('click', upgradeToNativeOnGesture, true);
+        document.addEventListener('touchend', upgradeToNativeOnGesture, true);
         document.addEventListener('keydown', upgradeToNativeOnGesture, true);
       };
 
@@ -974,6 +1098,7 @@ window.SyncLevel = SyncLevel;
       var fsDescDrawer = null;
       var fsDescBody = null;
       var isFsDescOpen = false;
+      var setDrawerState = null;
 
       var syncDescToggleWithUserActivity = function() {
         if (!fsDescToggle || !rootEl) return;
@@ -1214,7 +1339,7 @@ window.SyncLevel = SyncLevel;
           return true;
         };
 
-        var setDrawerState = function(open) {
+        setDrawerState = function(open) {
           isFsDescOpen = Boolean(open);
           var isFsNow = checkIsPlayerFullscreen();
           updateTitleBarDescVisibility(isFsNow);
@@ -1283,6 +1408,7 @@ window.SyncLevel = SyncLevel;
       var recOpenBtn = null;
       var recHideBtn = null;
       var recStage = 0;
+      var applyRecStage = null;
 
       if (rootEl && !rootEl.querySelector('.alabaster-rec-drawer')) {
         recDrawer = document.createElement('div');
@@ -1340,6 +1466,7 @@ window.SyncLevel = SyncLevel;
 
               card.addEventListener('click', function() {
                 if (checkIsPlayerFullscreen()) {
+                  try { localStorage.setItem(FS_PERSIST_KEY, '1'); } catch (_) {}
                   try { sessionStorage.setItem(FS_PERSIST_KEY, '1'); } catch (_) {}
                 }
               });
@@ -1422,7 +1549,7 @@ window.SyncLevel = SyncLevel;
           return Math.round(pH * 0.78);
         };
 
-        var applyRecStage = function(stage) {
+        applyRecStage = function(stage) {
           if (stage > 0 && !checkIsPlayerFullscreen()) {
             stage = 0;
           }
@@ -1669,17 +1796,58 @@ window.SyncLevel = SyncLevel;
           applyRecStage(0);
         });
 
-        rootEl.addEventListener('mousedown', function(evt) {
-          if (recStage !== 0 && recDrawer && !recDrawer.contains(evt.target) && (!recOpenBtn || !recOpenBtn.contains(evt.target))) {
-            applyRecStage(0);
-          }
-        }, true);
+        var consumeOutsideClickUntil = 0;
 
-        rootEl.addEventListener('touchstart', function(evt) {
-          if (recStage !== 0 && recDrawer && !recDrawer.contains(evt.target) && (!recOpenBtn || !recOpenBtn.contains(evt.target))) {
+        var handleOutsideDrawerInteraction = function(evt) {
+          var now = compat.now();
+          var target = evt.target;
+
+          if (evt.type === 'click' || evt.type === 'touchend' || evt.type === 'mouseup') {
+            if (now < consumeOutsideClickUntil) {
+              evt.preventDefault();
+              evt.stopPropagation();
+              evt.stopImmediatePropagation();
+              return;
+            }
+          }
+
+          var clickedOutsideRec = Boolean(
+            recStage !== 0 &&
+            recDrawer &&
+            !recDrawer.contains(target) &&
+            (!recOpenBtn || !recOpenBtn.contains(target))
+          );
+
+          var clickedOutsideDesc = Boolean(
+            isFsDescOpen &&
+            fsDescDrawer &&
+            !fsDescDrawer.contains(target) &&
+            (!fsDescToggle || !fsDescToggle.contains(target))
+          );
+
+          if (!clickedOutsideRec && !clickedOutsideDesc) return;
+
+          var cBarEl = player.controlBar && player.controlBar.el && player.controlBar.el();
+          var isInsideControlBar = Boolean(cBarEl && cBarEl.contains(target));
+
+          if (clickedOutsideRec && typeof applyRecStage === 'function') {
             applyRecStage(0);
           }
-        }, true);
+          if (clickedOutsideDesc && typeof setDrawerState === 'function') {
+            setDrawerState(false);
+          }
+
+          if (!isInsideControlBar) {
+            consumeOutsideClickUntil = now + 450;
+            evt.preventDefault();
+            evt.stopPropagation();
+            evt.stopImmediatePropagation();
+          }
+        };
+
+        ['pointerdown', 'mousedown', 'touchstart', 'touchend', 'mouseup', 'click'].forEach(function(evName) {
+          rootEl.addEventListener(evName, handleOutsideDrawerInteraction, true);
+        });
 
         document.addEventListener('keydown', function(evt) {
           if (evt.key === 'Escape' && recStage !== 0) {
@@ -1846,8 +2014,21 @@ window.SyncLevel = SyncLevel;
         };
       }
 
+      var hadNativeFs = false;
+
       var syncFullscreenTitleBarVisibility = function() {
         if (!rootEl) return;
+        var nativeFsNow = Boolean(getNativeFsElement());
+        if (nativeFsNow) {
+          hadNativeFs = true;
+          try { localStorage.setItem(FS_PERSIST_KEY, '1'); } catch (_) {}
+        } else if (hadNativeFs) {
+          hadNativeFs = false;
+          try { localStorage.removeItem(FS_PERSIST_KEY); } catch (_) {}
+          try { sessionStorage.removeItem(FS_PERSIST_KEY); } catch (_) {}
+          applyPseudoFullscreen(false);
+        }
+
         var isFs = checkIsPlayerFullscreen();
 
         if (!isFs) {
@@ -2113,6 +2294,7 @@ window.SyncLevel = SyncLevel;
       player.ready(function() {
         var rootEl = player.el && player.el();
         var videoEl = (rootEl && rootEl.querySelector('video')) || rawVideo;
+        setupVolumePersistence(player, videoEl, null);
         videoEl.preload = 'auto';
         if (videoEl.networkState === 0) {
           try { videoEl.load(); } catch (_) {}
@@ -2152,6 +2334,8 @@ window.SyncLevel = SyncLevel;
       if (!videoEl || videoEl._alabasterAttached) return;
       videoEl._alabasterAttached = true;
       window.Alabaster.active = true;
+
+      setupVolumePersistence(player, videoEl, audioEl);
 
       videoEl.autoplay = false;
       videoEl.removeAttribute('autoplay');
