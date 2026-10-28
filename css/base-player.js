@@ -444,27 +444,6 @@ window.SyncLevel = SyncLevel;
     var styleEl = document.createElement('style');
     styleEl.id = 'alabaster-fs-desc-styles';
     styleEl.textContent = [
-      'body.alabaster-body-fs-lock, html.alabaster-body-fs-lock {',
-      '  overflow: hidden !important;',
-      '  width: 100% !important;',
-      '  height: 100% !important;',
-      '}',
-      '.video-js.alabaster-persisted-fs {',
-      '  position: fixed !important;',
-      '  inset: 0 !important;',
-      '  top: 0 !important;',
-      '  left: 0 !important;',
-      '  right: 0 !important;',
-      '  bottom: 0 !important;',
-      '  width: 100vw !important;',
-      '  height: 100vh !important;',
-      '  max-width: 100vw !important;',
-      '  max-height: 100vh !important;',
-      '  z-index: 2147483647 !important;',
-      '  background: #000 !important;',
-      '  margin: 0 !important;',
-      '  padding: 0 !important;',
-      '}',
       '.alabaster-fs-desc-toggle {',
       '  position: absolute;',
       '  top: 22px;',
@@ -939,93 +918,24 @@ window.SyncLevel = SyncLevel;
         return Boolean(
           getNativeFsElement() ||
           (typeof player.isFullscreen === 'function' && player.isFullscreen()) ||
-          rootEl.classList.contains('vjs-fullscreen') ||
-          rootEl.classList.contains('vjs-full-window') ||
-          rootEl.classList.contains('alabaster-persisted-fs')
+          rootEl.classList.contains('vjs-fullscreen')
         );
       };
 
-      var applyPseudoFullscreen = function(enable) {
-        if (!rootEl) return;
-        if (enable) {
-          if (typeof player.enterFullWindow === 'function') {
-            try { player.enterFullWindow(); } catch (_) {}
-          }
-          rootEl.classList.add('alabaster-persisted-fs');
-          rootEl.classList.add('vjs-fullscreen');
-          rootEl.classList.add('vjs-full-window');
-          document.documentElement.classList.add('alabaster-body-fs-lock');
-          if (document.body) document.body.classList.add('alabaster-body-fs-lock');
-          if (typeof player.isFullscreen === 'function') {
-            try { player.isFullscreen(true); } catch (_) {}
-          }
-        } else {
-          if (typeof player.exitFullWindow === 'function') {
-            try { player.exitFullWindow(); } catch (_) {}
-          }
-          rootEl.classList.remove('alabaster-persisted-fs');
-          rootEl.classList.remove('vjs-fullscreen');
-          rootEl.classList.remove('vjs-full-window');
-          document.documentElement.classList.remove('alabaster-body-fs-lock');
-          if (document.body) document.body.classList.remove('alabaster-body-fs-lock');
-          if (typeof player.isFullscreen === 'function') {
-            try { player.isFullscreen(false); } catch (_) {}
-          }
+      var clickVjsFullscreenButton = function() {
+        if (checkIsPlayerFullscreen()) return true;
+        var fsBtn = (rootEl && rootEl.querySelector('.vjs-fullscreen-control.vjs-control.vjs-button, .vjs-fullscreen-control')) || document.querySelector('.vjs-fullscreen-control.vjs-control.vjs-button, .vjs-fullscreen-control');
+        if (fsBtn) {
+          try { fsBtn.click(); } catch (_) {}
         }
-      };
-
-      var tryNativeElementFullscreen = function() {
-        if (!rootEl || getNativeFsElement()) return Promise.resolve();
-        var req = rootEl.requestFullscreen || rootEl.webkitRequestFullscreen || rootEl.mozRequestFullScreen || rootEl.msRequestFullscreen;
-        if (typeof req === 'function') {
+        var fsToggle = player.controlBar && (player.controlBar.fullscreenToggle || (player.controlBar.getChild && player.controlBar.getChild('fullscreenToggle')));
+        if (!checkIsPlayerFullscreen() && fsToggle) {
           try {
-            var p = req.call(rootEl);
-            if (p && typeof p.then === 'function') return p;
+            if (typeof fsToggle.handleClick === 'function') fsToggle.handleClick();
+            else if (typeof fsToggle.trigger === 'function') fsToggle.trigger('click');
           } catch (_) {}
         }
-        return Promise.reject();
-      };
-
-      var origExitFs = typeof player.exitFullscreen === 'function' ? player.exitFullscreen.bind(player) : null;
-      player.exitFullscreen = function() {
-        try { localStorage.removeItem(FS_PERSIST_KEY); } catch (_) {}
-        try { sessionStorage.removeItem(FS_PERSIST_KEY); } catch (_) {}
-        applyPseudoFullscreen(false);
-        if (getNativeFsElement()) {
-          try {
-            var exitFn = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
-            var p = origExitFs ? origExitFs() : (exitFn ? exitFn.call(document) : null);
-            if (p && typeof p.catch === 'function') p.catch(function() {});
-          } catch (_) {}
-        }
-        player.trigger('fullscreenchange');
-        return Promise.resolve();
-      };
-
-      var origReqFs = typeof player.requestFullscreen === 'function' ? player.requestFullscreen.bind(player) : null;
-      player.requestFullscreen = function() {
-        try { localStorage.setItem(FS_PERSIST_KEY, '1'); } catch (_) {}
-        applyPseudoFullscreen(true);
-        try {
-          if (origReqFs) {
-            var p = origReqFs();
-            if (p && typeof p.catch === 'function') {
-              p.catch(function() {
-                tryNativeElementFullscreen().catch(function() {
-                  applyPseudoFullscreen(true);
-                  player.trigger('fullscreenchange');
-                });
-              });
-            }
-            return p;
-          }
-        } catch (_) {}
-        tryNativeElementFullscreen().catch(function() {
-          applyPseudoFullscreen(true);
-          player.trigger('fullscreenchange');
-        });
-        player.trigger('fullscreenchange');
-        return Promise.resolve();
+        return checkIsPlayerFullscreen();
       };
 
       var tryRestorePersistentFullscreen = function() {
@@ -1035,63 +945,40 @@ window.SyncLevel = SyncLevel;
         } catch (_) {}
         if (!wantFs) return;
 
-        var attemptAllFullscreenMethods = function() {
-          applyPseudoFullscreen(true);
-          player.trigger('fullscreenchange');
-          tryNativeElementFullscreen().then(function() {
-            applyPseudoFullscreen(true);
-            player.trigger('fullscreenchange');
-          }).catch(function() {});
-        };
+        clickVjsFullscreenButton();
+        setTimeout(clickVjsFullscreenButton, 60);
+        setTimeout(clickVjsFullscreenButton, 250);
+        player.one('loadedmetadata', clickVjsFullscreenButton);
+        player.one('play', clickVjsFullscreenButton);
 
-        attemptAllFullscreenMethods();
-        setTimeout(attemptAllFullscreenMethods, 50);
-        setTimeout(attemptAllFullscreenMethods, 250);
-        player.one('loadedmetadata', attemptAllFullscreenMethods);
-        player.one('play', attemptAllFullscreenMethods);
-
-        var upgradeToNativeOnGesture = function(evt) {
+        var clickOnFirstGesture = function(evt) {
           if (evt && evt.target && evt.target.closest && evt.target.closest('.vjs-fullscreen-control')) {
-            document.removeEventListener('click', upgradeToNativeOnGesture, true);
-            document.removeEventListener('touchend', upgradeToNativeOnGesture, true);
-            document.removeEventListener('keydown', upgradeToNativeOnGesture, true);
-            return;
-          }
-          var stillWantFs = false;
-          try {
-            stillWantFs = localStorage.getItem(FS_PERSIST_KEY) === '1' || checkIsPlayerFullscreen();
-          } catch (_) {
-            stillWantFs = checkIsPlayerFullscreen();
-          }
-          if (!stillWantFs) {
-            document.removeEventListener('click', upgradeToNativeOnGesture, true);
-            document.removeEventListener('touchend', upgradeToNativeOnGesture, true);
-            document.removeEventListener('keydown', upgradeToNativeOnGesture, true);
+            document.removeEventListener('click', clickOnFirstGesture, true);
+            document.removeEventListener('touchend', clickOnFirstGesture, true);
+            document.removeEventListener('keydown', clickOnFirstGesture, true);
             return;
           }
           if (evt && evt.key === 'Escape') {
-            player.exitFullscreen();
-            document.removeEventListener('click', upgradeToNativeOnGesture, true);
-            document.removeEventListener('touchend', upgradeToNativeOnGesture, true);
-            document.removeEventListener('keydown', upgradeToNativeOnGesture, true);
+            try { localStorage.removeItem(FS_PERSIST_KEY); } catch (_) {}
+            try { sessionStorage.removeItem(FS_PERSIST_KEY); } catch (_) {}
+            document.removeEventListener('click', clickOnFirstGesture, true);
+            document.removeEventListener('touchend', clickOnFirstGesture, true);
+            document.removeEventListener('keydown', clickOnFirstGesture, true);
             return;
           }
-          if (!getNativeFsElement()) {
-            tryNativeElementFullscreen().then(function() {
-              document.removeEventListener('click', upgradeToNativeOnGesture, true);
-              document.removeEventListener('touchend', upgradeToNativeOnGesture, true);
-              document.removeEventListener('keydown', upgradeToNativeOnGesture, true);
-            }).catch(function() {});
-          } else {
-            document.removeEventListener('click', upgradeToNativeOnGesture, true);
-            document.removeEventListener('touchend', upgradeToNativeOnGesture, true);
-            document.removeEventListener('keydown', upgradeToNativeOnGesture, true);
+          if (!checkIsPlayerFullscreen()) {
+            clickVjsFullscreenButton();
+          }
+          if (checkIsPlayerFullscreen()) {
+            document.removeEventListener('click', clickOnFirstGesture, true);
+            document.removeEventListener('touchend', clickOnFirstGesture, true);
+            document.removeEventListener('keydown', clickOnFirstGesture, true);
           }
         };
 
-        document.addEventListener('click', upgradeToNativeOnGesture, true);
-        document.addEventListener('touchend', upgradeToNativeOnGesture, true);
-        document.addEventListener('keydown', upgradeToNativeOnGesture, true);
+        document.addEventListener('click', clickOnFirstGesture, true);
+        document.addEventListener('touchend', clickOnFirstGesture, true);
+        document.addEventListener('keydown', clickOnFirstGesture, true);
       };
 
       var fsDescToggle = null;
@@ -1657,6 +1544,8 @@ window.SyncLevel = SyncLevel;
           startY: 0,
           startHeight: 0
         };
+        var justFinishedDragUntil = 0;
+        var consumeOutsideClickUntil = 0;
 
         var onDragStart = function(clientX, clientY, targetEl, sourceType) {
           if (!checkIsPlayerFullscreen()) return false;
@@ -1684,16 +1573,16 @@ window.SyncLevel = SyncLevel;
           var dx = clientX - dragState.startX;
 
           if (!dragState.engaged) {
-            if (Math.abs(dy) < 24) return;
-            if (Math.abs(dx) > Math.abs(dy) * 0.65) {
+            if (Math.abs(dy) < 18) return;
+            if (Math.abs(dx) > Math.abs(dy) * 0.75) {
               dragState.active = false;
               return;
             }
-            if (dragState.source === 'bar' && dy < 24) {
+            if (dragState.source === 'bar' && dy < 18) {
               dragState.active = false;
               return;
             }
-            if (dragState.source === 'topbar' && dy > -20) {
+            if (dragState.source === 'topbar' && dy > -16) {
               dragState.active = false;
               return;
             }
@@ -1734,11 +1623,14 @@ window.SyncLevel = SyncLevel;
 
           if (!wasEngaged) return;
 
+          justFinishedDragUntil = compat.now() + 450;
+          consumeOutsideClickUntil = compat.now() + 450;
+
           if (src === 'bar') {
-            if (dy > 65) applyRecStage(1);
+            if (dy > 45) applyRecStage(1);
             else applyRecStage(0);
           } else if (src === 'topbar') {
-            if (dy < -65) applyRecStage(0);
+            if (dy < -55) applyRecStage(0);
             else applyRecStage(1);
           }
         };
@@ -1792,15 +1684,22 @@ window.SyncLevel = SyncLevel;
         recHideBtn.addEventListener('click', function(evt) {
           evt.preventDefault();
           evt.stopPropagation();
-          if (dragState.engaged) return;
+          if (dragState.engaged || compat.now() < justFinishedDragUntil) return;
           applyRecStage(0);
         });
-
-        var consumeOutsideClickUntil = 0;
 
         var handleOutsideDrawerInteraction = function(evt) {
           var now = compat.now();
           var target = evt.target;
+
+          if (dragState.active || dragState.engaged || now < justFinishedDragUntil) {
+            if (evt.type === 'click') {
+              evt.preventDefault();
+              evt.stopPropagation();
+              evt.stopImmediatePropagation();
+            }
+            return;
+          }
 
           if (evt.type === 'click' || evt.type === 'touchend' || evt.type === 'mouseup') {
             if (now < consumeOutsideClickUntil) {
@@ -1809,6 +1708,10 @@ window.SyncLevel = SyncLevel;
               evt.stopImmediatePropagation();
               return;
             }
+          }
+
+          if (evt.type !== 'mousedown' && evt.type !== 'touchstart') {
+            return;
           }
 
           var clickedOutsideRec = Boolean(
@@ -1903,7 +1806,7 @@ window.SyncLevel = SyncLevel;
           recOpenBtn.addEventListener('click', function(evt) {
             evt.preventDefault();
             evt.stopPropagation();
-            if (dragState.engaged) return;
+            if (dragState.engaged || compat.now() < justFinishedDragUntil) return;
             applyRecStage(recStage === 0 ? 1 : 0);
           });
 
@@ -2014,22 +1917,20 @@ window.SyncLevel = SyncLevel;
         };
       }
 
-      var hadNativeFs = false;
+      var hadFs = false;
 
       var syncFullscreenTitleBarVisibility = function() {
         if (!rootEl) return;
-        var nativeFsNow = Boolean(getNativeFsElement());
-        if (nativeFsNow) {
-          hadNativeFs = true;
+        var isFs = checkIsPlayerFullscreen();
+
+        if (isFs) {
+          hadFs = true;
           try { localStorage.setItem(FS_PERSIST_KEY, '1'); } catch (_) {}
-        } else if (hadNativeFs) {
-          hadNativeFs = false;
+        } else if (hadFs) {
+          hadFs = false;
           try { localStorage.removeItem(FS_PERSIST_KEY); } catch (_) {}
           try { sessionStorage.removeItem(FS_PERSIST_KEY); } catch (_) {}
-          applyPseudoFullscreen(false);
         }
-
-        var isFs = checkIsPlayerFullscreen();
 
         if (!isFs) {
           isFsDescOpen = false;
