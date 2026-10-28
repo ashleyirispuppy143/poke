@@ -373,7 +373,6 @@ function fetchUrls(urls) {
   
   }
   }
-
 var popupMenu = document.getElementById("popupMenu");
 var loopOption = document.getElementById("loopOption");
 var speedOption = document.getElementById("speedOption");
@@ -382,7 +381,6 @@ var normalizeOption = document.getElementById("normalizeOption");
 var whisperOption = document.getElementById("whisperOption");
 var snapshotOption = document.getElementById("snapshotOption");
 var loopedIndicator = document.getElementById("loopedIndicator");
-var SettingsOption = document.getElementById("SettingsOption");
 
 loopedIndicator.style.display = "none";
 
@@ -791,15 +789,21 @@ function closeConfigurePlayerPopup() {
 configurePlayerClose.addEventListener("click", closeConfigurePlayerPopup);
 configurePlayerOverlay.addEventListener("click", closeConfigurePlayerPopup);
 
-if (SettingsOption) {
-    SettingsOption.addEventListener("click", function() {
+document.addEventListener("click", function(event) {
+    var settingsBtn = event.target.closest("#SettingsOption");
+    
+    if (settingsBtn) {
+        event.preventDefault();
+        event.stopPropagation(); 
+        
         configurePlayerOverlay.style.display = "block";
         configurePlayerPopup.style.display = "block";
+        
         if (popupMenu) {
             popupMenu.style.display = "none";
         }
-    });
-}
+    }
+});
 
 
 const GoogleTranslateEndpoint = "https://translate.google.com/_/TranslateWebserverUi/data/batchexecute?rpcids=MkEWBc&rt=c"
