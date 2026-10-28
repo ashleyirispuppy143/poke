@@ -373,7 +373,8 @@ function fetchUrls(urls) {
   
   }
   }
- var popupMenu = document.getElementById("popupMenu");
+
+var popupMenu = document.getElementById("popupMenu");
 var loopOption = document.getElementById("loopOption");
 var speedOption = document.getElementById("speedOption");
 var boostOption = document.getElementById("boostOption");
@@ -381,7 +382,7 @@ var normalizeOption = document.getElementById("normalizeOption");
 var whisperOption = document.getElementById("whisperOption");
 var snapshotOption = document.getElementById("snapshotOption");
 var loopedIndicator = document.getElementById("loopedIndicator");
-var settingsOption = document.getElementById("settingsOption");
+var SettingsOption = document.getElementById("SettingsOption");
 
 loopedIndicator.style.display = "none";
 
@@ -391,180 +392,6 @@ let normalizerInterval = null;
 let dataArray = null;
 let currentAutoGain = 1.0;
 
-const customStyles = document.createElement("style");
-customStyles.innerHTML = `
-dialog#customMenuHost {
-    padding: 0;
-    margin: 0;
-    border: none;
-    background: transparent;
-    overflow: visible;
-    width: 100%;
-    height: 100%;
-    max-width: 100%;
-    max-height: 100%;
-}
-dialog#customMenuHost::backdrop {
-    background: transparent;
-}
-.custom-settings-menu {
-    display: none;
-    position: absolute;
-    background-color: rgba(28, 28, 28, 0.95);
-    color: #fff;
-    border-radius: 12px;
-    width: 260px;
-    font-family: "Roboto", Arial, sans-serif;
-    font-size: 14px;
-    box-shadow: 0px 4px 10px rgba(0,0,0,0.5);
-    z-index: 999999;
-    backdrop-filter: blur(5px);
-    overflow: hidden;
-}
-.custom-settings-header {
-    display: flex;
-    align-items: center;
-    padding: 12px 15px;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
-    cursor: pointer;
-}
-.custom-settings-header:hover { background-color: rgba(255,255,255,0.1); }
-.custom-settings-header i { margin-right: 15px; font-size: 16px; }
-.custom-settings-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 15px;
-    cursor: pointer;
-}
-.custom-settings-row:hover { background-color: rgba(255,255,255,0.1); }
-.custom-switch {
-    position: relative;
-    display: inline-block;
-    width: 36px;
-    height: 14px;
-}
-.custom-switch input { opacity: 0; width: 0; height: 0; }
-.custom-slider {
-    position: absolute;
-    cursor: pointer;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background-color: #717171;
-    transition: .4s;
-    border-radius: 14px;
-}
-.custom-slider:before {
-    position: absolute;
-    content: "";
-    height: 20px; width: 20px;
-    left: -2px; bottom: -3px;
-    background-color: #b5b5b5;
-    transition: .4s;
-    border-radius: 50%;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.4);
-}
-input:checked + .custom-slider { background-color: #90caf9; }
-input:checked + .custom-slider:before {
-    transform: translateX(20px);
-    background-color: #3ea6ff;
-}
-`;
-document.head.appendChild(customStyles);
-
-const menuHost = document.createElement("dialog");
-menuHost.id = "customMenuHost";
-document.body.appendChild(menuHost);
-
-if (popupMenu) {
-    menuHost.appendChild(popupMenu);
-}
-
-const settingsMenu = document.createElement("div");
-settingsMenu.className = "custom-settings-menu";
-settingsMenu.id = "customSettingsMenu";
-settingsMenu.innerHTML = `
-    <div class="custom-settings-header" id="customSettingsBack">
-        <i class="fa-solid fa-arrow-left"></i> Settings
-    </div>
-    <div class="custom-settings-row">
-        <span>Use Description Button</span>
-        <label class="custom-switch">
-            <input type="checkbox" id="toggleDescCheckbox">
-            <span class="custom-slider"></span>
-        </label>
-    </div>
-    <div class="custom-settings-row">
-        <span>Disable Grid Discover</span>
-        <label class="custom-switch">
-            <input type="checkbox" id="toggleGridCheckbox">
-            <span class="custom-slider"></span>
-        </label>
-    </div>
-`;
-menuHost.appendChild(settingsMenu);
-
-const toggleDesc = settingsMenu.querySelector("#toggleDescCheckbox");
-const toggleGrid = settingsMenu.querySelector("#toggleGridCheckbox");
-const btnBack = settingsMenu.querySelector("#customSettingsBack");
-
-if (localStorage.getItem("DontUseYoutubeStyleDescriptionOpeningFS") === "true") toggleDesc.checked = true;
-if (localStorage.getItem("CloseFullScreenDiscover") === "true") toggleGrid.checked = true;
-
-toggleDesc.addEventListener("change", function(e) {
-    e.stopPropagation();
-    if (this.checked) localStorage.setItem("DontUseYoutubeStyleDescriptionOpeningFS", "true");
-    else localStorage.removeItem("DontUseYoutubeStyleDescriptionOpeningFS");
-});
-
-toggleGrid.addEventListener("change", function(e) {
-    e.stopPropagation();
-    if (this.checked) localStorage.setItem("CloseFullScreenDiscover", "true");
-    else localStorage.removeItem("CloseFullScreenDiscover");
-});
-
-function closeMenus() {
-    if (popupMenu) popupMenu.style.display = "none";
-    if (settingsMenu) settingsMenu.style.display = "none";
-    if (menuHost.open) menuHost.close();
-}
-
-menuHost.addEventListener("click", function(event) {
-    if (event.target === menuHost) {
-        closeMenus();
-    }
-});
-
-btnBack.addEventListener("click", function(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    let currentLeft = settingsMenu.style.left;
-    let currentTop = settingsMenu.style.top;
-    
-    settingsMenu.style.display = "none";
-    if (popupMenu) {
-        popupMenu.style.display = "block";
-        popupMenu.style.left = currentLeft;
-        popupMenu.style.top = currentTop;
-    }
-});
-
-if (settingsOption) {
-    settingsOption.addEventListener("click", function(e) {
-        e.preventDefault();
-        e.stopPropagation(); 
-        
-        let currentLeft = popupMenu.style.left;
-        let currentTop = popupMenu.style.top;
-        
-        popupMenu.style.display = "none";
-        
-        settingsMenu.style.display = "block";
-        settingsMenu.style.position = "absolute";
-        settingsMenu.style.left = currentLeft;
-        settingsMenu.style.top = currentTop;
-    });
-}
-
 function initAudio() {
     var currentAud = document.getElementById("aud");
     if (audioCtx || !currentAud) return;
@@ -572,9 +399,11 @@ function initAudio() {
     try {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         source = audioCtx.createMediaElementSource(currentAud);
+
         analyzer = audioCtx.createAnalyser();
         analyzer.fftSize = 2048;
         dataArray = new Float32Array(analyzer.frequencyBinCount);
+
         gainNode = audioCtx.createGain();
         compressorNode = audioCtx.createDynamicsCompressor();
 
@@ -641,12 +470,14 @@ function applyAudioState(isUserInteraction = false) {
             if (!currentAud || currentAud.paused || audioCtx.state !== "running") return;
 
             analyzer.getFloatTimeDomainData(dataArray);
+
             let sumSquares = 0.0;
             for (let i = 0; i < dataArray.length; i++) {
                 sumSquares += dataArray[i] * dataArray[i];
             }
 
             let rms = Math.sqrt(sumSquares / dataArray.length);
+
             let targetGain = 1.0;
 
             if (rms > 0.005) {
@@ -681,46 +512,45 @@ document.addEventListener("play", function(event) {
         if (audioCtx && audioCtx.state === "suspended") {
             audioCtx.resume();
         }
+
         if (audioState !== "none" && !audioCtx) {
             applyAudioState(true);
         }
     }
 }, true);
 
-boostOption.addEventListener("click", function(e) {
-    e.stopPropagation();
+boostOption.addEventListener("click", function() {
     audioState = audioState === "boost" ? "none" : "boost";
     applyAudioState(true);
-    closeMenus();
+    popupMenu.style.display = "none";
 });
 
-normalizeOption.addEventListener("click", function(e) {
-    e.stopPropagation();
+normalizeOption.addEventListener("click", function() {
     audioState = audioState === "normalize" ? "none" : "normalize";
     applyAudioState(true);
-    closeMenus();
+    popupMenu.style.display = "none";
 });
 
 if (whisperOption) {
-    whisperOption.addEventListener("click", function(e) {
-        e.stopPropagation();
+    whisperOption.addEventListener("click", function() {
         audioState = audioState === "whisper" ? "none" : "whisper";
         applyAudioState(true);
-        closeMenus();
+        popupMenu.style.display = "none";
     });
 }
 
 if (snapshotOption) {
-    snapshotOption.addEventListener("click", function(e) {
-        e.stopPropagation();
+    snapshotOption.addEventListener("click", function() {
         if (video.videoWidth > 0 && video.videoHeight > 0) {
             var canvas = document.createElement("canvas");
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
+
             var ctx = canvas.getContext("2d");
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
             var dataURL = canvas.toDataURL("image/png");
+
             var videoName = getSnapshotVideoName();
 
             var time = video.currentTime;
@@ -738,22 +568,29 @@ if (snapshotOption) {
         } else {
             console.warn("Snapshot failed: Video dimensions not ready.");
         }
-        closeMenus();
+
+        popupMenu.style.display = "none";
     });
 }
 
 function getSnapshotVideoName() {
     var twitterTitle = document.querySelector('meta[name="twitter:title"]');
     var videoName = "";
+
     if (twitterTitle && twitterTitle.content) {
-        videoName = twitterTitle.content.replace(/\s*\|\s*Poke\s*$/i, "").trim();
+        videoName = twitterTitle.content
+            .replace(/\s*\|\s*Poke\s*$/i, "")
+            .trim();
     }
+
     if (!videoName) {
         var src = video.currentSrc || video.src || "";
+
         if (src && !src.startsWith("blob:")) {
             var fileNameWithExt = src.split("/").pop().split("?")[0].split("#")[0];
             var lastDot = fileNameWithExt.lastIndexOf(".");
             var baseName = lastDot !== -1 ? fileNameWithExt.substring(0, lastDot) : fileNameWithExt;
+
             try {
                 videoName = decodeURIComponent(baseName) || "snapshot";
             } catch (e) {
@@ -763,46 +600,41 @@ function getSnapshotVideoName() {
             videoName = document.title ? document.title.replace(/\s*\|\s*Poke\s*$/i, "").trim() : "snapshot";
         }
     }
+
     videoName = videoName.replace(/[<>:"/\\|?*\u0000-\u001F]/g, "").trim();
+
     return videoName || "snapshot";
 }
 
 video.addEventListener("contextmenu", function(event) {
-    event.preventDefault();
-    if (!menuHost.open) {
-        menuHost.showModal();
-    }
-    
-    settingsMenu.style.display = "none";
-    if (popupMenu) {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement && !document.msFullscreenElement) {
+        event.preventDefault();
         popupMenu.style.display = "block";
-        popupMenu.style.position = "absolute";
-        
-        let menuW = popupMenu.offsetWidth || 260;
-        let menuH = popupMenu.offsetHeight || 300;
-        let x = event.clientX;
-        let y = event.clientY;
-        
-        if (x + menuW > window.innerWidth) x = window.innerWidth - menuW;
-        if (y + menuH > window.innerHeight) y = window.innerHeight - menuH;
-        
-        popupMenu.style.left = x + "px";
-        popupMenu.style.top = y + "px";
+        popupMenu.style.left = event.pageX + "px";
+        popupMenu.style.top = event.pageY + "px";
     }
 });
 
-loopOption.addEventListener("click", function(e) {
-    e.stopPropagation();
+window.addEventListener("click", function(event) {
+    if (event.target !== video) {
+        popupMenu.style.display = "none";
+    }
+});
+
+loopOption.addEventListener("click", function() {
     const quaindt = new URLSearchParams(window.location.search).get("quality") || "";
     var looped = video.loop;
     video.loop = !looped;
     var currentAud = document.getElementById("aud");
 
-    if (quaindt !== "medium" && currentAud) {
-        currentAud.loop = !looped;
+    if (quaindt !== "medium") {
+        if (currentAud) {
+            currentAud.loop = !looped;
+        }
     }
 
     var displaySpecialText = Math.random() < 0.5;
+
     if (displaySpecialText) {
         var specialText = looped ? "Unlooped >.<" : "Looped~ :3 >~<";
         loopedIndicator.textContent = specialText;
@@ -811,15 +643,15 @@ loopOption.addEventListener("click", function(e) {
     }
 
     loopedIndicator.style.display = "block";
+
     setTimeout(function() {
         loopedIndicator.style.display = "none";
     }, 2000);
 
-    closeMenus();
+    popupMenu.style.display = "none";
 });
 
-speedOption.addEventListener("click", function(e) {
-    e.stopPropagation();
+speedOption.addEventListener("click", function() {
     var currentSpeed = video.playbackRate;
     var newSpeed = getNextSpeed(currentSpeed);
     var currentAud = document.getElementById("aud");
@@ -828,7 +660,7 @@ speedOption.addEventListener("click", function(e) {
     if (currentAud) currentAud.playbackRate = newSpeed;
 
     speedOption.innerHTML = "<i class='fa-light fa-gauge'></i> Speed: " + newSpeed.toFixed(2) + "x";
-    closeMenus();
+    popupMenu.style.display = "none";
 });
 
 function getNextSpeed(currentSpeed) {
@@ -842,6 +674,7 @@ function getNextSpeed(currentSpeed) {
 
     for (var i = 1; i < speeds.length; i++) {
         var distance = Math.abs(currentSpeed - speeds[i]);
+
         if (distance < closestDistance) {
             closestDistance = distance;
             closestIndex = i;
@@ -850,12 +683,124 @@ function getNextSpeed(currentSpeed) {
 
     if (closestDistance > 0.01) {
         for (var j = 0; j < speeds.length; j++) {
-            if (currentSpeed < speeds[j]) return speeds[j];
+            if (currentSpeed < speeds[j]) {
+                return speeds[j];
+            }
         }
+
         return speeds[0];
     }
+
     return speeds[(closestIndex + 1) % speeds.length];
 }
+
+var configurePlayerStyle = document.createElement("style");
+configurePlayerStyle.innerHTML = `
+    .configure-player-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 99998; display: none; }
+    .configure-player-popup { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #282828; color: #fff; width: 320px; border-radius: 12px; padding: 16px 0; z-index: 99999; display: none; font-family: Roboto, Arial, sans-serif; box-shadow: 0 10px 32px rgba(0,0,0,0.5); }
+    .configure-player-header { padding: 0 24px 16px; font-size: 16px; font-weight: 500; border-bottom: 1px solid #3f3f3f; display: flex; justify-content: space-between; align-items: center; }
+    .configure-player-close { cursor: pointer; font-size: 20px; color: #aaa; background: none; border: none; padding: 0; outline: none; }
+    .configure-player-close:hover { color: #fff; }
+    .configure-player-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 24px; cursor: pointer; }
+    .configure-player-row:hover { background: #3f3f3f; }
+    .configure-player-label { font-size: 14px; pointer-events: none; }
+    .configure-switch { position: relative; display: inline-block; width: 36px; height: 14px; pointer-events: none; }
+    .configure-switch input { opacity: 0; width: 0; height: 0; }
+    .configure-slider { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: #717171; transition: .2s; border-radius: 14px; }
+    .configure-slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: -2px; bottom: -3px; background-color: #b1b1b1; transition: .2s; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+    input:checked + .configure-slider { background-color: #a6c7ff; }
+    input:checked + .configure-slider:before { transform: translateX(20px); background-color: #3ea6ff; }
+`;
+document.head.appendChild(configurePlayerStyle);
+
+var configurePlayerOverlay = document.createElement("div");
+configurePlayerOverlay.className = "configure-player-overlay";
+
+var configurePlayerPopup = document.createElement("div");
+configurePlayerPopup.className = "configure-player-popup";
+configurePlayerPopup.innerHTML = `
+    <div class="configure-player-header">
+        Settings
+        <button class="configure-player-close">&times;</button>
+    </div>
+    <div class="configure-player-row" id="rowDescToggle">
+        <span class="configure-player-label">Use Description Button</span>
+        <label class="configure-switch">
+            <input type="checkbox" id="configureDescToggle">
+            <span class="configure-slider"></span>
+        </label>
+    </div>
+    <div class="configure-player-row" id="rowGridToggle">
+        <span class="configure-player-label">Disable Grid Discover</span>
+        <label class="configure-switch">
+            <input type="checkbox" id="configureGridToggle">
+            <span class="configure-slider"></span>
+        </label>
+    </div>
+`;
+
+document.body.appendChild(configurePlayerOverlay);
+document.body.appendChild(configurePlayerPopup);
+
+var configureDescToggle = document.getElementById("configureDescToggle");
+var configureGridToggle = document.getElementById("configureGridToggle");
+var rowDescToggle = document.getElementById("rowDescToggle");
+var rowGridToggle = document.getElementById("rowGridToggle");
+var configurePlayerClose = configurePlayerPopup.querySelector(".configure-player-close");
+
+if (localStorage.getItem("DontUseYoutubeStyleDescriptionOpeningFS") === "true") {
+    configureDescToggle.checked = true;
+}
+if (localStorage.getItem("CloseFullScreenDiscover") === "true") {
+    configureGridToggle.checked = true;
+}
+
+rowDescToggle.addEventListener("click", function() {
+    configureDescToggle.checked = !configureDescToggle.checked;
+    var event = new Event('change');
+    configureDescToggle.dispatchEvent(event);
+});
+
+rowGridToggle.addEventListener("click", function() {
+    configureGridToggle.checked = !configureGridToggle.checked;
+    var event = new Event('change');
+    configureGridToggle.dispatchEvent(event);
+});
+
+configureDescToggle.addEventListener("change", function() {
+    if (this.checked) {
+        localStorage.setItem("DontUseYoutubeStyleDescriptionOpeningFS", "true");
+    } else {
+        localStorage.removeItem("DontUseYoutubeStyleDescriptionOpeningFS");
+    }
+});
+
+configureGridToggle.addEventListener("change", function() {
+    if (this.checked) {
+        localStorage.setItem("CloseFullScreenDiscover", "true");
+    } else {
+        localStorage.removeItem("CloseFullScreenDiscover");
+    }
+});
+
+function closeConfigurePlayerPopup() {
+    configurePlayerOverlay.style.display = "none";
+    configurePlayerPopup.style.display = "none";
+}
+
+configurePlayerClose.addEventListener("click", closeConfigurePlayerPopup);
+configurePlayerOverlay.addEventListener("click", closeConfigurePlayerPopup);
+
+if (SettingsOption) {
+    SettingsOption.addEventListener("click", function() {
+        configurePlayerOverlay.style.display = "block";
+        configurePlayerPopup.style.display = "block";
+        if (popupMenu) {
+            popupMenu.style.display = "none";
+        }
+    });
+}
+
 
 const GoogleTranslateEndpoint = "https://translate.google.com/_/TranslateWebserverUi/data/batchexecute?rpcids=MkEWBc&rt=c"
 // @license-end
