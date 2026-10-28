@@ -50,9 +50,21 @@ window.SyncLevel = SyncLevel;
 
   const qs = new URLSearchParams(window.location.search);
   const qua = qs.get("quality") || "";
-  const FS_PERSIST_KEY = 'alabaster_persist_fs';
   const VOL_PERSIST_KEY = 'alabaster_volume';
   const MUTE_PERSIST_KEY = 'alabaster_muted';
+  const LEGACY_DESC_BTN_KEY = 'DontUseYoutubeStyleDescriptionOpeningFS';
+  const DISABLE_FS_DISCOVER_KEY = 'CloseFullScreenDiscover';
+
+  function isStorageFlagEnabled(key) {
+    try {
+      var val = localStorage.getItem(key);
+      if (!val) return false;
+      var norm = String(val).trim().toLowerCase();
+      return norm === 'true' || norm === '1' || norm === 'yes';
+    } catch (_) {
+      return false;
+    }
+  }
 
   var config = {
     minPlayBuffer: 0.25,
@@ -495,6 +507,27 @@ window.SyncLevel = SyncLevel;
       '.alabaster-fs-desc-toggle.is-expanded .alabaster-fs-desc-chevron {',
       '  transform: rotate(180deg);',
       '}',
+      '.alabaster-yt-title-clickable {',
+      '  display: inline-block !important;',
+      '  width: fit-content !important;',
+      '  max-width: calc(100% - 40px) !important;',
+      '  padding: 6px 12px !important;',
+      '  margin: -6px -12px !important;',
+      '  border-radius: 10px !important;',
+      '  background: transparent !important;',
+      '  cursor: pointer !important;',
+      '  pointer-events: auto !important;',
+      '  user-select: none !important;',
+      '  transition: background-color 0.2s cubic-bezier(0.22, 1, 0.36, 1), padding 0.2s cubic-bezier(0.22, 1, 0.36, 1), transform 0.15s ease !important;',
+      '}',
+      '.alabaster-yt-title-clickable:hover {',
+      '  background: rgba(255, 255, 255, 0.14) !important;',
+      '  padding: 6px 15px !important;',
+      '}',
+      '.alabaster-yt-title-clickable:active {',
+      '  background: rgba(255, 255, 255, 0.2) !important;',
+      '  transform: scale(0.985) !important;',
+      '}',
       '.alabaster-fs-desc-drawer {',
       '  position: absolute;',
       '  top: 70px;',
@@ -518,6 +551,7 @@ window.SyncLevel = SyncLevel;
       '  overflow-y: auto;',
       '  overflow-x: hidden;',
       '  opacity: 0;',
+      '  visibility: visible;',
       '  transform: translateY(-10px) scale(0.98);',
       '  transition: opacity 0.24s cubic-bezier(0.22, 1, 0.36, 1), transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);',
       '}',
@@ -534,8 +568,11 @@ window.SyncLevel = SyncLevel;
       '.alabaster-fs-desc-drawer::-webkit-scrollbar-thumb:hover {',
       '  background: rgba(255, 255, 255, 0.38);',
       '}',
-      '.alabaster-fs-desc-drawer.is-visible {',
-      '  opacity: 1;',
+      '.alabaster-fs-desc-drawer.is-visible,',
+      '.vjs-user-inactive.vjs-playing .alabaster-fs-desc-drawer.is-visible {',
+      '  opacity: 1 !important;',
+      '  visibility: visible !important;',
+      '  pointer-events: auto !important;',
       '  transform: translateY(0) scale(1);',
       '}',
       '.alabaster-fs-desc-header {',
@@ -922,70 +959,27 @@ window.SyncLevel = SyncLevel;
         );
       };
 
-      var clickVjsFullscreenButton = function() {
-        if (checkIsPlayerFullscreen()) return true;
-        var fsBtn = (rootEl && rootEl.querySelector('.vjs-fullscreen-control.vjs-control.vjs-button, .vjs-fullscreen-control')) || document.querySelector('.vjs-fullscreen-control.vjs-control.vjs-button, .vjs-fullscreen-control');
-        if (fsBtn) {
-          try { fsBtn.click(); } catch (_) {}
-        }
-        var fsToggle = player.controlBar && (player.controlBar.fullscreenToggle || (player.controlBar.getChild && player.controlBar.getChild('fullscreenToggle')));
-        if (!checkIsPlayerFullscreen() && fsToggle) {
-          try {
-            if (typeof fsToggle.handleClick === 'function') fsToggle.handleClick();
-            else if (typeof fsToggle.trigger === 'function') fsToggle.trigger('click');
-          } catch (_) {}
-        }
-        return checkIsPlayerFullscreen();
-      };
-
-      var tryRestorePersistentFullscreen = function() {
-        var wantFs = false;
-        try {
-          wantFs = localStorage.getItem(FS_PERSIST_KEY) === '1' || sessionStorage.getItem(FS_PERSIST_KEY) === '1';
-        } catch (_) {}
-        if (!wantFs) return;
-
-        clickVjsFullscreenButton();
-        setTimeout(clickVjsFullscreenButton, 60);
-        setTimeout(clickVjsFullscreenButton, 250);
-        player.one('loadedmetadata', clickVjsFullscreenButton);
-        player.one('play', clickVjsFullscreenButton);
-
-        var clickOnFirstGesture = function(evt) {
-          if (evt && evt.target && evt.target.closest && evt.target.closest('.vjs-fullscreen-control')) {
-            document.removeEventListener('click', clickOnFirstGesture, true);
-            document.removeEventListener('touchend', clickOnFirstGesture, true);
-            document.removeEventListener('keydown', clickOnFirstGesture, true);
-            return;
-          }
-          if (evt && evt.key === 'Escape') {
-            try { localStorage.removeItem(FS_PERSIST_KEY); } catch (_) {}
-            try { sessionStorage.removeItem(FS_PERSIST_KEY); } catch (_) {}
-            document.removeEventListener('click', clickOnFirstGesture, true);
-            document.removeEventListener('touchend', clickOnFirstGesture, true);
-            document.removeEventListener('keydown', clickOnFirstGesture, true);
-            return;
-          }
-          if (!checkIsPlayerFullscreen()) {
-            clickVjsFullscreenButton();
-          }
-          if (checkIsPlayerFullscreen()) {
-            document.removeEventListener('click', clickOnFirstGesture, true);
-            document.removeEventListener('touchend', clickOnFirstGesture, true);
-            document.removeEventListener('keydown', clickOnFirstGesture, true);
-          }
-        };
-
-        document.addEventListener('click', clickOnFirstGesture, true);
-        document.addEventListener('touchend', clickOnFirstGesture, true);
-        document.addEventListener('keydown', clickOnFirstGesture, true);
-      };
-
       var fsDescToggle = null;
       var fsDescDrawer = null;
       var fsDescBody = null;
       var isFsDescOpen = false;
       var setDrawerState = null;
+
+      var getTitleElements = function() {
+        if (!rootEl) return [];
+        return rootEl.querySelectorAll('.vjs-title-bar-title, [class*="vjs-title-bar-title"]');
+      };
+
+      var isTargetInsideTitle = function(target) {
+        if (!target || !rootEl) return false;
+        var titles = getTitleElements();
+        for (var i = 0; i < titles.length; i++) {
+          if (titles[i] === target || titles[i].contains(target)) {
+            return true;
+          }
+        }
+        return false;
+      };
 
       var syncDescToggleWithUserActivity = function() {
         if (!fsDescToggle || !rootEl) return;
@@ -1006,7 +1000,7 @@ window.SyncLevel = SyncLevel;
 
       var updateTitleBarDescVisibility = function(isFs) {
         if (!rootEl) return;
-        var descNodes = rootEl.querySelectorAll('.vjs-title-bar-description');
+        var descNodes = rootEl.querySelectorAll('.vjs-title-bar-description, [class*="vjs-title-bar-description"]');
         for (var i = 0; i < descNodes.length; i++) {
           var dNode = descNodes[i];
           if (!isFs || !info.description || isFsDescOpen) {
@@ -1018,6 +1012,33 @@ window.SyncLevel = SyncLevel;
             dNode.style.removeProperty('visibility');
             dNode.style.removeProperty('opacity');
           }
+        }
+      };
+
+      var bindTitleClickHandlers = function() {
+        var titles = getTitleElements();
+        for (var i = 0; i < titles.length; i++) {
+          var tNode = titles[i];
+          if (tNode._alabasterTitleBound) continue;
+          tNode._alabasterTitleBound = true;
+
+          ['mousedown', 'pointerdown', 'touchstart', 'touchend'].forEach(function(evName) {
+            tNode.addEventListener(evName, function(evt) {
+              if (!checkIsPlayerFullscreen() || isStorageFlagEnabled(LEGACY_DESC_BTN_KEY)) return;
+              if (!document.querySelector('.descriptionHtml')) return;
+              evt.stopPropagation();
+            }, false);
+          });
+
+          tNode.addEventListener('click', function(evt) {
+            if (!checkIsPlayerFullscreen() || isStorageFlagEnabled(LEGACY_DESC_BTN_KEY)) return;
+            if (!document.querySelector('.descriptionHtml')) return;
+            evt.preventDefault();
+            evt.stopPropagation();
+            if (typeof setDrawerState === 'function') {
+              setDrawerState(!isFsDescOpen);
+            }
+          }, false);
         }
       };
 
@@ -1231,20 +1252,24 @@ window.SyncLevel = SyncLevel;
           var isFsNow = checkIsPlayerFullscreen();
           updateTitleBarDescVisibility(isFsNow);
 
-          if (!fsDescToggle || !fsDescDrawer) return;
+          if (!fsDescDrawer) return;
           if (isFsDescOpen) {
             populateDescriptionVerbatim();
-            fsDescToggle.classList.add('is-expanded');
-            fsDescToggle.classList.remove('is-controls-hidden');
-            fsDescToggle.setAttribute('aria-expanded', 'true');
+            if (fsDescToggle) {
+              fsDescToggle.classList.add('is-expanded');
+              fsDescToggle.classList.remove('is-controls-hidden');
+              fsDescToggle.setAttribute('aria-expanded', 'true');
+            }
             fsDescDrawer.style.display = 'flex';
             fsDescDrawer.scrollTop = 0;
             compat.raf(function() {
               fsDescDrawer.classList.add('is-visible');
             });
           } else {
-            fsDescToggle.classList.remove('is-expanded');
-            fsDescToggle.setAttribute('aria-expanded', 'false');
+            if (fsDescToggle) {
+              fsDescToggle.classList.remove('is-expanded');
+              fsDescToggle.setAttribute('aria-expanded', 'false');
+            }
             syncDescToggleWithUserActivity();
             fsDescDrawer.classList.remove('is-visible');
             setTimeout(function() {
@@ -1281,6 +1306,8 @@ window.SyncLevel = SyncLevel;
 
         rootEl.appendChild(fsDescToggle);
         rootEl.appendChild(fsDescDrawer);
+
+        bindTitleClickHandlers();
 
         player.on('useractive', syncDescToggleWithUserActivity);
         player.on('userinactive', syncDescToggleWithUserActivity);
@@ -1339,6 +1366,7 @@ window.SyncLevel = SyncLevel;
         rootEl.appendChild(recDrawer);
 
         var buildRecCards = function() {
+          if (isStorageFlagEnabled(DISABLE_FS_DISCOVER_KEY)) return false;
           var list = metadataParser.readRecommended();
           if (!list || !list.length) return false;
           recGrid.innerHTML = '';
@@ -1350,13 +1378,6 @@ window.SyncLevel = SyncLevel;
               var card = document.createElement('a');
               card.className = 'alabaster-rec-card';
               card.href = item.href;
-
-              card.addEventListener('click', function() {
-                if (checkIsPlayerFullscreen()) {
-                  try { localStorage.setItem(FS_PERSIST_KEY, '1'); } catch (_) {}
-                  try { sessionStorage.setItem(FS_PERSIST_KEY, '1'); } catch (_) {}
-                }
-              });
 
               var thumbWrap = document.createElement('div');
               thumbWrap.className = 'alabaster-rec-thumb-wrap';
@@ -1437,7 +1458,7 @@ window.SyncLevel = SyncLevel;
         };
 
         applyRecStage = function(stage) {
-          if (stage > 0 && !checkIsPlayerFullscreen()) {
+          if (stage > 0 && (!checkIsPlayerFullscreen() || isStorageFlagEnabled(DISABLE_FS_DISCOVER_KEY))) {
             stage = 0;
           }
           if (stage > 0 && !buildRecCards()) return;
@@ -1481,7 +1502,7 @@ window.SyncLevel = SyncLevel;
         });
 
         var isPointInControlBarCenterGap = function(clientX, clientY, targetEl) {
-          if (!checkIsPlayerFullscreen()) return false;
+          if (!checkIsPlayerFullscreen() || isStorageFlagEnabled(DISABLE_FS_DISCOVER_KEY)) return false;
           if (targetEl && recOpenBtn && (targetEl === recOpenBtn || recOpenBtn.contains(targetEl))) {
             return true;
           }
@@ -1548,7 +1569,7 @@ window.SyncLevel = SyncLevel;
         var consumeOutsideClickUntil = 0;
 
         var onDragStart = function(clientX, clientY, targetEl, sourceType) {
-          if (!checkIsPlayerFullscreen()) return false;
+          if (!checkIsPlayerFullscreen() || isStorageFlagEnabled(DISABLE_FS_DISCOVER_KEY)) return false;
           if (sourceType === 'bar') {
             if (recStage !== 0) return false;
             if (!isPointInControlBarCenterGap(clientX, clientY, targetEl)) return false;
@@ -1725,7 +1746,8 @@ window.SyncLevel = SyncLevel;
             isFsDescOpen &&
             fsDescDrawer &&
             !fsDescDrawer.contains(target) &&
-            (!fsDescToggle || !fsDescToggle.contains(target))
+            (!fsDescToggle || !fsDescToggle.contains(target)) &&
+            !isTargetInsideTitle(target)
           );
 
           if (!clickedOutsideRec && !clickedOutsideDesc) return;
@@ -1740,7 +1762,7 @@ window.SyncLevel = SyncLevel;
             setDrawerState(false);
           }
 
-          if (!isInsideControlBar) {
+          if (!isInsideControlBar && !isTargetInsideTitle(target)) {
             consumeOutsideClickUntil = now + 450;
             evt.preventDefault();
             evt.stopPropagation();
@@ -1917,28 +1939,25 @@ window.SyncLevel = SyncLevel;
         };
       }
 
-      var hadFs = false;
-
       var syncFullscreenTitleBarVisibility = function() {
         if (!rootEl) return;
         var isFs = checkIsPlayerFullscreen();
-
-        if (isFs) {
-          hadFs = true;
-          try { localStorage.setItem(FS_PERSIST_KEY, '1'); } catch (_) {}
-        } else if (hadFs) {
-          hadFs = false;
-          try { localStorage.removeItem(FS_PERSIST_KEY); } catch (_) {}
-          try { sessionStorage.removeItem(FS_PERSIST_KEY); } catch (_) {}
-        }
 
         if (!isFs) {
           isFsDescOpen = false;
         }
 
-        var titleBars = rootEl.querySelectorAll('.vjs-title-bar, .vjs-title-bar-title');
+        bindTitleClickHandlers();
+
+        var useLegacyDescButton = isStorageFlagEnabled(LEGACY_DESC_BTN_KEY);
+        var hasDescriptionNode = Boolean(document.querySelector('.descriptionHtml'));
+
+        var titleBars = rootEl.querySelectorAll('.vjs-title-bar, [class*="vjs-title-bar"]');
         for (var i = 0; i < titleBars.length; i++) {
           var node = titleBars[i];
+          if (node.classList.contains('vjs-title-bar-description') || (node.className && String(node.className).indexOf('description') !== -1)) {
+            continue;
+          }
           if (!isFs) {
             node.style.setProperty('display', 'none', 'important');
             node.style.setProperty('visibility', 'hidden', 'important');
@@ -1950,11 +1969,20 @@ window.SyncLevel = SyncLevel;
           }
         }
 
+        var titleEls = getTitleElements();
+        for (var t = 0; t < titleEls.length; t++) {
+          var tElNode = titleEls[t];
+          if (isFs && hasDescriptionNode && !useLegacyDescButton) {
+            tElNode.classList.add('alabaster-yt-title-clickable');
+          } else {
+            tElNode.classList.remove('alabaster-yt-title-clickable');
+          }
+        }
+
         updateTitleBarDescVisibility(isFs);
 
         if (fsDescToggle && fsDescDrawer) {
-          var hasDescriptionNode = Boolean(document.querySelector('.descriptionHtml'));
-          if (isFs && hasDescriptionNode) {
+          if (isFs && hasDescriptionNode && useLegacyDescButton) {
             fsDescToggle.style.display = 'inline-flex';
             syncDescToggleWithUserActivity();
           } else {
@@ -1962,6 +1990,9 @@ window.SyncLevel = SyncLevel;
             fsDescToggle.classList.remove('is-expanded');
             fsDescToggle.classList.remove('is-controls-hidden');
             fsDescToggle.setAttribute('aria-expanded', 'false');
+          }
+
+          if (!isFs || !hasDescriptionNode) {
             fsDescDrawer.classList.remove('is-visible');
             fsDescDrawer.style.display = 'none';
           }
@@ -1969,7 +2000,8 @@ window.SyncLevel = SyncLevel;
 
         if (recOpenBtn && recDrawer) {
           var hasRecNode = Boolean(document.querySelector('.recommended-list .video'));
-          if (isFs && hasRecNode) {
+          var discoverDisabled = isStorageFlagEnabled(DISABLE_FS_DISCOVER_KEY);
+          if (isFs && hasRecNode && !discoverDisabled) {
             recOpenBtn.style.display = 'inline-flex';
           } else {
             recOpenBtn.style.display = 'none';
@@ -1982,15 +2014,16 @@ window.SyncLevel = SyncLevel;
         }
       };
 
-      tryRestorePersistentFullscreen();
       syncFullscreenTitleBarVisibility();
       player.on('fullscreenchange', syncFullscreenTitleBarVisibility);
       document.addEventListener('fullscreenchange', syncFullscreenTitleBarVisibility, false);
       document.addEventListener('webkitfullscreenchange', syncFullscreenTitleBarVisibility, false);
+      window.addEventListener('storage', syncFullscreenTitleBarVisibility, false);
 
       player.on('dispose', function() {
         document.removeEventListener('fullscreenchange', syncFullscreenTitleBarVisibility, false);
         document.removeEventListener('webkitfullscreenchange', syncFullscreenTitleBarVisibility, false);
+        window.removeEventListener('storage', syncFullscreenTitleBarVisibility, false);
       });
 
       var bar = player.controlBar;
