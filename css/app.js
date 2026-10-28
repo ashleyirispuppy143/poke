@@ -373,7 +373,6 @@ function fetchUrls(urls) {
   
   }
   }
- 
  var popupMenu = document.getElementById("popupMenu");
 var loopOption = document.getElementById("loopOption");
 var speedOption = document.getElementById("speedOption");
@@ -392,8 +391,22 @@ let normalizerInterval = null;
 let dataArray = null;
 let currentAutoGain = 1.0;
 
-const settingsStyles = document.createElement("style");
-settingsStyles.innerHTML = `
+const customStyles = document.createElement("style");
+customStyles.innerHTML = `
+dialog#customMenuHost {
+    padding: 0;
+    margin: 0;
+    border: none;
+    background: transparent;
+    overflow: visible;
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+}
+dialog#customMenuHost::backdrop {
+    background: transparent;
+}
 .custom-settings-menu {
     display: none;
     position: absolute;
@@ -456,7 +469,15 @@ input:checked + .custom-slider:before {
     background-color: #3ea6ff;
 }
 `;
-document.head.appendChild(settingsStyles);
+document.head.appendChild(customStyles);
+
+const menuHost = document.createElement("dialog");
+menuHost.id = "customMenuHost";
+document.body.appendChild(menuHost);
+
+if (popupMenu) {
+    menuHost.appendChild(popupMenu);
+}
 
 const settingsMenu = document.createElement("div");
 settingsMenu.className = "custom-settings-menu";
@@ -480,12 +501,7 @@ settingsMenu.innerHTML = `
         </label>
     </div>
 `;
-
-if (popupMenu.parentNode) {
-    popupMenu.parentNode.appendChild(settingsMenu);
-} else {
-    document.body.appendChild(settingsMenu);
-}
+menuHost.appendChild(settingsMenu);
 
 const toggleDesc = settingsMenu.querySelector("#toggleDescCheckbox");
 const toggleGrid = settingsMenu.querySelector("#toggleGridCheckbox");
@@ -494,29 +510,58 @@ const btnBack = settingsMenu.querySelector("#customSettingsBack");
 if (localStorage.getItem("DontUseYoutubeStyleDescriptionOpeningFS") === "true") toggleDesc.checked = true;
 if (localStorage.getItem("CloseFullScreenDiscover") === "true") toggleGrid.checked = true;
 
-toggleDesc.addEventListener("change", function() {
+toggleDesc.addEventListener("change", function(e) {
+    e.stopPropagation();
     if (this.checked) localStorage.setItem("DontUseYoutubeStyleDescriptionOpeningFS", "true");
     else localStorage.removeItem("DontUseYoutubeStyleDescriptionOpeningFS");
 });
 
-toggleGrid.addEventListener("change", function() {
+toggleGrid.addEventListener("change", function(e) {
+    e.stopPropagation();
     if (this.checked) localStorage.setItem("CloseFullScreenDiscover", "true");
     else localStorage.removeItem("CloseFullScreenDiscover");
 });
 
+function closeMenus() {
+    if (popupMenu) popupMenu.style.display = "none";
+    if (settingsMenu) settingsMenu.style.display = "none";
+    if (menuHost.open) menuHost.close();
+}
+
+menuHost.addEventListener("click", function(event) {
+    if (event.target === menuHost) {
+        closeMenus();
+    }
+});
+
 btnBack.addEventListener("click", function(e) {
+    e.preventDefault();
     e.stopPropagation();
+    let currentLeft = settingsMenu.style.left;
+    let currentTop = settingsMenu.style.top;
+    
     settingsMenu.style.display = "none";
-    popupMenu.style.display = "block";
+    if (popupMenu) {
+        popupMenu.style.display = "block";
+        popupMenu.style.left = currentLeft;
+        popupMenu.style.top = currentTop;
+    }
 });
 
 if (settingsOption) {
     settingsOption.addEventListener("click", function(e) {
+        e.preventDefault();
         e.stopPropagation(); 
+        
+        let currentLeft = popupMenu.style.left;
+        let currentTop = popupMenu.style.top;
+        
         popupMenu.style.display = "none";
+        
         settingsMenu.style.display = "block";
-        settingsMenu.style.left = popupMenu.style.left;
-        settingsMenu.style.top = popupMenu.style.top;
+        settingsMenu.style.position = "absolute";
+        settingsMenu.style.left = currentLeft;
+        settingsMenu.style.top = currentTop;
     });
 }
 
@@ -527,11 +572,9 @@ function initAudio() {
     try {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         source = audioCtx.createMediaElementSource(currentAud);
-
         analyzer = audioCtx.createAnalyser();
         analyzer.fftSize = 2048;
         dataArray = new Float32Array(analyzer.frequencyBinCount);
-
         gainNode = audioCtx.createGain();
         compressorNode = audioCtx.createDynamicsCompressor();
 
@@ -598,7 +641,6 @@ function applyAudioState(isUserInteraction = false) {
             if (!currentAud || currentAud.paused || audioCtx.state !== "running") return;
 
             analyzer.getFloatTimeDomainData(dataArray);
-
             let sumSquares = 0.0;
             for (let i = 0; i < dataArray.length; i++) {
                 sumSquares += dataArray[i] * dataArray[i];
@@ -639,40 +681,42 @@ document.addEventListener("play", function(event) {
         if (audioCtx && audioCtx.state === "suspended") {
             audioCtx.resume();
         }
-
         if (audioState !== "none" && !audioCtx) {
             applyAudioState(true);
         }
     }
 }, true);
 
-boostOption.addEventListener("click", function() {
+boostOption.addEventListener("click", function(e) {
+    e.stopPropagation();
     audioState = audioState === "boost" ? "none" : "boost";
     applyAudioState(true);
-    popupMenu.style.display = "none";
+    closeMenus();
 });
 
-normalizeOption.addEventListener("click", function() {
+normalizeOption.addEventListener("click", function(e) {
+    e.stopPropagation();
     audioState = audioState === "normalize" ? "none" : "normalize";
     applyAudioState(true);
-    popupMenu.style.display = "none";
+    closeMenus();
 });
 
 if (whisperOption) {
-    whisperOption.addEventListener("click", function() {
+    whisperOption.addEventListener("click", function(e) {
+        e.stopPropagation();
         audioState = audioState === "whisper" ? "none" : "whisper";
         applyAudioState(true);
-        popupMenu.style.display = "none";
+        closeMenus();
     });
 }
 
 if (snapshotOption) {
-    snapshotOption.addEventListener("click", function() {
+    snapshotOption.addEventListener("click", function(e) {
+        e.stopPropagation();
         if (video.videoWidth > 0 && video.videoHeight > 0) {
             var canvas = document.createElement("canvas");
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
-
             var ctx = canvas.getContext("2d");
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
@@ -694,26 +738,22 @@ if (snapshotOption) {
         } else {
             console.warn("Snapshot failed: Video dimensions not ready.");
         }
-
-        popupMenu.style.display = "none";
+        closeMenus();
     });
 }
 
 function getSnapshotVideoName() {
     var twitterTitle = document.querySelector('meta[name="twitter:title"]');
     var videoName = "";
-
     if (twitterTitle && twitterTitle.content) {
         videoName = twitterTitle.content.replace(/\s*\|\s*Poke\s*$/i, "").trim();
     }
-
     if (!videoName) {
         var src = video.currentSrc || video.src || "";
         if (src && !src.startsWith("blob:")) {
             var fileNameWithExt = src.split("/").pop().split("?")[0].split("#")[0];
             var lastDot = fileNameWithExt.lastIndexOf(".");
             var baseName = lastDot !== -1 ? fileNameWithExt.substring(0, lastDot) : fileNameWithExt;
-
             try {
                 videoName = decodeURIComponent(baseName) || "snapshot";
             } catch (e) {
@@ -723,42 +763,46 @@ function getSnapshotVideoName() {
             videoName = document.title ? document.title.replace(/\s*\|\s*Poke\s*$/i, "").trim() : "snapshot";
         }
     }
-
     videoName = videoName.replace(/[<>:"/\\|?*\u0000-\u001F]/g, "").trim();
     return videoName || "snapshot";
 }
 
 video.addEventListener("contextmenu", function(event) {
     event.preventDefault();
-    settingsMenu.style.display = "none"; 
-    popupMenu.style.display = "block";
-    popupMenu.style.left = event.pageX + "px";
-    popupMenu.style.top = event.pageY + "px";
+    if (!menuHost.open) {
+        menuHost.showModal();
+    }
+    
+    settingsMenu.style.display = "none";
+    if (popupMenu) {
+        popupMenu.style.display = "block";
+        popupMenu.style.position = "absolute";
+        
+        let menuW = popupMenu.offsetWidth || 260;
+        let menuH = popupMenu.offsetHeight || 300;
+        let x = event.clientX;
+        let y = event.clientY;
+        
+        if (x + menuW > window.innerWidth) x = window.innerWidth - menuW;
+        if (y + menuH > window.innerHeight) y = window.innerHeight - menuH;
+        
+        popupMenu.style.left = x + "px";
+        popupMenu.style.top = y + "px";
+    }
 });
 
-window.addEventListener("click", function(event) {
-    if (event.target !== video) {
-        popupMenu.style.display = "none";
-    }
-    if (settingsMenu && !settingsMenu.contains(event.target) && event.target !== settingsOption) {
-        settingsMenu.style.display = "none";
-    }
-});
-
-loopOption.addEventListener("click", function() {
+loopOption.addEventListener("click", function(e) {
+    e.stopPropagation();
     const quaindt = new URLSearchParams(window.location.search).get("quality") || "";
     var looped = video.loop;
     video.loop = !looped;
     var currentAud = document.getElementById("aud");
 
-    if (quaindt !== "medium") {
-        if (currentAud) {
-            currentAud.loop = !looped;
-        }
+    if (quaindt !== "medium" && currentAud) {
+        currentAud.loop = !looped;
     }
 
     var displaySpecialText = Math.random() < 0.5;
-
     if (displaySpecialText) {
         var specialText = looped ? "Unlooped >.<" : "Looped~ :3 >~<";
         loopedIndicator.textContent = specialText;
@@ -767,15 +811,15 @@ loopOption.addEventListener("click", function() {
     }
 
     loopedIndicator.style.display = "block";
-
     setTimeout(function() {
         loopedIndicator.style.display = "none";
     }, 2000);
 
-    popupMenu.style.display = "none";
+    closeMenus();
 });
 
-speedOption.addEventListener("click", function() {
+speedOption.addEventListener("click", function(e) {
+    e.stopPropagation();
     var currentSpeed = video.playbackRate;
     var newSpeed = getNextSpeed(currentSpeed);
     var currentAud = document.getElementById("aud");
@@ -784,7 +828,7 @@ speedOption.addEventListener("click", function() {
     if (currentAud) currentAud.playbackRate = newSpeed;
 
     speedOption.innerHTML = "<i class='fa-light fa-gauge'></i> Speed: " + newSpeed.toFixed(2) + "x";
-    popupMenu.style.display = "none";
+    closeMenus();
 });
 
 function getNextSpeed(currentSpeed) {
@@ -812,7 +856,6 @@ function getNextSpeed(currentSpeed) {
     }
     return speeds[(closestIndex + 1) % speeds.length];
 }
-
 
 const GoogleTranslateEndpoint = "https://translate.google.com/_/TranslateWebserverUi/data/batchexecute?rpcids=MkEWBc&rt=c"
 // @license-end
