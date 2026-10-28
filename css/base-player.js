@@ -21,7 +21,7 @@
  * ///////////////////////////////////////////////////////////////////////////
  * "It takes a lot of hard work to make something simple." ~ Steve Jobs 
  */
-const SyncLevel = {
+ const SyncLevel = {
   driftSeconds: 0,
   driftMs: 0,
   synced: true,
@@ -269,17 +269,75 @@ window.SyncLevel = SyncLevel;
     };
 
     var readRecommendedVideos = function() {
-      var scriptEl = document.getElementById('video');
-      if (!scriptEl) return [];
-      var rawText = (scriptEl.textContent || scriptEl.innerHTML || '').trim();
-      if (!rawText) return [];
-      try {
-        var parsed = JSON.parse(rawText);
-        if (parsed && Array.isArray(parsed.recommendedVideos)) {
-          return parsed.recommendedVideos;
+      var container = document.querySelector('.recommended-list');
+      if (!container) return [];
+      var videoNodes = container.querySelectorAll('.video');
+      var results = [];
+
+      for (var i = 0; i < videoNodes.length; i++) {
+        var node = videoNodes[i];
+        var thumbAnchor = node.querySelector('a.thumbnail');
+        var titleAnchor = node.querySelector('a.title');
+        var href = (titleAnchor && titleAnchor.getAttribute('href')) || (thumbAnchor && thumbAnchor.getAttribute('href')) || '';
+        if (!href) continue;
+
+        var title = '';
+        if (titleAnchor) {
+          title = (titleAnchor.getAttribute('title') || titleAnchor.textContent || '').trim();
         }
-      } catch (_) {}
-      return [];
+
+        var thumbUrl = '';
+        if (thumbAnchor) {
+          var rawStyle = thumbAnchor.getAttribute('style') || '';
+          var bgMatch = rawStyle.match(/background-image\s*:\s*url\(\s*['"]?([^'")]+)['"]?\s*\)/i);
+          if (bgMatch && bgMatch[1]) {
+            thumbUrl = bgMatch[1].trim();
+          } else if (thumbAnchor.style && thumbAnchor.style.backgroundImage) {
+            var styleMatch = thumbAnchor.style.backgroundImage.match(/url\(\s*['"]?([^'")]+)['"]?\s*\)/i);
+            if (styleMatch && styleMatch[1]) thumbUrl = styleMatch[1].trim();
+          }
+          if (!thumbUrl) {
+            var innerImg = thumbAnchor.querySelector('img');
+            if (innerImg) {
+              thumbUrl = (innerImg.currentSrc || innerImg.src || innerImg.getAttribute('src') || '').trim();
+            }
+          }
+        }
+
+        var durEl = node.querySelector('.video-length');
+        var durationText = durEl ? (durEl.textContent || '').trim() : '';
+
+        var channelEl = node.querySelector('.info a[href*="/channel"] span, .info a[href*="/channel"]');
+        var author = channelEl ? (channelEl.textContent || '').replace(/\s+/g, ' ').trim() : '';
+
+        var viewsContainer = node.querySelector('.video-views');
+        var viewsCount = '';
+        var publishedText = '';
+        if (viewsContainer) {
+          var vcEl = viewsContainer.querySelector('viewcounttext');
+          if (vcEl) {
+            viewsCount = (vcEl.textContent || '').replace(/\s+/g, ' ').trim();
+            var clone = viewsContainer.cloneNode(true);
+            var cloneVc = clone.querySelector('viewcounttext');
+            if (cloneVc && cloneVc.parentNode) cloneVc.parentNode.removeChild(cloneVc);
+            publishedText = (clone.textContent || '').replace(/\s+/g, ' ').trim();
+          } else {
+            publishedText = (viewsContainer.textContent || '').replace(/\s+/g, ' ').trim();
+          }
+        }
+
+        results.push({
+          href: href,
+          title: title,
+          thumbUrl: thumbUrl,
+          durationText: durationText,
+          author: author,
+          viewCountText: viewsCount,
+          publishedText: publishedText
+        });
+      }
+
+      return results;
     };
 
     return {
@@ -537,18 +595,40 @@ window.SyncLevel = SyncLevel;
       '.alabaster-fs-desc-body a:hover {',
       '  text-decoration: underline;',
       '}',
+      '.alabaster-rec-open-btn {',
+      '  position: absolute;',
+      '  left: 50%;',
+      '  bottom: 6px;',
+      '  transform: translateX(-50%);',
+      '  width: 30px;',
+      '  height: 30px;',
+      '  border-radius: 50%;',
+      '  display: inline-flex;',
+      '  align-items: center;',
+      '  justify-content: center;',
+      '  z-index: 30;',
+      '  pointer-events: auto;',
+      '  user-select: none;',
+      '}',
+      '.alabaster-rec-open-btn svg {',
+      '  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);',
+      '}',
+      '.alabaster-rec-open-btn.is-open svg {',
+      '  transform: rotate(180deg);',
+      '}',
       '.alabaster-rec-drawer {',
       '  position: absolute;',
       '  left: 0;',
       '  right: 0;',
       '  bottom: 0;',
       '  width: 100%;',
+      '  height: 76%;',
       '  max-height: 82%;',
       '  z-index: 44;',
       '  display: none;',
       '  flex-direction: column;',
       '  box-sizing: border-box;',
-      '  background: linear-gradient(180deg, rgba(12, 12, 12, 0.94) 0%, rgba(8, 8, 8, 0.98) 100%);',
+      '  background: linear-gradient(180deg, rgba(14, 14, 14, 0.95) 0%, rgba(8, 8, 8, 0.98) 100%);',
       '  backdrop-filter: blur(30px);',
       '  -webkit-backdrop-filter: blur(30px);',
       '  border-top: 1px solid rgba(255, 255, 255, 0.12);',
@@ -561,22 +641,44 @@ window.SyncLevel = SyncLevel;
       '  overflow: hidden;',
       '  transform: translate3d(0, 100%, 0);',
       '  opacity: 0;',
-      '  transition: height 0.28s cubic-bezier(0.22, 1, 0.36, 1), transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease;',
+      '  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease;',
       '}',
-      '.alabaster-rec-drawer.is-dragging {',
-      '  transition: none !important;',
+      '.alabaster-rec-drawer.is-visible {',
+      '  transform: translate3d(0, 0, 0);',
+      '  opacity: 1;',
+      '}',
+      '.alabaster-rec-header {',
+      '  display: flex;',
+      '  align-items: center;',
+      '  justify-content: space-between;',
+      '  padding: 14px 22px 10px 24px;',
+      '  flex-shrink: 0;',
+      '}',
+      '.alabaster-rec-heading {',
+      '  font-size: 15px;',
+      '  font-weight: 600;',
+      '  font-stretch: expanded;',
+      '  color: #ffffff;',
+      '  margin: 0;',
+      '  letter-spacing: -0.1px;',
+      '}',
+      '.alabaster-rec-close {',
+      '  width: 32px;',
+      '  height: 32px;',
+      '  border-radius: 50%;',
+      '  display: inline-flex;',
+      '  align-items: center;',
+      '  justify-content: center;',
+      '  flex-shrink: 0;',
       '}',
       '.alabaster-rec-scroll {',
       '  width: 100%;',
-      '  height: 100%;',
+      '  flex: 1 1 auto;',
       '  box-sizing: border-box;',
-      '  padding: 20px 24px 26px 24px;',
+      '  padding: 6px 24px 26px 24px;',
       '  overflow-y: auto;',
       '  overflow-x: hidden;',
       '  overscroll-behavior: contain;',
-      '}',
-      '.alabaster-rec-drawer.is-peek .alabaster-rec-scroll {',
-      '  overflow-y: hidden;',
       '}',
       '.alabaster-rec-scroll::-webkit-scrollbar {',
       '  width: 6px;',
@@ -1025,12 +1127,42 @@ window.SyncLevel = SyncLevel;
       var recDrawer = null;
       var recScroll = null;
       var recGrid = null;
-      var recStage = 0;
-      var recPopulated = false;
+      var recOpenBtn = null;
+      var isRecOpen = false;
 
       if (rootEl && !rootEl.querySelector('.alabaster-rec-drawer')) {
         recDrawer = document.createElement('div');
         recDrawer.className = 'alabaster-rec-drawer';
+
+        var recHeader = document.createElement('div');
+        recHeader.className = 'alabaster-rec-header';
+
+        var recHeading = document.createElement('h3');
+        recHeading.className = 'alabaster-rec-heading';
+        recHeading.textContent = 'More videos';
+
+        var recCloseBtn = document.createElement('button');
+        recCloseBtn.type = 'button';
+        recCloseBtn.className = 'alabaster-rec-close';
+        recCloseBtn.setAttribute('aria-label', 'Close recommendations');
+        recCloseBtn.style.cssText = 'background:transparent;border:none;color:#aaaaaa;padding:0;border-radius:50%;cursor:pointer;transition:background 0.15s ease, color 0.15s ease;';
+        recCloseBtn.addEventListener('mouseenter', function() {
+          recCloseBtn.style.background = 'rgba(255, 255, 255, 0.12)';
+          recCloseBtn.style.color = '#ffffff';
+        });
+        recCloseBtn.addEventListener('mouseleave', function() {
+          recCloseBtn.style.background = 'transparent';
+          recCloseBtn.style.color = '#aaaaaa';
+        });
+        recCloseBtn.innerHTML = [
+          '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
+          '  <line x1="18" y1="6" x2="6" y2="18"></line>',
+          '  <line x1="6" y1="6" x2="18" y2="18"></line>',
+          '</svg>'
+        ].join('');
+
+        recHeader.appendChild(recHeading);
+        recHeader.appendChild(recCloseBtn);
 
         recScroll = document.createElement('div');
         recScroll.className = 'alabaster-rec-scroll';
@@ -1039,35 +1171,22 @@ window.SyncLevel = SyncLevel;
         recGrid.className = 'alabaster-rec-grid';
 
         recScroll.appendChild(recGrid);
+        recDrawer.appendChild(recHeader);
         recDrawer.appendChild(recScroll);
         rootEl.appendChild(recDrawer);
 
-        var pickBestThumbnail = function(thumbs) {
-          if (!Array.isArray(thumbs) || !thumbs.length) return '';
-          var preferred = ['high', 'sddefault', 'maxresdefault', 'maxres', 'medium', 'default'];
-          for (var p = 0; p < preferred.length; p++) {
-            for (var i = 0; i < thumbs.length; i++) {
-              if (thumbs[i] && thumbs[i].quality === preferred[p] && thumbs[i].url) {
-                return compat.proxyThumbnailUrl(thumbs[i].url);
-              }
-            }
-          }
-          return thumbs[0] && thumbs[0].url ? compat.proxyThumbnailUrl(thumbs[0].url) : '';
-        };
-
         var buildRecCards = function() {
-          if (recPopulated) return recGrid.children.length > 0;
           var list = metadataParser.readRecommended();
           if (!list || !list.length) return false;
           recGrid.innerHTML = '';
 
           for (var i = 0; i < list.length; i++) {
             var item = list[i];
-            if (!item || !item.videoId) continue;
+            if (!item || !item.href) continue;
 
             var card = document.createElement('a');
             card.className = 'alabaster-rec-card';
-            card.href = '/watch?v=' + encodeURIComponent(item.videoId);
+            card.href = item.href;
 
             var thumbWrap = document.createElement('div');
             thumbWrap.className = 'alabaster-rec-thumb-wrap';
@@ -1076,13 +1195,13 @@ window.SyncLevel = SyncLevel;
             img.className = 'alabaster-rec-thumb';
             img.loading = 'lazy';
             img.alt = item.title || '';
-            img.src = pickBestThumbnail(item.videoThumbnails);
+            img.src = item.thumbUrl || '';
             thumbWrap.appendChild(img);
 
-            if (item.lengthSeconds && item.lengthSeconds > 0) {
+            if (item.durationText) {
               var durBadge = document.createElement('span');
               durBadge.className = 'alabaster-rec-duration';
-              durBadge.textContent = compat.formatClock(item.lengthSeconds);
+              durBadge.textContent = item.durationText;
               thumbWrap.appendChild(durBadge);
             }
 
@@ -1113,337 +1232,105 @@ window.SyncLevel = SyncLevel;
             recGrid.appendChild(card);
           }
 
-          recPopulated = recGrid.children.length > 0;
-          return recPopulated;
+          return recGrid.children.length > 0;
         };
 
-        var getPeekHeightPx = function() {
-          var firstCard = recGrid.querySelector('.alabaster-rec-card');
-          if (firstCard) {
-            var cHeight = firstCard.getBoundingClientRect().height;
-            if (cHeight > 40) return Math.round(cHeight + 44);
-          }
-          var pH = rootEl.clientHeight || 480;
-          return Math.min(Math.max(Math.round(pH * 0.42), 185), 290);
-        };
-
-        var getFullHeightPx = function() {
-          var pH = rootEl.clientHeight || 480;
-          return Math.round(pH * 0.8);
-        };
-
-        var applyRecStage = function(stage) {
-          if (!buildRecCards()) return;
-          recStage = stage;
-          recDrawer.classList.remove('is-dragging');
-
-          if (stage === 0) {
-            recDrawer.classList.remove('is-peek');
-            recDrawer.style.transform = 'translate3d(0, 100%, 0)';
-            recDrawer.style.opacity = '0';
+        var setRecPopupState = function(open) {
+          var next = Boolean(open);
+          if (next) {
+            if (!buildRecCards()) return;
+            isRecOpen = true;
+            if (recOpenBtn) {
+              recOpenBtn.classList.add('is-open');
+              recOpenBtn.setAttribute('aria-expanded', 'true');
+            }
+            recDrawer.style.display = 'flex';
+            recScroll.scrollTop = 0;
+            compat.raf(function() {
+              recDrawer.classList.add('is-visible');
+            });
+          } else {
+            isRecOpen = false;
+            if (recOpenBtn) {
+              recOpenBtn.classList.remove('is-open');
+              recOpenBtn.setAttribute('aria-expanded', 'false');
+            }
+            recDrawer.classList.remove('is-visible');
             setTimeout(function() {
-              if (recStage === 0 && recDrawer) {
+              if (!isRecOpen && recDrawer) {
                 recDrawer.style.display = 'none';
                 recScroll.scrollTop = 0;
               }
             }, 280);
-          } else if (stage === 1) {
-            recDrawer.style.display = 'flex';
-            recDrawer.classList.add('is-peek');
-            recScroll.scrollTop = 0;
-            var peekH = getPeekHeightPx();
-            recDrawer.style.height = peekH + 'px';
-            compat.raf(function() {
-              recDrawer.style.transform = 'translate3d(0, 0, 0)';
-              recDrawer.style.opacity = '1';
-            });
-          } else if (stage === 2) {
-            recDrawer.style.display = 'flex';
-            recDrawer.classList.remove('is-peek');
-            var fullH = getFullHeightPx();
-            recDrawer.style.height = fullH + 'px';
-            compat.raf(function() {
-              recDrawer.style.transform = 'translate3d(0, 0, 0)';
-              recDrawer.style.opacity = '1';
-            });
           }
         };
 
-        ['click', 'mousedown', 'pointerdown', 'touchstart', 'touchend'].forEach(function(evName) {
+        ['click', 'mousedown', 'pointerdown', 'touchstart', 'touchend', 'wheel'].forEach(function(evName) {
           recDrawer.addEventListener(evName, function(evt) {
             evt.stopPropagation();
           }, false);
         });
 
-        var wheelAccum = 0;
-        var wheelResetTimer = 0;
-
-        recDrawer.addEventListener('wheel', function(evt) {
-          evt.stopPropagation();
-          var dy = evt.deltaY;
-          if (recStage === 1) {
-            evt.preventDefault();
-            wheelAccum += dy;
-            clearTimeout(wheelResetTimer);
-            wheelResetTimer = setTimeout(function() { wheelAccum = 0; }, 220);
-            if (wheelAccum > 35) {
-              wheelAccum = 0;
-              applyRecStage(2);
-            } else if (wheelAccum < -35) {
-              wheelAccum = 0;
-              applyRecStage(0);
-            }
-          } else if (recStage === 2) {
-            if (recScroll.scrollTop <= 0 && dy < 0) {
-              evt.preventDefault();
-              wheelAccum += dy;
-              clearTimeout(wheelResetTimer);
-              wheelResetTimer = setTimeout(function() { wheelAccum = 0; }, 220);
-              if (wheelAccum < -45) {
-                wheelAccum = 0;
-                applyRecStage(1);
-              }
-            } else {
-              wheelAccum = 0;
-            }
-          }
-        }, { passive: false });
-
-        var isPointInControlBarCenterGap = function(clientX, clientY, targetEl) {
-          var bar = player.controlBar && player.controlBar.el && player.controlBar.el();
-          if (!bar) return false;
-          var barRect = bar.getBoundingClientRect();
-          if (clientY < barRect.top - 10 || clientY > barRect.bottom + 8) return false;
-
-          if (targetEl && targetEl !== bar) {
-            var curr = targetEl;
-            while (curr && curr !== bar && curr !== rootEl) {
-              var tag = curr.tagName ? curr.tagName.toLowerCase() : '';
-              var cls = typeof curr.className === 'string' ? curr.className : '';
-              if (
-                tag === 'button' ||
-                tag === 'input' ||
-                curr.getAttribute('role') === 'slider' ||
-                curr.getAttribute('role') === 'button' ||
-                cls.indexOf('vjs-progress-control') !== -1 ||
-                cls.indexOf('vjs-slider') !== -1 ||
-                cls.indexOf('vjs-volume') !== -1 ||
-                cls.indexOf('vjs-play-control') !== -1 ||
-                cls.indexOf('vjs-fullscreen-control') !== -1 ||
-                cls.indexOf('vjs-picture-in-picture') !== -1 ||
-                cls.indexOf('vjs-menu') !== -1 ||
-                cls.indexOf('vjs-player-time-toggle') !== -1 ||
-                cls.indexOf('vjs-time-control') !== -1
-              ) {
-                return false;
-              }
-              curr = curr.parentNode;
-            }
-          }
-
-          var leftBoundary = barRect.left + 140;
-          var rightBoundary = barRect.right - 90;
-
-          var timeBtn = bar.querySelector('.vjs-player-time-toggle');
-          if (timeBtn) {
-            var tRect = timeBtn.getBoundingClientRect();
-            if (tRect.width > 0) leftBoundary = Math.max(leftBoundary, tRect.right + 8);
-          }
-
-          var rightButtons = bar.querySelectorAll('.vjs-picture-in-picture-control, .vjs-fullscreen-control, .vjs-subs-caps-button, .vjs-playback-rate, .vjs-quality-selector');
-          for (var i = 0; i < rightButtons.length; i++) {
-            var rbRect = rightButtons[i].getBoundingClientRect();
-            if (rbRect.width > 0 && rbRect.left > barRect.left + barRect.width * 0.45) {
-              rightBoundary = Math.min(rightBoundary, rbRect.left - 8);
-            }
-          }
-
-          return clientX >= leftBoundary && clientX <= rightBoundary;
-        };
-
-        var dragState = {
-          active: false,
-          engaged: false,
-          source: '',
-          startX: 0,
-          startY: 0,
-          startHeight: 0,
-          baseStage: 0
-        };
-
-        var onDragStart = function(clientX, clientY, targetEl, sourceType) {
-          if (sourceType === 'bar') {
-            if (recStage !== 0) return false;
-            if (!isPointInControlBarCenterGap(clientX, clientY, targetEl)) return false;
-          } else if (sourceType === 'drawer') {
-            if (recStage === 0) return false;
-            if (targetEl && targetEl.closest && targetEl.closest('a.alabaster-rec-card')) {
-              if (recStage === 2 && recScroll.scrollTop > 0) return false;
-            }
-            if (recStage === 2 && recScroll.scrollTop > 2) return false;
-          }
-
-          dragState.active = true;
-          dragState.engaged = false;
-          dragState.source = sourceType;
-          dragState.startX = clientX;
-          dragState.startY = clientY;
-          dragState.baseStage = recStage;
-          dragState.startHeight = recStage === 0 ? 0 : (recDrawer.getBoundingClientRect().height || getPeekHeightPx());
-          return true;
-        };
-
-        var onDragMove = function(clientX, clientY, evt) {
-          if (!dragState.active) return;
-          var dy = dragState.startY - clientY;
-          var dx = clientX - dragState.startX;
-
-          if (!dragState.engaged) {
-            if (Math.abs(dy) < 10) return;
-            if (Math.abs(dx) > Math.abs(dy) * 1.1) {
-              dragState.active = false;
-              return;
-            }
-            if (dragState.source === 'bar' && dy < 10) {
-              dragState.active = false;
-              return;
-            }
-            if (!buildRecCards()) {
-              dragState.active = false;
-              return;
-            }
-            dragState.engaged = true;
-            recDrawer.style.display = 'flex';
-            recDrawer.classList.add('is-dragging');
-            if (dragState.baseStage === 0) {
-              recDrawer.classList.add('is-peek');
-            }
-          }
-
-          if (evt && evt.cancelable) evt.preventDefault();
-
-          var peekH = getPeekHeightPx();
-          var fullH = getFullHeightPx();
-
-          if (dragState.baseStage === 0) {
-            var pullUp = Math.max(0, dy);
-            var h = Math.min(fullH, pullUp);
-            recDrawer.style.height = Math.max(peekH, h) + 'px';
-            var offset = Math.max(0, peekH - pullUp);
-            recDrawer.style.transform = 'translate3d(0, ' + offset + 'px, 0)';
-            recDrawer.style.opacity = String(Math.min(1, pullUp / (peekH * 0.55)));
-          } else {
-            var nextH = Math.max(40, Math.min(fullH + 30, dragState.startHeight + dy));
-            recDrawer.style.height = nextH + 'px';
-            recDrawer.style.transform = 'translate3d(0, 0, 0)';
-            recDrawer.style.opacity = String(Math.min(1, Math.max(0.2, nextH / peekH)));
-          }
-        };
-
-        var onDragEnd = function(clientY) {
-          if (!dragState.active) return;
-          var wasEngaged = dragState.engaged;
-          var dy = dragState.startY - clientY;
-          var base = dragState.baseStage;
-          dragState.active = false;
-          dragState.engaged = false;
-
-          if (!wasEngaged) return;
-
-          if (base === 0) {
-            if (dy > 190) applyRecStage(2);
-            else if (dy > 38) applyRecStage(1);
-            else applyRecStage(0);
-          } else if (base === 1) {
-            if (dy > 45) applyRecStage(2);
-            else if (dy < -40) applyRecStage(0);
-            else applyRecStage(1);
-          } else if (base === 2) {
-            if (dy < -140) applyRecStage(0);
-            else if (dy < -45) applyRecStage(1);
-            else applyRecStage(2);
-          }
-        };
-
-        rootEl.addEventListener('mousedown', function(evt) {
-          if (evt.button !== 0) return;
-          if (onDragStart(evt.clientX, evt.clientY, evt.target, 'bar')) {
-            evt.stopPropagation();
-          }
-        }, false);
-
-        recDrawer.addEventListener('mousedown', function(evt) {
-          if (evt.button !== 0) return;
-          onDragStart(evt.clientX, evt.clientY, evt.target, 'drawer');
-        }, false);
-
-        window.addEventListener('mousemove', function(evt) {
-          if (!dragState.active) return;
-          onDragMove(evt.clientX, evt.clientY, evt);
-        }, false);
-
-        window.addEventListener('mouseup', function(evt) {
-          if (!dragState.active) return;
-          onDragEnd(evt.clientY);
-        }, false);
-
-        rootEl.addEventListener('touchstart', function(evt) {
-          if (!evt.touches || evt.touches.length !== 1) return;
-          var t = evt.touches[0];
-          onDragStart(t.clientX, t.clientY, evt.target, 'bar');
-        }, { passive: true });
-
-        recDrawer.addEventListener('touchstart', function(evt) {
-          if (!evt.touches || evt.touches.length !== 1) return;
-          var t = evt.touches[0];
-          onDragStart(t.clientX, t.clientY, evt.target, 'drawer');
-        }, { passive: true });
-
-        window.addEventListener('touchmove', function(evt) {
-          if (!dragState.active || !evt.touches || !evt.touches.length) return;
-          var t = evt.touches[0];
-          onDragMove(t.clientX, t.clientY, evt);
-        }, { passive: false });
-
-        window.addEventListener('touchend', function(evt) {
-          if (!dragState.active) return;
-          var t = (evt.changedTouches && evt.changedTouches[0]) || { clientY: dragState.startY };
-          onDragEnd(t.clientY);
-        }, false);
-
-        var barWheelAccum = 0;
-        var barWheelTimer = 0;
-        rootEl.addEventListener('wheel', function(evt) {
-          if (recStage !== 0) return;
-          if (!isPointInControlBarCenterGap(evt.clientX, evt.clientY, evt.target)) return;
+        recCloseBtn.addEventListener('click', function(evt) {
           evt.preventDefault();
           evt.stopPropagation();
-          barWheelAccum += evt.deltaY;
-          clearTimeout(barWheelTimer);
-          barWheelTimer = setTimeout(function() { barWheelAccum = 0; }, 220);
-          if (barWheelAccum > 30 || barWheelAccum < -35) {
-            barWheelAccum = 0;
-            applyRecStage(1);
-          }
-        }, { passive: false });
+          setRecPopupState(false);
+        });
 
         rootEl.addEventListener('mousedown', function(evt) {
-          if (recStage !== 0 && recDrawer && !recDrawer.contains(evt.target)) {
-            applyRecStage(0);
+          if (isRecOpen && recDrawer && !recDrawer.contains(evt.target) && (!recOpenBtn || !recOpenBtn.contains(evt.target))) {
+            setRecPopupState(false);
           }
         }, true);
 
         rootEl.addEventListener('touchstart', function(evt) {
-          if (recStage !== 0 && recDrawer && !recDrawer.contains(evt.target)) {
-            applyRecStage(0);
+          if (isRecOpen && recDrawer && !recDrawer.contains(evt.target) && (!recOpenBtn || !recOpenBtn.contains(evt.target))) {
+            setRecPopupState(false);
           }
         }, true);
 
         document.addEventListener('keydown', function(evt) {
-          if (evt.key === 'Escape' && recStage !== 0) {
-            applyRecStage(0);
+          if (evt.key === 'Escape' && isRecOpen) {
+            setRecPopupState(false);
           }
         }, false);
+
+        var cBar = player.controlBar && player.controlBar.el && player.controlBar.el();
+        if (cBar && !cBar.querySelector('.alabaster-rec-open-btn')) {
+          recOpenBtn = document.createElement('button');
+          recOpenBtn.type = 'button';
+          recOpenBtn.className = 'alabaster-rec-open-btn';
+          recOpenBtn.setAttribute('aria-label', 'More videos');
+          recOpenBtn.setAttribute('aria-expanded', 'false');
+          recOpenBtn.style.cssText = 'position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:30px;height:30px;border-radius:50%;background:rgba(255, 255, 255, 0.12);border:1px solid rgba(255, 255, 255, 0.22);color:#ffffff;padding:0;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;z-index:30;transition:background 0.18s ease, border-color 0.18s ease, transform 0.15s ease;';
+          recOpenBtn.addEventListener('mouseenter', function() {
+            recOpenBtn.style.background = 'rgba(255, 255, 255, 0.24)';
+            recOpenBtn.style.borderColor = 'rgba(255, 255, 255, 0.38)';
+          });
+          recOpenBtn.addEventListener('mouseleave', function() {
+            recOpenBtn.style.background = 'rgba(255, 255, 255, 0.12)';
+            recOpenBtn.style.borderColor = 'rgba(255, 255, 255, 0.22)';
+          });
+          recOpenBtn.innerHTML = [
+            '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">',
+            '  <polyline points="18 15 12 9 6 15"></polyline>',
+            '</svg>'
+          ].join('');
+
+          ['mousedown', 'pointerdown', 'touchstart', 'touchend'].forEach(function(evName) {
+            recOpenBtn.addEventListener(evName, function(evt) {
+              evt.stopPropagation();
+            }, false);
+          });
+
+          recOpenBtn.addEventListener('click', function(evt) {
+            evt.preventDefault();
+            evt.stopPropagation();
+            setRecPopupState(!isRecOpen);
+          });
+
+          cBar.appendChild(recOpenBtn);
+        }
       }
 
       var loopInd = document.getElementById('loopedIndicator');
