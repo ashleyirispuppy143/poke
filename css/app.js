@@ -374,7 +374,7 @@ function fetchUrls(urls) {
   }
   }
  
-   var popupMenu = document.getElementById("popupMenu");
+ var popupMenu = document.getElementById("popupMenu");
 var loopOption = document.getElementById("loopOption");
 var speedOption = document.getElementById("speedOption");
 var boostOption = document.getElementById("boostOption");
@@ -382,16 +382,143 @@ var normalizeOption = document.getElementById("normalizeOption");
 var whisperOption = document.getElementById("whisperOption");
 var snapshotOption = document.getElementById("snapshotOption");
 var loopedIndicator = document.getElementById("loopedIndicator");
+var settingsOption = document.getElementById("settingsOption");
 
 loopedIndicator.style.display = "none";
 
 let audioCtx, source, gainNode, compressorNode, analyzer;
-
 let audioState = localStorage.getItem("audioMode") || "none";
-
 let normalizerInterval = null;
 let dataArray = null;
 let currentAutoGain = 1.0;
+
+const settingsStyles = document.createElement("style");
+settingsStyles.innerHTML = `
+.custom-settings-menu {
+    display: none;
+    position: absolute;
+    background-color: rgba(28, 28, 28, 0.95);
+    color: #fff;
+    border-radius: 12px;
+    width: 260px;
+    font-family: "Roboto", Arial, sans-serif;
+    font-size: 14px;
+    box-shadow: 0px 4px 10px rgba(0,0,0,0.5);
+    z-index: 999999;
+    backdrop-filter: blur(5px);
+    overflow: hidden;
+}
+.custom-settings-header {
+    display: flex;
+    align-items: center;
+    padding: 12px 15px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    cursor: pointer;
+}
+.custom-settings-header:hover { background-color: rgba(255,255,255,0.1); }
+.custom-settings-header i { margin-right: 15px; font-size: 16px; }
+.custom-settings-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    cursor: pointer;
+}
+.custom-settings-row:hover { background-color: rgba(255,255,255,0.1); }
+.custom-switch {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 14px;
+}
+.custom-switch input { opacity: 0; width: 0; height: 0; }
+.custom-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #717171;
+    transition: .4s;
+    border-radius: 14px;
+}
+.custom-slider:before {
+    position: absolute;
+    content: "";
+    height: 20px; width: 20px;
+    left: -2px; bottom: -3px;
+    background-color: #b5b5b5;
+    transition: .4s;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+input:checked + .custom-slider { background-color: #90caf9; }
+input:checked + .custom-slider:before {
+    transform: translateX(20px);
+    background-color: #3ea6ff;
+}
+`;
+document.head.appendChild(settingsStyles);
+
+const settingsMenu = document.createElement("div");
+settingsMenu.className = "custom-settings-menu";
+settingsMenu.id = "customSettingsMenu";
+settingsMenu.innerHTML = `
+    <div class="custom-settings-header" id="customSettingsBack">
+        <i class="fa-solid fa-arrow-left"></i> Settings
+    </div>
+    <div class="custom-settings-row">
+        <span>Use Description Button</span>
+        <label class="custom-switch">
+            <input type="checkbox" id="toggleDescCheckbox">
+            <span class="custom-slider"></span>
+        </label>
+    </div>
+    <div class="custom-settings-row">
+        <span>Disable Grid Discover</span>
+        <label class="custom-switch">
+            <input type="checkbox" id="toggleGridCheckbox">
+            <span class="custom-slider"></span>
+        </label>
+    </div>
+`;
+
+if (popupMenu.parentNode) {
+    popupMenu.parentNode.appendChild(settingsMenu);
+} else {
+    document.body.appendChild(settingsMenu);
+}
+
+const toggleDesc = settingsMenu.querySelector("#toggleDescCheckbox");
+const toggleGrid = settingsMenu.querySelector("#toggleGridCheckbox");
+const btnBack = settingsMenu.querySelector("#customSettingsBack");
+
+if (localStorage.getItem("DontUseYoutubeStyleDescriptionOpeningFS") === "true") toggleDesc.checked = true;
+if (localStorage.getItem("CloseFullScreenDiscover") === "true") toggleGrid.checked = true;
+
+toggleDesc.addEventListener("change", function() {
+    if (this.checked) localStorage.setItem("DontUseYoutubeStyleDescriptionOpeningFS", "true");
+    else localStorage.removeItem("DontUseYoutubeStyleDescriptionOpeningFS");
+});
+
+toggleGrid.addEventListener("change", function() {
+    if (this.checked) localStorage.setItem("CloseFullScreenDiscover", "true");
+    else localStorage.removeItem("CloseFullScreenDiscover");
+});
+
+btnBack.addEventListener("click", function(e) {
+    e.stopPropagation();
+    settingsMenu.style.display = "none";
+    popupMenu.style.display = "block";
+});
+
+if (settingsOption) {
+    settingsOption.addEventListener("click", function(e) {
+        e.stopPropagation(); 
+        popupMenu.style.display = "none";
+        settingsMenu.style.display = "block";
+        settingsMenu.style.left = popupMenu.style.left;
+        settingsMenu.style.top = popupMenu.style.top;
+    });
+}
 
 function initAudio() {
     var currentAud = document.getElementById("aud");
@@ -478,7 +605,6 @@ function applyAudioState(isUserInteraction = false) {
             }
 
             let rms = Math.sqrt(sumSquares / dataArray.length);
-
             let targetGain = 1.0;
 
             if (rms > 0.005) {
@@ -551,7 +677,6 @@ if (snapshotOption) {
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
             var dataURL = canvas.toDataURL("image/png");
-
             var videoName = getSnapshotVideoName();
 
             var time = video.currentTime;
@@ -579,14 +704,11 @@ function getSnapshotVideoName() {
     var videoName = "";
 
     if (twitterTitle && twitterTitle.content) {
-        videoName = twitterTitle.content
-            .replace(/\s*\|\s*Poke\s*$/i, "")
-            .trim();
+        videoName = twitterTitle.content.replace(/\s*\|\s*Poke\s*$/i, "").trim();
     }
 
     if (!videoName) {
         var src = video.currentSrc || video.src || "";
-
         if (src && !src.startsWith("blob:")) {
             var fileNameWithExt = src.split("/").pop().split("?")[0].split("#")[0];
             var lastDot = fileNameWithExt.lastIndexOf(".");
@@ -603,22 +725,23 @@ function getSnapshotVideoName() {
     }
 
     videoName = videoName.replace(/[<>:"/\\|?*\u0000-\u001F]/g, "").trim();
-
     return videoName || "snapshot";
 }
 
 video.addEventListener("contextmenu", function(event) {
-    if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement && !document.msFullscreenElement) {
-        event.preventDefault();
-        popupMenu.style.display = "block";
-        popupMenu.style.left = event.pageX + "px";
-        popupMenu.style.top = event.pageY + "px";
-    }
+    event.preventDefault();
+    settingsMenu.style.display = "none"; 
+    popupMenu.style.display = "block";
+    popupMenu.style.left = event.pageX + "px";
+    popupMenu.style.top = event.pageY + "px";
 });
 
 window.addEventListener("click", function(event) {
     if (event.target !== video) {
         popupMenu.style.display = "none";
+    }
+    if (settingsMenu && !settingsMenu.contains(event.target) && event.target !== settingsOption) {
+        settingsMenu.style.display = "none";
     }
 });
 
@@ -675,7 +798,6 @@ function getNextSpeed(currentSpeed) {
 
     for (var i = 1; i < speeds.length; i++) {
         var distance = Math.abs(currentSpeed - speeds[i]);
-
         if (distance < closestDistance) {
             closestDistance = distance;
             closestIndex = i;
@@ -684,16 +806,13 @@ function getNextSpeed(currentSpeed) {
 
     if (closestDistance > 0.01) {
         for (var j = 0; j < speeds.length; j++) {
-            if (currentSpeed < speeds[j]) {
-                return speeds[j];
-            }
+            if (currentSpeed < speeds[j]) return speeds[j];
         }
-
         return speeds[0];
     }
-
     return speeds[(closestIndex + 1) % speeds.length];
 }
+
 
 const GoogleTranslateEndpoint = "https://translate.google.com/_/TranslateWebserverUi/data/batchexecute?rpcids=MkEWBc&rt=c"
 // @license-end
