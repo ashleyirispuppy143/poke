@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Player Configure</title>
+  <style>
+    @font-face {
+      font-family: "PokeTube Flex";
+      src: url("/static/robotoflex.ttf?v=29");
+      font-style: normal;
+      font-stretch: 1% 800%;
+      font-display: swap;
+    }
+
+    body {
+      background-color: #222222;
+      color: #e0e0e0;
+      font-family: system-ui, -apple-system, sans-serif;
+      display: flex;
+      justify-content: flex-start;
+      align-items: flex-start;
+      height: 100vh;
+      margin: 0;
+      padding: 24px;
+      box-sizing: border-box;
+    }
+
+    .container {
+      width: 340px;
+    }
+
+    h1 {
+      font-family: "PokeTube Flex", sans-serif;
+      font-stretch: 800%;
+      margin: 0 0 16px 0;
+      font-size: 24px;
+    }
+
+    .setting-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid #3d3d3d;
+    }
+
+    .setting-row:last-child {
+      border-bottom: none;
+    }
+
+    .label-group {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .setting-title {
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 46px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #444;
+      transition: 0.2s;
+      border-radius: 24px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: #fff;
+      transition: 0.2s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background-color: #3b82f6;
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(22px);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>player settings</h1>
+
+    <div class="setting-row">
+      <div class="label-group">
+        <span class="setting-title">Use Description Button</span>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="toggle-alabaster">
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="setting-row">
+      <div class="label-group">
+        <span class="setting-title">Remove Discover in fullscreen</span>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="toggle-discover">
+        <span class="slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <script>
+    const settings = [
+      {
+        key: 'DontUseAlabasterStyleDescriptionOpeningFS',
+        toggleId: 'toggle-alabaster'
+      },
+      {
+        key: 'CloseFullScreenDiscover',
+        toggleId: 'toggle-discover'
+      }
+    ];
+
+    settings.forEach(({ key, toggleId }) => {
+      const toggle = document.getElementById(toggleId);
+
+      const currentValue = localStorage.getItem(key) === 'true';
+      if (localStorage.getItem(key) === null) {
+        localStorage.setItem(key, 'false');
+      }
+
+      toggle.checked = currentValue;
+
+      toggle.addEventListener('change', () => {
+        const isChecked = toggle.checked;
+        localStorage.setItem(key, String(isChecked));
+      });
+    });
+  </script>
+
+</body>
+</html>
