@@ -606,6 +606,15 @@ window.SyncLevel = SyncLevel;
         fsDescToggle.type = 'button';
         fsDescToggle.className = 'alabaster-fs-desc-toggle';
         fsDescToggle.setAttribute('aria-expanded', 'false');
+        fsDescToggle.style.cssText = 'background:rgba(15, 15, 15, 0.78);border:1px solid rgba(255, 255, 255, 0.14);color:#f1f1f1;font-size:13px;font-weight:600;line-height:1.2;padding:8px 16px;border-radius:999px;cursor:pointer;transition:background 0.2s ease, border-color 0.2s ease, transform 0.15s ease, opacity 0.25s ease, visibility 0.25s ease;';
+        fsDescToggle.addEventListener('mouseenter', function() {
+          fsDescToggle.style.background = 'rgba(38, 38, 38, 0.9)';
+          fsDescToggle.style.borderColor = 'rgba(255, 255, 255, 0.25)';
+        });
+        fsDescToggle.addEventListener('mouseleave', function() {
+          fsDescToggle.style.background = 'rgba(15, 15, 15, 0.78)';
+          fsDescToggle.style.borderColor = 'rgba(255, 255, 255, 0.14)';
+        });
         fsDescToggle.innerHTML = [
           '<span>Description</span>',
           '<span class="alabaster-fs-desc-chevron">',
@@ -650,6 +659,15 @@ window.SyncLevel = SyncLevel;
         fsDescClose.type = 'button';
         fsDescClose.className = 'alabaster-fs-desc-close';
         fsDescClose.setAttribute('aria-label', 'Close description');
+        fsDescClose.style.cssText = 'background:transparent;border:none;color:#aaaaaa;padding:0;border-radius:50%;cursor:pointer;transition:background 0.15s ease, color 0.15s ease;';
+        fsDescClose.addEventListener('mouseenter', function() {
+          fsDescClose.style.background = 'rgba(255, 255, 255, 0.12)';
+          fsDescClose.style.color = '#ffffff';
+        });
+        fsDescClose.addEventListener('mouseleave', function() {
+          fsDescClose.style.background = 'transparent';
+          fsDescClose.style.color = '#aaaaaa';
+        });
         fsDescClose.innerHTML = [
           '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
           '  <line x1="18" y1="6" x2="6" y2="18"></line>',
