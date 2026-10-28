@@ -247,6 +247,27 @@ window.SyncLevel = SyncLevel;
     var age = '(?:' + divider + '(?:\\uD83D[\\uDDD3\\uDCC5\\uDCC6\\uDDD2])' + skin + '\\s*(\\d+\\s*(?:second|minute|hour|day|week|month|year)s?\\s*ago))?';
     var pattern = new RegExp(up + divider + down + views + age, 'i');
 
+    var findChannelAvatarUrl = function() {
+      var el = document.querySelector('.video-chnl-info-pill .avatar, #video-chnl-info-pill .avatar, [class*="video-chnl-info-pill"] .avatar, .avatar');
+      if (!el) return '';
+      if (el.currentSrc || el.src) return (el.currentSrc || el.src).trim();
+      var attrSrc = el.getAttribute('src') || el.getAttribute('data-src') || '';
+      if (attrSrc.trim()) return attrSrc.trim();
+      var childImg = el.querySelector('img');
+      if (childImg) {
+        var cSrc = childImg.currentSrc || childImg.src || childImg.getAttribute('src') || childImg.getAttribute('data-src') || '';
+        if (cSrc.trim()) return cSrc.trim();
+      }
+      if (window.getComputedStyle) {
+        var bg = window.getComputedStyle(el).backgroundImage;
+        if (bg && bg !== 'none') {
+          var m = bg.match(/url\(["']?([^"')]+)["']?\)/);
+          if (m && m[1]) return m[1].trim();
+        }
+      }
+      return '';
+    };
+
     return {
       read: function() {
         var title = compat.getMeta('meta[name="title"]') || compat.getMeta('meta[property="og:title"]') || document.title || '';
@@ -254,6 +275,7 @@ window.SyncLevel = SyncLevel;
         var rawThumb = compat.getMeta('meta[property="og:image"]') || compat.getMeta('meta[name="og:image"]') || compat.getMeta('meta[name="twitter:image"]') || '';
         var proxiedThumb = compat.proxyThumbnailUrl(rawThumb);
         var author = (typeof window.authorchannelname === 'string' && window.authorchannelname.trim()) ? window.authorchannelname.trim() : '';
+        var avatarUrl = findChannelAvatarUrl();
         var matched = desc.match(pattern);
         var stats = matched ? matched[0].replace(/\s*\|\s*/g, ' | ').replace(/\s+/g, ' ').trim() : '';
         return {
@@ -264,7 +286,8 @@ window.SyncLevel = SyncLevel;
           views: matched && matched[3] ? matched[3].trim() : '',
           age: matched && matched[4] ? matched[4].trim() : '',
           artworkUrl: proxiedThumb,
-          author: author
+          author: author,
+          avatarUrl: avatarUrl
         };
       }
     };
@@ -357,20 +380,55 @@ window.SyncLevel = SyncLevel;
       '}',
       '.alabaster-fs-desc-header {',
       '  display: flex;',
-      '  align-items: center;',
+      '  align-items: flex-start;',
       '  justify-content: space-between;',
-      '  padding: 16px 20px;',
+      '  gap: 12px;',
+      '  padding: 18px 18px 16px 20px;',
       '  border-bottom: 1px solid rgba(255, 255, 255, 0.1);',
       '  background: rgba(255, 255, 255, 0.02);',
       '  flex-shrink: 0;',
+      '}',
+      '.alabaster-fs-desc-header-info {',
+      '  display: flex;',
+      '  flex-direction: column;',
+      '  align-items: flex-start;',
+      '  gap: 10px;',
+      '  flex: 1 1 auto;',
+      '  min-width: 0;',
       '}',
       '.alabaster-fs-desc-heading {',
       '  font-size: 16px;',
       '  font-weight: 600;',
       '  font-stretch: expanded;',
+      '  line-height: 1.32;',
       '  color: #ffffff;',
       '  margin: 0;',
       '  letter-spacing: -0.2px;',
+      '  word-break: break-word;',
+      '}',
+      '.alabaster-fs-desc-channel-row {',
+      '  display: flex;',
+      '  align-items: center;',
+      '  gap: 10px;',
+      '  min-width: 0;',
+      '}',
+      '.alabaster-fs-desc-channel-avatar {',
+      '  width: 32px;',
+      '  height: 32px;',
+      '  border-radius: 50%;',
+      '  object-fit: cover;',
+      '  flex-shrink: 0;',
+      '  background: rgba(255, 255, 255, 0.08);',
+      '}',
+      '.alabaster-fs-desc-channel-name {',
+      '  font-size: 13px;',
+      '  font-weight: 600;',
+      '  font-stretch: expanded;',
+      '  color: #f1f1f1;',
+      '  line-height: 1.2;',
+      '  white-space: nowrap;',
+      '  overflow: hidden;',
+      '  text-overflow: ellipsis;',
       '}',
       '.alabaster-fs-desc-close {',
       '  width: 32px;',
@@ -383,6 +441,8 @@ window.SyncLevel = SyncLevel;
       '  align-items: center;',
       '  justify-content: center;',
       '  cursor: pointer;',
+      '  flex-shrink: 0;',
+      '  margin-top: -2px;',
       '  transition: background 0.15s ease, color 0.15s ease;',
       '}',
       '.alabaster-fs-desc-close:hover {',
@@ -564,22 +624,43 @@ window.SyncLevel = SyncLevel;
         var fsDescHeader = document.createElement('div');
         fsDescHeader.className = 'alabaster-fs-desc-header';
 
+        var fsDescHeaderInfo = document.createElement('div');
+        fsDescHeaderInfo.className = 'alabaster-fs-desc-header-info';
+
         var fsDescHeading = document.createElement('h3');
         fsDescHeading.className = 'alabaster-fs-desc-heading';
-        fsDescHeading.textContent = 'Description';
+        fsDescHeading.textContent = info.title || 'Description';
+
+        var fsDescChannelRow = document.createElement('div');
+        fsDescChannelRow.className = 'alabaster-fs-desc-channel-row';
+        fsDescChannelRow.style.display = 'none';
+
+        var fsDescAvatar = document.createElement('img');
+        fsDescAvatar.className = 'alabaster-fs-desc-channel-avatar';
+        fsDescAvatar.alt = '';
+        fsDescAvatar.style.display = 'none';
+
+        var fsDescChannelName = document.createElement('span');
+        fsDescChannelName.className = 'alabaster-fs-desc-channel-name';
+
+        fsDescChannelRow.appendChild(fsDescAvatar);
+        fsDescChannelRow.appendChild(fsDescChannelName);
+
+        fsDescHeaderInfo.appendChild(fsDescHeading);
+        fsDescHeaderInfo.appendChild(fsDescChannelRow);
 
         var fsDescClose = document.createElement('button');
         fsDescClose.type = 'button';
         fsDescClose.className = 'alabaster-fs-desc-close';
         fsDescClose.setAttribute('aria-label', 'Close description');
         fsDescClose.innerHTML = [
-          '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
+          '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
           '  <line x1="18" y1="6" x2="6" y2="18"></line>',
           '  <line x1="6" y1="6" x2="18" y2="18"></line>',
           '</svg>'
         ].join('');
 
-        fsDescHeader.appendChild(fsDescHeading);
+        fsDescHeader.appendChild(fsDescHeaderInfo);
         fsDescHeader.appendChild(fsDescClose);
 
         fsDescBody = document.createElement('div');
@@ -589,6 +670,33 @@ window.SyncLevel = SyncLevel;
         fsDescDrawer.appendChild(fsDescBody);
 
         var populateDescriptionVerbatim = function() {
+          var freshMeta = metadataParser.read();
+          fsDescHeading.textContent = freshMeta.title || info.title || 'Description';
+
+          var chName = (typeof window.authorchannelname === 'string' && window.authorchannelname.trim()) ? window.authorchannelname.trim() : freshMeta.author;
+          var avUrl = freshMeta.avatarUrl;
+
+          if (avUrl) {
+            fsDescAvatar.src = avUrl;
+            fsDescAvatar.style.display = 'block';
+          } else {
+            fsDescAvatar.style.display = 'none';
+          }
+
+          if (chName) {
+            fsDescChannelName.textContent = chName;
+            fsDescChannelName.style.display = 'block';
+          } else {
+            fsDescChannelName.textContent = '';
+            fsDescChannelName.style.display = 'none';
+          }
+
+          if (avUrl || chName) {
+            fsDescChannelRow.style.display = 'flex';
+          } else {
+            fsDescChannelRow.style.display = 'none';
+          }
+
           var sourceNode = document.querySelector('.descriptionHtml');
           if (!sourceNode) return false;
 
@@ -650,7 +758,6 @@ window.SyncLevel = SyncLevel;
 
           fsDescBody.innerHTML = '';
 
-          var freshMeta = metadataParser.read();
           if (freshMeta.views || freshMeta.likes || freshMeta.dislikes) {
             var statsBar = document.createElement('div');
             statsBar.className = 'alabaster-fs-desc-stats';
