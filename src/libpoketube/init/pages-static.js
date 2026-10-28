@@ -90,6 +90,10 @@ app.get("/request", (req, res) => {
   app.get("/502", function (req, res) {
     renderTemplate(res, req, "502.ejs");
   });
+
+  app.get("/player-settings", (req, res) => {
+  renderTemplate(res, req, "playerconfig.ejs");
+});
  
 app.get("/143", (req, res) => {
   const numberEasterEgg = getWholeRandom(1, 143);
