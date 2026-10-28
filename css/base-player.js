@@ -50,6 +50,7 @@ window.SyncLevel = SyncLevel;
 
   const qs = new URLSearchParams(window.location.search);
   const qua = qs.get("quality") || "";
+  const FS_PERSIST_KEY = 'alabaster_persist_fs';
 
   var config = {
     minPlayBuffer: 0.25,
@@ -311,9 +312,11 @@ window.SyncLevel = SyncLevel;
         var author = channelEl ? (channelEl.textContent || '').replace(/\s+/g, ' ').trim() : '';
 
         var viewsContainer = node.querySelector('.video-views');
+        var viewsHtml = '';
         var viewsCount = '';
         var publishedText = '';
         if (viewsContainer) {
+          viewsHtml = viewsContainer.innerHTML.trim();
           var vcEl = viewsContainer.querySelector('viewcounttext');
           if (vcEl) {
             viewsCount = (vcEl.textContent || '').replace(/\s+/g, ' ').trim();
@@ -332,6 +335,7 @@ window.SyncLevel = SyncLevel;
           thumbUrl: thumbUrl,
           durationText: durationText,
           author: author,
+          viewsHtml: viewsHtml,
           viewCountText: viewsCount,
           publishedText: publishedText
         });
@@ -598,23 +602,27 @@ window.SyncLevel = SyncLevel;
       '.alabaster-rec-open-btn {',
       '  position: absolute;',
       '  left: 50%;',
-      '  bottom: 6px;',
+      '  bottom: 12px;',
       '  transform: translateX(-50%);',
-      '  width: 30px;',
-      '  height: 30px;',
+      '  width: 38px;',
+      '  height: 38px;',
       '  border-radius: 50%;',
-      '  display: inline-flex;',
+      '  display: none;',
       '  align-items: center;',
       '  justify-content: center;',
       '  z-index: 30;',
       '  pointer-events: auto;',
       '  user-select: none;',
+      '  backdrop-filter: blur(16px);',
+      '  -webkit-backdrop-filter: blur(16px);',
+      '  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);',
       '}',
       '.alabaster-rec-open-btn svg {',
       '  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);',
       '}',
-      '.alabaster-rec-open-btn.is-open svg {',
-      '  transform: rotate(180deg);',
+      '.alabaster-rec-open-btn.is-open {',
+      '  opacity: 0 !important;',
+      '  pointer-events: none !important;',
       '}',
       '.alabaster-rec-drawer {',
       '  position: absolute;',
@@ -623,17 +631,12 @@ window.SyncLevel = SyncLevel;
       '  bottom: 0;',
       '  width: 100%;',
       '  height: 76%;',
-      '  max-height: 82%;',
+      '  max-height: 84%;',
       '  z-index: 44;',
       '  display: none;',
       '  flex-direction: column;',
       '  box-sizing: border-box;',
-      '  background: linear-gradient(180deg, rgba(14, 14, 14, 0.95) 0%, rgba(8, 8, 8, 0.98) 100%);',
-      '  backdrop-filter: blur(30px);',
-      '  -webkit-backdrop-filter: blur(30px);',
-      '  border-top: 1px solid rgba(255, 255, 255, 0.12);',
-      '  border-radius: 20px 20px 0 0;',
-      '  box-shadow: 0 -16px 48px rgba(0, 0, 0, 0.78);',
+      '  background: transparent;',
       '  color: #f1f1f1;',
       '  font-family: "poketube flex", "PokeTube Flex", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;',
       '  pointer-events: auto;',
@@ -641,44 +644,44 @@ window.SyncLevel = SyncLevel;
       '  overflow: hidden;',
       '  transform: translate3d(0, 100%, 0);',
       '  opacity: 0;',
-      '  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease;',
+      '  transition: height 0.28s cubic-bezier(0.22, 1, 0.36, 1), transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease;',
+      '}',
+      '.alabaster-rec-drawer.is-dragging {',
+      '  transition: none !important;',
       '}',
       '.alabaster-rec-drawer.is-visible {',
       '  transform: translate3d(0, 0, 0);',
       '  opacity: 1;',
       '}',
-      '.alabaster-rec-header {',
+      '.alabaster-rec-top-bar {',
       '  display: flex;',
       '  align-items: center;',
-      '  justify-content: space-between;',
-      '  padding: 14px 22px 10px 24px;',
+      '  justify-content: center;',
+      '  padding: 10px 0 8px 0;',
       '  flex-shrink: 0;',
       '}',
-      '.alabaster-rec-heading {',
-      '  font-size: 15px;',
-      '  font-weight: 600;',
-      '  font-stretch: expanded;',
-      '  color: #ffffff;',
-      '  margin: 0;',
-      '  letter-spacing: -0.1px;',
-      '}',
-      '.alabaster-rec-close {',
-      '  width: 32px;',
-      '  height: 32px;',
+      '.alabaster-rec-hide-btn {',
+      '  width: 40px;',
+      '  height: 40px;',
       '  border-radius: 50%;',
       '  display: inline-flex;',
       '  align-items: center;',
       '  justify-content: center;',
-      '  flex-shrink: 0;',
+      '  backdrop-filter: blur(18px);',
+      '  -webkit-backdrop-filter: blur(18px);',
+      '  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.55);',
       '}',
       '.alabaster-rec-scroll {',
       '  width: 100%;',
       '  flex: 1 1 auto;',
       '  box-sizing: border-box;',
-      '  padding: 6px 24px 26px 24px;',
+      '  padding: 6px 28px 28px 28px;',
       '  overflow-y: auto;',
       '  overflow-x: hidden;',
       '  overscroll-behavior: contain;',
+      '}',
+      '.alabaster-rec-drawer.is-peek .alabaster-rec-scroll {',
+      '  overflow-y: hidden;',
       '}',
       '.alabaster-rec-scroll::-webkit-scrollbar {',
       '  width: 6px;',
@@ -687,11 +690,11 @@ window.SyncLevel = SyncLevel;
       '  background: transparent;',
       '}',
       '.alabaster-rec-scroll::-webkit-scrollbar-thumb {',
-      '  background: rgba(255, 255, 255, 0.22);',
+      '  background: rgba(255, 255, 255, 0.25);',
       '  border-radius: 999px;',
       '}',
       '.alabaster-rec-scroll::-webkit-scrollbar-thumb:hover {',
-      '  background: rgba(255, 255, 255, 0.38);',
+      '  background: rgba(255, 255, 255, 0.42);',
       '}',
       '.alabaster-rec-grid {',
       '  display: grid;',
@@ -706,21 +709,26 @@ window.SyncLevel = SyncLevel;
       '  gap: 9px;',
       '  text-decoration: none;',
       '  color: #f1f1f1;',
-      '  border-radius: 12px;',
-      '  padding: 6px;',
-      '  margin: -6px;',
-      '  transition: background 0.18s ease, transform 0.18s ease;',
+      '  border-radius: 14px;',
+      '  padding: 10px;',
+      '  background: rgba(12, 12, 12, 0.72);',
+      '  backdrop-filter: blur(16px);',
+      '  -webkit-backdrop-filter: blur(16px);',
+      '  border: 1px solid rgba(255, 255, 255, 0.08);',
+      '  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);',
+      '  transition: background 0.18s ease, transform 0.18s ease, border-color 0.18s ease;',
       '  min-width: 0;',
       '}',
       '.alabaster-rec-card:hover {',
-      '  background: rgba(255, 255, 255, 0.07);',
+      '  background: rgba(24, 24, 24, 0.86);',
+      '  border-color: rgba(255, 255, 255, 0.18);',
       '  transform: translateY(-2px);',
       '}',
       '.alabaster-rec-thumb-wrap {',
       '  position: relative;',
       '  width: 100%;',
       '  aspect-ratio: 16 / 9;',
-      '  border-radius: 10px;',
+      '  border-radius: 9.5px;',
       '  overflow: hidden;',
       '  background: rgba(255, 255, 255, 0.06);',
       '  flex-shrink: 0;',
@@ -752,8 +760,8 @@ window.SyncLevel = SyncLevel;
       '}',
       '.alabaster-rec-title {',
       '  font-size: 13.5px;',
-      '  font-weight: 600;',
-      '  font-stretch: expanded;',
+      '  font-weight: 850;',
+      '  font-stretch: ultra-expanded;',
       '  line-height: 1.32;',
       '  color: #ffffff;',
       '  display: -webkit-box;',
@@ -763,11 +771,22 @@ window.SyncLevel = SyncLevel;
       '  text-overflow: ellipsis;',
       '  word-break: break-word;',
       '}',
-      '.alabaster-rec-sub {',
+      '.alabaster-rec-author {',
+      '  font-size: 12px;',
+      '  font-weight: 600;',
+      '  color: #d0d0d0;',
+      '  line-height: 1.25;',
+      '  white-space: nowrap;',
+      '  overflow: hidden;',
+      '  text-overflow: ellipsis;',
+      '}',
+      '.alabaster-rec-card .video-views {',
       '  font-size: 12px;',
       '  font-weight: 500;',
       '  color: #aaaaaa;',
       '  line-height: 1.25;',
+      '  display: flex;',
+      '  align-items: center;',
       '  white-space: nowrap;',
       '  overflow: hidden;',
       '  text-overflow: ellipsis;',
@@ -811,6 +830,57 @@ window.SyncLevel = SyncLevel;
         fallbackBar.appendChild(dEl);
         rootEl.appendChild(fallbackBar);
       }
+
+      var checkIsPlayerFullscreen = function() {
+        if (!rootEl) return false;
+        return Boolean(
+          (typeof player.isFullscreen === 'function' && player.isFullscreen()) ||
+          document.fullscreenElement ||
+          document.webkitFullscreenElement ||
+          rootEl.classList.contains('vjs-fullscreen')
+        );
+      };
+
+      var tryRestorePersistentFullscreen = function() {
+        var wantFs = false;
+        try {
+          wantFs = sessionStorage.getItem(FS_PERSIST_KEY) === '1';
+        } catch (_) {}
+        if (!wantFs) return;
+        try { sessionStorage.removeItem(FS_PERSIST_KEY); } catch (_) {}
+
+        var enterFs = function() {
+          if (checkIsPlayerFullscreen()) return true;
+          try {
+            if (typeof player.requestFullscreen === 'function') {
+              var p = player.requestFullscreen();
+              if (p && typeof p.catch === 'function') {
+                p.catch(function() {
+                  if (typeof player.enterFullWindow === 'function') player.enterFullWindow();
+                });
+              }
+              return true;
+            }
+            if (rootEl && rootEl.requestFullscreen) {
+              rootEl.requestFullscreen().catch(function() {
+                if (typeof player.enterFullWindow === 'function') player.enterFullWindow();
+              });
+              return true;
+            }
+          } catch (_) {
+            if (typeof player.enterFullWindow === 'function') {
+              try { player.enterFullWindow(); } catch (_) {}
+            }
+          }
+          return false;
+        };
+
+        setTimeout(enterFs, 60);
+        player.one('play', enterFs);
+        player.one('playing', enterFs);
+      };
+
+      tryRestorePersistentFullscreen();
 
       var fsDescToggle = null;
       var fsDescDrawer = null;
@@ -1058,12 +1128,7 @@ window.SyncLevel = SyncLevel;
 
         var setDrawerState = function(open) {
           isFsDescOpen = Boolean(open);
-          var isFsNow = Boolean(
-            (typeof player.isFullscreen === 'function' && player.isFullscreen()) ||
-            document.fullscreenElement ||
-            document.webkitFullscreenElement ||
-            rootEl.classList.contains('vjs-fullscreen')
-          );
+          var isFsNow = checkIsPlayerFullscreen();
           updateTitleBarDescVisibility(isFsNow);
 
           if (!fsDescToggle || !fsDescDrawer) return;
@@ -1128,41 +1193,38 @@ window.SyncLevel = SyncLevel;
       var recScroll = null;
       var recGrid = null;
       var recOpenBtn = null;
-      var isRecOpen = false;
+      var recHideBtn = null;
+      var recStage = 0;
 
       if (rootEl && !rootEl.querySelector('.alabaster-rec-drawer')) {
         recDrawer = document.createElement('div');
         recDrawer.className = 'alabaster-rec-drawer';
 
-        var recHeader = document.createElement('div');
-        recHeader.className = 'alabaster-rec-header';
+        var recTopBar = document.createElement('div');
+        recTopBar.className = 'alabaster-rec-top-bar';
 
-        var recHeading = document.createElement('h3');
-        recHeading.className = 'alabaster-rec-heading';
-        recHeading.textContent = 'More videos';
-
-        var recCloseBtn = document.createElement('button');
-        recCloseBtn.type = 'button';
-        recCloseBtn.className = 'alabaster-rec-close';
-        recCloseBtn.setAttribute('aria-label', 'Close recommendations');
-        recCloseBtn.style.cssText = 'background:transparent;border:none;color:#aaaaaa;padding:0;border-radius:50%;cursor:pointer;transition:background 0.15s ease, color 0.15s ease;';
-        recCloseBtn.addEventListener('mouseenter', function() {
-          recCloseBtn.style.background = 'rgba(255, 255, 255, 0.12)';
-          recCloseBtn.style.color = '#ffffff';
+        recHideBtn = document.createElement('button');
+        recHideBtn.type = 'button';
+        recHideBtn.className = 'alabaster-rec-hide-btn';
+        recHideBtn.setAttribute('aria-label', 'Hide recommendations');
+        recHideBtn.style.cssText = 'width:40px;height:40px;border-radius:50%;background:rgba(18, 18, 18, 0.82);border:1px solid rgba(255, 255, 255, 0.22);color:#ffffff;padding:0;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:background 0.18s ease, border-color 0.18s ease, transform 0.15s ease;';
+        recHideBtn.addEventListener('mouseenter', function() {
+          recHideBtn.style.background = 'rgba(38, 38, 38, 0.94)';
+          recHideBtn.style.borderColor = 'rgba(255, 255, 255, 0.38)';
+          recHideBtn.style.transform = 'scale(1.06)';
         });
-        recCloseBtn.addEventListener('mouseleave', function() {
-          recCloseBtn.style.background = 'transparent';
-          recCloseBtn.style.color = '#aaaaaa';
+        recHideBtn.addEventListener('mouseleave', function() {
+          recHideBtn.style.background = 'rgba(18, 18, 18, 0.82)';
+          recHideBtn.style.borderColor = 'rgba(255, 255, 255, 0.22)';
+          recHideBtn.style.transform = 'scale(1)';
         });
-        recCloseBtn.innerHTML = [
-          '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
-          '  <line x1="18" y1="6" x2="6" y2="18"></line>',
-          '  <line x1="6" y1="6" x2="18" y2="18"></line>',
+        recHideBtn.innerHTML = [
+          '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">',
+          '  <polyline points="6 9 12 15 18 9"></polyline>',
           '</svg>'
         ].join('');
 
-        recHeader.appendChild(recHeading);
-        recHeader.appendChild(recCloseBtn);
+        recTopBar.appendChild(recHideBtn);
 
         recScroll = document.createElement('div');
         recScroll.className = 'alabaster-rec-scroll';
@@ -1171,7 +1233,7 @@ window.SyncLevel = SyncLevel;
         recGrid.className = 'alabaster-rec-grid';
 
         recScroll.appendChild(recGrid);
-        recDrawer.appendChild(recHeader);
+        recDrawer.appendChild(recTopBar);
         recDrawer.appendChild(recScroll);
         rootEl.appendChild(recDrawer);
 
@@ -1187,6 +1249,12 @@ window.SyncLevel = SyncLevel;
             var card = document.createElement('a');
             card.className = 'alabaster-rec-card';
             card.href = item.href;
+
+            card.addEventListener('click', function() {
+              if (checkIsPlayerFullscreen()) {
+                try { sessionStorage.setItem(FS_PERSIST_KEY, '1'); } catch (_) {}
+              }
+            });
 
             var thumbWrap = document.createElement('div');
             thumbWrap.className = 'alabaster-rec-thumb-wrap';
@@ -1211,21 +1279,29 @@ window.SyncLevel = SyncLevel;
             var titleEl = document.createElement('div');
             titleEl.className = 'alabaster-rec-title';
             titleEl.textContent = item.title || '';
-
-            var subEl = document.createElement('div');
-            subEl.className = 'alabaster-rec-sub';
-            var subParts = [];
-            if (item.author) subParts.push(item.author);
-            if (item.viewCountText) {
-              var vText = String(item.viewCountText);
-              if (vText.toLowerCase().indexOf('view') === -1) vText += ' views';
-              subParts.push(vText);
-            }
-            if (item.publishedText) subParts.push(item.publishedText);
-            subEl.textContent = subParts.join(' • ');
-
             metaWrap.appendChild(titleEl);
-            metaWrap.appendChild(subEl);
+
+            if (item.author) {
+              var authorEl = document.createElement('div');
+              authorEl.className = 'alabaster-rec-author';
+              authorEl.textContent = item.author;
+              metaWrap.appendChild(authorEl);
+            }
+
+            var viewsEl = document.createElement('div');
+            viewsEl.className = 'video-views';
+            if (item.viewsHtml) {
+              viewsEl.innerHTML = item.viewsHtml;
+            } else {
+              var vcNode = document.createElement('viewcounttext');
+              vcNode.style.cssText = 'margin-right: 6px;margin-left: 1px;';
+              vcNode.innerHTML = '<i class="fa-light fa-play"></i> ' + (item.viewCountText || '');
+              viewsEl.appendChild(vcNode);
+              if (item.publishedText) {
+                viewsEl.appendChild(document.createTextNode(' ' + item.publishedText));
+              }
+            }
+            metaWrap.appendChild(viewsEl);
 
             card.appendChild(thumbWrap);
             card.appendChild(metaWrap);
@@ -1235,63 +1311,362 @@ window.SyncLevel = SyncLevel;
           return recGrid.children.length > 0;
         };
 
-        var setRecPopupState = function(open) {
-          var next = Boolean(open);
-          if (next) {
-            if (!buildRecCards()) return;
-            isRecOpen = true;
-            if (recOpenBtn) {
-              recOpenBtn.classList.add('is-open');
-              recOpenBtn.setAttribute('aria-expanded', 'true');
-            }
-            recDrawer.style.display = 'flex';
-            recScroll.scrollTop = 0;
-            compat.raf(function() {
-              recDrawer.classList.add('is-visible');
-            });
-          } else {
-            isRecOpen = false;
+        var getPeekHeightPx = function() {
+          var firstCard = recGrid.querySelector('.alabaster-rec-card');
+          if (firstCard) {
+            var cHeight = firstCard.getBoundingClientRect().height;
+            if (cHeight > 40) return Math.round(cHeight + 86);
+          }
+          var pH = rootEl.clientHeight || 480;
+          return Math.min(Math.max(Math.round(pH * 0.44), 210), 320);
+        };
+
+        var getFullHeightPx = function() {
+          var pH = rootEl.clientHeight || 480;
+          return Math.round(pH * 0.8);
+        };
+
+        var applyRecStage = function(stage) {
+          if (stage > 0 && !checkIsPlayerFullscreen()) {
+            stage = 0;
+          }
+          if (stage > 0 && !buildRecCards()) return;
+          recStage = stage;
+          recDrawer.classList.remove('is-dragging');
+
+          if (stage === 0) {
+            recDrawer.classList.remove('is-peek');
+            recDrawer.classList.remove('is-visible');
+            recDrawer.style.transform = 'translate3d(0, 100%, 0)';
+            recDrawer.style.opacity = '0';
             if (recOpenBtn) {
               recOpenBtn.classList.remove('is-open');
               recOpenBtn.setAttribute('aria-expanded', 'false');
             }
-            recDrawer.classList.remove('is-visible');
             setTimeout(function() {
-              if (!isRecOpen && recDrawer) {
+              if (recStage === 0 && recDrawer) {
                 recDrawer.style.display = 'none';
                 recScroll.scrollTop = 0;
               }
             }, 280);
+          } else if (stage === 1) {
+            recDrawer.style.display = 'flex';
+            recDrawer.classList.add('is-peek');
+            if (recOpenBtn) {
+              recOpenBtn.classList.add('is-open');
+              recOpenBtn.setAttribute('aria-expanded', 'true');
+            }
+            recScroll.scrollTop = 0;
+            var peekH = getPeekHeightPx();
+            recDrawer.style.height = peekH + 'px';
+            compat.raf(function() {
+              recDrawer.classList.add('is-visible');
+              recDrawer.style.transform = 'translate3d(0, 0, 0)';
+              recDrawer.style.opacity = '1';
+            });
+          } else if (stage === 2) {
+            recDrawer.style.display = 'flex';
+            recDrawer.classList.remove('is-peek');
+            if (recOpenBtn) {
+              recOpenBtn.classList.add('is-open');
+              recOpenBtn.setAttribute('aria-expanded', 'true');
+            }
+            var fullH = getFullHeightPx();
+            recDrawer.style.height = fullH + 'px';
+            compat.raf(function() {
+              recDrawer.classList.add('is-visible');
+              recDrawer.style.transform = 'translate3d(0, 0, 0)';
+              recDrawer.style.opacity = '1';
+            });
           }
         };
 
-        ['click', 'mousedown', 'pointerdown', 'touchstart', 'touchend', 'wheel'].forEach(function(evName) {
+        ['click', 'mousedown', 'pointerdown', 'touchstart', 'touchend'].forEach(function(evName) {
           recDrawer.addEventListener(evName, function(evt) {
             evt.stopPropagation();
           }, false);
         });
 
-        recCloseBtn.addEventListener('click', function(evt) {
+        recHideBtn.addEventListener('click', function(evt) {
           evt.preventDefault();
           evt.stopPropagation();
-          setRecPopupState(false);
+          applyRecStage(0);
         });
 
+        var wheelAccum = 0;
+        var wheelResetTimer = 0;
+
+        recDrawer.addEventListener('wheel', function(evt) {
+          evt.stopPropagation();
+          var dy = evt.deltaY;
+          if (recStage === 1) {
+            evt.preventDefault();
+            wheelAccum += dy;
+            clearTimeout(wheelResetTimer);
+            wheelResetTimer = setTimeout(function() { wheelAccum = 0; }, 220);
+            if (wheelAccum > 35) {
+              wheelAccum = 0;
+              applyRecStage(2);
+            } else if (wheelAccum < -35) {
+              wheelAccum = 0;
+              applyRecStage(0);
+            }
+          } else if (recStage === 2) {
+            if (recScroll.scrollTop <= 0 && dy < 0) {
+              evt.preventDefault();
+              wheelAccum += dy;
+              clearTimeout(wheelResetTimer);
+              wheelResetTimer = setTimeout(function() { wheelAccum = 0; }, 220);
+              if (wheelAccum < -45) {
+                wheelAccum = 0;
+                applyRecStage(0);
+              }
+            } else {
+              wheelAccum = 0;
+            }
+          }
+        }, { passive: false });
+
+        var isPointInControlBarCenterGap = function(clientX, clientY, targetEl) {
+          if (!checkIsPlayerFullscreen()) return false;
+          var bar = player.controlBar && player.controlBar.el && player.controlBar.el();
+          if (!bar) return false;
+          var barRect = bar.getBoundingClientRect();
+          if (clientY < barRect.top - 12 || clientY > barRect.bottom + 8) return false;
+
+          if (targetEl && recOpenBtn && (targetEl === recOpenBtn || recOpenBtn.contains(targetEl))) {
+            return true;
+          }
+
+          if (targetEl && targetEl !== bar) {
+            var curr = targetEl;
+            while (curr && curr !== bar && curr !== rootEl) {
+              var tag = curr.tagName ? curr.tagName.toLowerCase() : '';
+              var cls = typeof curr.className === 'string' ? curr.className : '';
+              if (
+                tag === 'button' ||
+                tag === 'input' ||
+                curr.getAttribute('role') === 'slider' ||
+                curr.getAttribute('role') === 'button' ||
+                cls.indexOf('vjs-progress-control') !== -1 ||
+                cls.indexOf('vjs-slider') !== -1 ||
+                cls.indexOf('vjs-volume') !== -1 ||
+                cls.indexOf('vjs-play-control') !== -1 ||
+                cls.indexOf('vjs-fullscreen-control') !== -1 ||
+                cls.indexOf('vjs-picture-in-picture') !== -1 ||
+                cls.indexOf('vjs-menu') !== -1 ||
+                cls.indexOf('vjs-player-time-toggle') !== -1 ||
+                cls.indexOf('vjs-time-control') !== -1
+              ) {
+                return false;
+              }
+              curr = curr.parentNode;
+            }
+          }
+
+          var leftBoundary = barRect.left + 140;
+          var rightBoundary = barRect.right - 90;
+
+          var timeBtn = bar.querySelector('.vjs-player-time-toggle');
+          if (timeBtn) {
+            var tRect = timeBtn.getBoundingClientRect();
+            if (tRect.width > 0) leftBoundary = Math.max(leftBoundary, tRect.right + 8);
+          }
+
+          var rightButtons = bar.querySelectorAll('.vjs-picture-in-picture-control, .vjs-fullscreen-control, .vjs-subs-caps-button, .vjs-playback-rate, .vjs-quality-selector');
+          for (var i = 0; i < rightButtons.length; i++) {
+            var rbRect = rightButtons[i].getBoundingClientRect();
+            if (rbRect.width > 0 && rbRect.left > barRect.left + barRect.width * 0.45) {
+              rightBoundary = Math.min(rightBoundary, rbRect.left - 8);
+            }
+          }
+
+          return clientX >= leftBoundary && clientX <= rightBoundary;
+        };
+
+        var dragState = {
+          active: false,
+          engaged: false,
+          source: '',
+          startX: 0,
+          startY: 0,
+          startHeight: 0,
+          baseStage: 0
+        };
+
+        var onDragStart = function(clientX, clientY, targetEl, sourceType) {
+          if (!checkIsPlayerFullscreen()) return false;
+          if (sourceType === 'bar') {
+            if (recStage !== 0) return false;
+            if (!isPointInControlBarCenterGap(clientX, clientY, targetEl)) return false;
+          } else if (sourceType === 'drawer') {
+            if (recStage === 0) return false;
+            if (targetEl && recHideBtn && (targetEl === recHideBtn || recHideBtn.contains(targetEl))) return false;
+            if (targetEl && targetEl.closest && targetEl.closest('a.alabaster-rec-card')) {
+              if (recStage === 2 && recScroll.scrollTop > 0) return false;
+            }
+            if (recStage === 2 && recScroll.scrollTop > 2) return false;
+          }
+
+          dragState.active = true;
+          dragState.engaged = false;
+          dragState.source = sourceType;
+          dragState.startX = clientX;
+          dragState.startY = clientY;
+          dragState.baseStage = recStage;
+          dragState.startHeight = recStage === 0 ? 0 : (recDrawer.getBoundingClientRect().height || getPeekHeightPx());
+          return true;
+        };
+
+        var onDragMove = function(clientX, clientY, evt) {
+          if (!dragState.active) return;
+          var dy = dragState.startY - clientY;
+          var dx = clientX - dragState.startX;
+
+          if (!dragState.engaged) {
+            if (Math.abs(dy) < 10) return;
+            if (Math.abs(dx) > Math.abs(dy) * 1.1) {
+              dragState.active = false;
+              return;
+            }
+            if (dragState.source === 'bar' && dy < 10) {
+              dragState.active = false;
+              return;
+            }
+            if (!buildRecCards()) {
+              dragState.active = false;
+              return;
+            }
+            dragState.engaged = true;
+            recDrawer.style.display = 'flex';
+            recDrawer.classList.add('is-dragging');
+            if (dragState.baseStage === 0) {
+              recDrawer.classList.add('is-peek');
+            }
+          }
+
+          if (evt && evt.cancelable) evt.preventDefault();
+
+          var peekH = getPeekHeightPx();
+          var fullH = getFullHeightPx();
+
+          if (dragState.baseStage === 0) {
+            var pullUp = Math.max(0, dy);
+            var h = Math.min(fullH, pullUp);
+            recDrawer.style.height = Math.max(peekH, h) + 'px';
+            var offset = Math.max(0, peekH - pullUp);
+            recDrawer.style.transform = 'translate3d(0, ' + offset + 'px, 0)';
+            recDrawer.style.opacity = String(Math.min(1, pullUp / (peekH * 0.55)));
+          } else {
+            var nextH = Math.max(40, Math.min(fullH + 30, dragState.startHeight + dy));
+            recDrawer.style.height = nextH + 'px';
+            recDrawer.style.transform = 'translate3d(0, 0, 0)';
+            recDrawer.style.opacity = String(Math.min(1, Math.max(0.2, nextH / peekH)));
+          }
+        };
+
+        var onDragEnd = function(clientY) {
+          if (!dragState.active) return;
+          var wasEngaged = dragState.engaged;
+          var dy = dragState.startY - clientY;
+          var base = dragState.baseStage;
+          dragState.active = false;
+          dragState.engaged = false;
+
+          if (!wasEngaged) return;
+
+          if (base === 0) {
+            if (dy > 190) applyRecStage(2);
+            else if (dy > 38) applyRecStage(1);
+            else applyRecStage(0);
+          } else if (base === 1) {
+            if (dy > 45) applyRecStage(2);
+            else if (dy < -40) applyRecStage(0);
+            else applyRecStage(1);
+          } else if (base === 2) {
+            if (dy < -140) applyRecStage(0);
+            else if (dy < -45) applyRecStage(1);
+            else applyRecStage(2);
+          }
+        };
+
         rootEl.addEventListener('mousedown', function(evt) {
-          if (isRecOpen && recDrawer && !recDrawer.contains(evt.target) && (!recOpenBtn || !recOpenBtn.contains(evt.target))) {
-            setRecPopupState(false);
+          if (evt.button !== 0) return;
+          if (onDragStart(evt.clientX, evt.clientY, evt.target, 'bar')) {
+            evt.stopPropagation();
+          }
+        }, false);
+
+        recDrawer.addEventListener('mousedown', function(evt) {
+          if (evt.button !== 0) return;
+          onDragStart(evt.clientX, evt.clientY, evt.target, 'drawer');
+        }, false);
+
+        window.addEventListener('mousemove', function(evt) {
+          if (!dragState.active) return;
+          onDragMove(evt.clientX, evt.clientY, evt);
+        }, false);
+
+        window.addEventListener('mouseup', function(evt) {
+          if (!dragState.active) return;
+          onDragEnd(evt.clientY);
+        }, false);
+
+        rootEl.addEventListener('touchstart', function(evt) {
+          if (!evt.touches || evt.touches.length !== 1) return;
+          var t = evt.touches[0];
+          onDragStart(t.clientX, t.clientY, evt.target, 'bar');
+        }, { passive: true });
+
+        recDrawer.addEventListener('touchstart', function(evt) {
+          if (!evt.touches || evt.touches.length !== 1) return;
+          var t = evt.touches[0];
+          onDragStart(t.clientX, t.clientY, evt.target, 'drawer');
+        }, { passive: true });
+
+        window.addEventListener('touchmove', function(evt) {
+          if (!dragState.active || !evt.touches || !evt.touches.length) return;
+          var t = evt.touches[0];
+          onDragMove(t.clientX, t.clientY, evt);
+        }, { passive: false });
+
+        window.addEventListener('touchend', function(evt) {
+          if (!dragState.active) return;
+          var t = (evt.changedTouches && evt.changedTouches[0]) || { clientY: dragState.startY };
+          onDragEnd(t.clientY);
+        }, false);
+
+        var barWheelAccum = 0;
+        var barWheelTimer = 0;
+        rootEl.addEventListener('wheel', function(evt) {
+          if (recStage !== 0 || !checkIsPlayerFullscreen()) return;
+          if (!isPointInControlBarCenterGap(evt.clientX, evt.clientY, evt.target)) return;
+          evt.preventDefault();
+          evt.stopPropagation();
+          barWheelAccum += evt.deltaY;
+          clearTimeout(barWheelTimer);
+          barWheelTimer = setTimeout(function() { barWheelAccum = 0; }, 220);
+          if (barWheelAccum > 30 || barWheelAccum < -35) {
+            barWheelAccum = 0;
+            applyRecStage(2);
+          }
+        }, { passive: false });
+
+        rootEl.addEventListener('mousedown', function(evt) {
+          if (recStage !== 0 && recDrawer && !recDrawer.contains(evt.target) && (!recOpenBtn || !recOpenBtn.contains(evt.target))) {
+            applyRecStage(0);
           }
         }, true);
 
         rootEl.addEventListener('touchstart', function(evt) {
-          if (isRecOpen && recDrawer && !recDrawer.contains(evt.target) && (!recOpenBtn || !recOpenBtn.contains(evt.target))) {
-            setRecPopupState(false);
+          if (recStage !== 0 && recDrawer && !recDrawer.contains(evt.target) && (!recOpenBtn || !recOpenBtn.contains(evt.target))) {
+            applyRecStage(0);
           }
         }, true);
 
         document.addEventListener('keydown', function(evt) {
-          if (evt.key === 'Escape' && isRecOpen) {
-            setRecPopupState(false);
+          if (evt.key === 'Escape' && recStage !== 0) {
+            applyRecStage(0);
           }
         }, false);
 
@@ -1300,24 +1675,41 @@ window.SyncLevel = SyncLevel;
           recOpenBtn = document.createElement('button');
           recOpenBtn.type = 'button';
           recOpenBtn.className = 'alabaster-rec-open-btn';
-          recOpenBtn.setAttribute('aria-label', 'More videos');
+          recOpenBtn.setAttribute('aria-label', 'Show recommendations');
           recOpenBtn.setAttribute('aria-expanded', 'false');
-          recOpenBtn.style.cssText = 'position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:30px;height:30px;border-radius:50%;background:rgba(255, 255, 255, 0.12);border:1px solid rgba(255, 255, 255, 0.22);color:#ffffff;padding:0;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;z-index:30;transition:background 0.18s ease, border-color 0.18s ease, transform 0.15s ease;';
+          recOpenBtn.style.cssText = 'position:absolute;left:50%;bottom:12px;transform:translateX(-50%);width:38px;height:38px;border-radius:50%;background:rgba(20, 20, 20, 0.78);border:1px solid rgba(255, 255, 255, 0.24);color:#ffffff;padding:0;display:none;align-items:center;justify-content:center;cursor:pointer;z-index:30;box-shadow:0 4px 16px rgba(0,0,0,0.45);transition:background 0.18s ease, border-color 0.18s ease, transform 0.15s ease, opacity 0.2s ease;';
           recOpenBtn.addEventListener('mouseenter', function() {
-            recOpenBtn.style.background = 'rgba(255, 255, 255, 0.24)';
-            recOpenBtn.style.borderColor = 'rgba(255, 255, 255, 0.38)';
+            recOpenBtn.style.background = 'rgba(42, 42, 42, 0.92)';
+            recOpenBtn.style.borderColor = 'rgba(255, 255, 255, 0.42)';
+            recOpenBtn.style.transform = 'translateX(-50%) scale(1.06)';
           });
           recOpenBtn.addEventListener('mouseleave', function() {
-            recOpenBtn.style.background = 'rgba(255, 255, 255, 0.12)';
-            recOpenBtn.style.borderColor = 'rgba(255, 255, 255, 0.22)';
+            recOpenBtn.style.background = 'rgba(20, 20, 20, 0.78)';
+            recOpenBtn.style.borderColor = 'rgba(255, 255, 255, 0.24)';
+            recOpenBtn.style.transform = 'translateX(-50%) scale(1)';
           });
           recOpenBtn.innerHTML = [
-            '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">',
+            '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">',
             '  <polyline points="18 15 12 9 6 15"></polyline>',
             '</svg>'
           ].join('');
 
-          ['mousedown', 'pointerdown', 'touchstart', 'touchend'].forEach(function(evName) {
+          recOpenBtn.addEventListener('mousedown', function(evt) {
+            if (evt.button === 0) {
+              onDragStart(evt.clientX, evt.clientY, recOpenBtn, 'bar');
+            }
+            evt.stopPropagation();
+          }, false);
+
+          recOpenBtn.addEventListener('touchstart', function(evt) {
+            if (evt.touches && evt.touches.length === 1) {
+              var t = evt.touches[0];
+              onDragStart(t.clientX, t.clientY, recOpenBtn, 'bar');
+            }
+            evt.stopPropagation();
+          }, { passive: true });
+
+          ['pointerdown', 'touchend'].forEach(function(evName) {
             recOpenBtn.addEventListener(evName, function(evt) {
               evt.stopPropagation();
             }, false);
@@ -1326,7 +1718,8 @@ window.SyncLevel = SyncLevel;
           recOpenBtn.addEventListener('click', function(evt) {
             evt.preventDefault();
             evt.stopPropagation();
-            setRecPopupState(!isRecOpen);
+            if (dragState.engaged) return;
+            applyRecStage(recStage === 0 ? 2 : 0);
           });
 
           cBar.appendChild(recOpenBtn);
@@ -1438,12 +1831,7 @@ window.SyncLevel = SyncLevel;
 
       var syncFullscreenTitleBarVisibility = function() {
         if (!rootEl) return;
-        var isFs = Boolean(
-          (typeof player.isFullscreen === 'function' && player.isFullscreen()) ||
-          document.fullscreenElement ||
-          document.webkitFullscreenElement ||
-          rootEl.classList.contains('vjs-fullscreen')
-        );
+        var isFs = checkIsPlayerFullscreen();
 
         if (!isFs) {
           isFsDescOpen = false;
@@ -1477,6 +1865,21 @@ window.SyncLevel = SyncLevel;
             fsDescToggle.setAttribute('aria-expanded', 'false');
             fsDescDrawer.classList.remove('is-visible');
             fsDescDrawer.style.display = 'none';
+          }
+        }
+
+        if (recOpenBtn && recDrawer) {
+          var hasRecNode = Boolean(document.querySelector('.recommended-list .video'));
+          if (isFs && hasRecNode) {
+            recOpenBtn.style.display = 'inline-flex';
+          } else {
+            recOpenBtn.style.display = 'none';
+            recOpenBtn.classList.remove('is-open');
+            recOpenBtn.setAttribute('aria-expanded', 'false');
+            recStage = 0;
+            recDrawer.classList.remove('is-visible');
+            recDrawer.classList.remove('is-peek');
+            recDrawer.style.display = 'none';
           }
         }
       };
