@@ -21,7 +21,7 @@
  * ///////////////////////////////////////////////////////////////////////////
  * "It takes a lot of hard work to make something simple." ~ Steve Jobs 
  */
-const SyncLevel = {
+ const SyncLevel = {
   driftSeconds: 0,
   driftMs: 0,
   synced: true,
@@ -52,7 +52,7 @@ window.SyncLevel = SyncLevel;
   const qua = qs.get("quality") || "";
   const VOL_PERSIST_KEY = 'alabaster_volume';
   const MUTE_PERSIST_KEY = 'alabaster_muted';
-  const LEGACY_DESC_BTN_KEY = 'DontUseYoutubeStyleDescriptionOpeningFS';
+  const LEGACY_DESC_BTN_KEY = 'DontUseAlabasterStyleDescriptionOpeningFS';
   const DISABLE_FS_DISCOVER_KEY = 'CloseFullScreenDiscover';
 
   function isStorageFlagEnabled(key) {
@@ -524,35 +524,18 @@ window.SyncLevel = SyncLevel;
       '  padding: 12px 12px !important;',
       '  margin: 0 !important;',
       '  border-radius: 12px !important;',
-      '  border: 1px solid transparent !important;',
       '  background: transparent !important;',
-      '  background-color: transparent !important;',
-      '  backdrop-filter: none !important;',
-      '  -webkit-backdrop-filter: none !important;',
-      '  box-shadow: none !important;',
-      '  transition: border-color 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s cubic-bezier(0.22, 1, 0.36, 1), transform 0.15s ease !important;',
+      '  transition: background 0.2s ease !important;',
       '}',
-      '.alabaster-yt-title-clickable {',
+      '.alabaster-title-clickable {',
       '  cursor: pointer !important;',
       '  pointer-events: auto !important;',
       '  user-select: none !important;',
       '}',
       '@media (hover: hover) {',
-      '  .video-js .alabaster-yt-title-clickable:hover, .alabaster-yt-title-clickable:hover {',
-      '    background: transparent !important;',
-      '    background-color: transparent !important;',
-      '    backdrop-filter: none !important;',
-      '    -webkit-backdrop-filter: none !important;',
-      '    border-color: rgba(255, 255, 255, 0.32) !important;',
-      '    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38), inset 0 -1px 0 rgba(255, 255, 255, 0.12), inset 0 0 14px rgba(255, 255, 255, 0.08), 0 4px 14px rgba(0, 0, 0, 0.22) !important;',
+      '  .video-js .alabaster-title-clickable:hover, .alabaster-title-clickable:hover {',
+      '    background: rgba(255, 255, 255, 0.1) !important;',
       '  }',
-      '}',
-      '.video-js .alabaster-yt-title-clickable:active, .alabaster-yt-title-clickable:active {',
-      '  background: transparent !important;',
-      '  background-color: transparent !important;',
-      '  border-color: rgba(255, 255, 255, 0.48) !important;',
-      '  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 18px rgba(255, 255, 255, 0.14) !important;',
-      '  transform: scale(0.985) !important;',
       '}',
       '.alabaster-fs-desc-drawer {',
       '  position: absolute;',
@@ -1999,9 +1982,9 @@ window.SyncLevel = SyncLevel;
         for (var t = 0; t < titleEls.length; t++) {
           var tElNode = titleEls[t];
           if (isFs && hasDescriptionNode && !useLegacyDescButton) {
-            tElNode.classList.add('alabaster-yt-title-clickable');
+            tElNode.classList.add('alabaster-title-clickable');
           } else {
-            tElNode.classList.remove('alabaster-yt-title-clickable');
+            tElNode.classList.remove('alabaster-title-clickable');
           }
         }
 
