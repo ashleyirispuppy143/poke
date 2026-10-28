@@ -875,13 +875,14 @@ background-color: #0000;
               <img  style="padding-left:0.9em;width: 8.5em;display: block;margin-left: auto;margin-right: auto;" src="/css/logo-poke.svg?v=5"></a>
  
      <% if (secure) { %> 
-       
-                 <i style="margin-left: 1em;" class="fa-light fa-lock"
-                  title="This is a secure and/or offical instance!
+        <i style="margin-left: 1em; cursor: pointer;" class="fa-light fa-lock" 
+title="This is a secure and/or offical instance!
 you can trust this instance becuase:
 
 - its a offical instance (offical instances have the max. privacy rules )
+
 - logs are kept closed
+
 
 if you see this lock icon, you can trust the instance!!
                          
@@ -893,11 +894,8 @@ caaddefabec047746608
 b8ef09b69b3ac2f63f4
 e53a4a
 
-if your domain matches this code you are probably in poketube.fun owo:3
-"
-
-
-                  ></i>
+if your domain matches this code you are probably in poketube.fun owo:3"
+onclick="(async function(){if(document.getElementById('poke-sec-modal'))return;var d=location.hostname;var href=location.href;var isHttps=(location.protocol==='https:');var hrefOk=(href.indexOf('https://poketube.fun/')===0||href==='https://poketube.fun');var puny=(d.indexOf('xn--')===-1);var buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(d||'poketube.fun'));var h=Array.from(new Uint8Array(buf)).map(function(b){return b.toString(16).padStart(2,'0')}).join('');var pSha='d312fe1994124e29478caaddefabec047746608b8ef09b69b3ac2f63f4e53a4a';var shaOk=(h===pSha);var v=(shaOk&&hrefOk&&isHttps&&puny);var o=document.createElement('div');o.id='poke-sec-modal';o.style.cssText='position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:999999;font-family:sans-serif;';var m=document.createElement('div');m.style.cssText='background:#181818;color:#fff;width:90%;max-width:440px;border-radius:12px;padding:24px;text-align:center;border:1px solid #333;box-sizing:border-box;';var ic=document.createElement('i');ic.className='fa-light fa-lock';ic.style.cssText='font-size:32px;margin-bottom:10px;display:block;color:'+(v?'#2ba640':'#e74c3c')+';';var t=document.createElement('div');t.style.cssText='font-size:18px;font-weight:bold;margin-bottom:16px;';t.textContent=(v?'Verified secure instance':'Unverified instance');var p=document.createElement('div');p.style.cssText='white-space:pre-wrap;overflow-wrap:break-word;word-break:break-word;max-height:70vh;overflow-y:auto;font-size:13px;color:#ccc;line-height:1.5;margin-bottom:14px;text-align:left;';p.textContent='This is a secure and/or offical instance!\nyou can trust this instance becuase:\n\n- its a offical instance (offical instances have the max. privacy rules )\n- logs are kept closed\n\nif you see this lock icon, you can trust the instance!! offical instances dont track u or sell ur data and keep everything super private :3\n\nBut Please note that unofficial instances can add the same lock icon, so please be careful about dad :D! Since u have js enabled we checked the domain for u automatically:\n\nthe provided sha: '+pSha.slice(0,30)+'...\nthis domains sha: '+h.slice(0,30)+'...\n\n'+(v?'yay!! the code matches so you are in poketube.fun owo:3':'uh oh!! the code doesnt match poketube.fun so be careful owo');var det=document.createElement('details');det.style.cssText='text-align:left;margin-top:14px;font-size:12px;color:#aaa;background:#121212;padding:8px 12px;border-radius:8px;border:1px solid #2a2a2a;';var sum=document.createElement('summary');sum.style.cssText='cursor:pointer;font-weight:bold;color:#ccc;outline:none;';sum.textContent='nerdy stats';var pre=document.createElement('pre');pre.style.cssText='margin:8px 0 0 0;padding:10px;background:#0a0a0a;color:#ccc;border-radius:6px;overflow-x:auto;font-family:monospace;font-size:11px;line-height:1.5;white-space:pre-wrap;word-break:break-all;border:1px solid #222;';var code=document.createElement('code');function addLn(k,val,ok){var s=document.createElement('div');var c=document.createElement('span');c.style.color='#888';c.textContent=k+': ';var vSpan=document.createElement('span');vSpan.style.color=(ok?'#2ecc71':'#ff4d4d');vSpan.textContent=val;s.appendChild(c);s.appendChild(vSpan);code.appendChild(s);}addLn('window.href       ',href,hrefOk);addLn('location.hostname ',d||'empty',d==='poketube.fun');addLn('provided_sha256   ',pSha,true);addLn('domain_sha256     ',h,shaOk);addLn('hash comparison   ',shaOk?'pass':'fail',shaOk);addLn('href reporting    ',hrefOk?'pass':'fail',hrefOk);addLn('https check       ',isHttps?'pass':'fail',isHttps);addLn('punycode check    ',puny?'pass':'fail',puny);pre.appendChild(code);det.appendChild(sum);det.appendChild(pre);p.appendChild(det);var b=document.createElement('button');b.id='poke-sec-close';b.style.cssText='background:#fff;color:#000;border:none;padding:8px 20px;border-radius:18px;font-weight:bold;cursor:pointer;';b.textContent='Close';m.appendChild(ic);m.appendChild(t);m.appendChild(p);m.appendChild(b);o.appendChild(m);document.body.appendChild(o);o.onclick=function(e){if(e.target===o||e.target.id==='poke-sec-close')o.remove();};})()"></i>
                                                      		 	               <% } %>   
                                                         
                                                          <% } %>   
@@ -910,12 +908,14 @@ if your domain matches this code you are probably in poketube.fun owo:3
  
      <% if (secure) { %> 
        
-                 <i style="margin-left: 7.5em;" class="fa-light fa-lock"
-                  title="This is a secure and/or offical instance!
+          <i style="margin-left: 7.5em; cursor: pointer;" class="fa-light fa-lock" 
+title="This is a secure and/or offical instance!
 you can trust this instance becuase:
 
 - its a offical instance (offical instances have the max. privacy rules )
+
 - logs are kept closed
+
 
 if you see this lock icon, you can trust the instance!!
                          
@@ -927,12 +927,9 @@ caaddefabec047746608
 b8ef09b69b3ac2f63f4
 e53a4a
 
-if your domain matches this code you are probably in poketube.fun owo:3
-"
-
-
-                  ></i>
-                                                     		 	               <% } %>   
+if your domain matches this code you are probably in poketube.fun owo:3"
+onclick="(async function(){if(document.getElementById('poke-sec-modal'))return;var d=location.hostname;var href=location.href;var isHttps=(location.protocol==='https:');var hrefOk=(href.indexOf('https://poketube.fun/')===0||href==='https://poketube.fun');var puny=(d.indexOf('xn--')===-1);var buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(d||'poketube.fun'));var h=Array.from(new Uint8Array(buf)).map(function(b){return b.toString(16).padStart(2,'0')}).join('');var pSha='d312fe1994124e29478caaddefabec047746608b8ef09b69b3ac2f63f4e53a4a';var shaOk=(h===pSha);var v=(shaOk&&hrefOk&&isHttps&&puny);var o=document.createElement('div');o.id='poke-sec-modal';o.style.cssText='position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:999999;font-family:sans-serif;';var m=document.createElement('div');m.style.cssText='background:#181818;color:#fff;width:90%;max-width:440px;border-radius:12px;padding:24px;text-align:center;border:1px solid #333;box-sizing:border-box;';var ic=document.createElement('i');ic.className='fa-light fa-lock';ic.style.cssText='font-size:32px;margin-bottom:10px;display:block;color:'+(v?'#2ba640':'#e74c3c')+';';var t=document.createElement('div');t.style.cssText='font-size:18px;font-weight:bold;margin-bottom:16px;';t.textContent=(v?'Verified secure instance':'Unverified instance');var p=document.createElement('div');p.style.cssText='white-space:pre-wrap;overflow-wrap:break-word;word-break:break-word;max-height:70vh;overflow-y:auto;font-size:13px;color:#ccc;line-height:1.5;margin-bottom:14px;text-align:left;';p.textContent='This is a secure and/or offical instance!\nyou can trust this instance becuase:\n\n- its a offical instance (offical instances have the max. privacy rules )\n- logs are kept closed\n\nif you see this lock icon, you can trust the instance!! offical instances dont track u or sell ur data and keep everything super private :3\n\nBut Please note that unofficial instances can add the same lock icon, so please be careful about dad :D! Since u have js enabled we checked the domain for u automatically:\n\nthe provided sha: '+pSha.slice(0,30)+'...\nthis domains sha: '+h.slice(0,30)+'...\n\n'+(v?'yay!! the code matches so you are in poketube.fun owo:3':'uh oh!! the code doesnt match poketube.fun so be careful owo');var det=document.createElement('details');det.style.cssText='text-align:left;margin-top:14px;font-size:12px;color:#aaa;background:#121212;padding:8px 12px;border-radius:8px;border:1px solid #2a2a2a;';var sum=document.createElement('summary');sum.style.cssText='cursor:pointer;font-weight:bold;color:#ccc;outline:none;';sum.textContent='nerdy stats';var pre=document.createElement('pre');pre.style.cssText='margin:8px 0 0 0;padding:10px;background:#0a0a0a;color:#ccc;border-radius:6px;overflow-x:auto;font-family:monospace;font-size:11px;line-height:1.5;white-space:pre-wrap;word-break:break-all;border:1px solid #222;';var code=document.createElement('code');function addLn(k,val,ok){var s=document.createElement('div');var c=document.createElement('span');c.style.color='#888';c.textContent=k+': ';var vSpan=document.createElement('span');vSpan.style.color=(ok?'#2ecc71':'#ff4d4d');vSpan.textContent=val;s.appendChild(c);s.appendChild(vSpan);code.appendChild(s);}addLn('window.href       ',href,hrefOk);addLn('location.hostname ',d||'empty',d==='poketube.fun');addLn('provided_sha256   ',pSha,true);addLn('domain_sha256     ',h,shaOk);addLn('hash comparison   ',shaOk?'pass':'fail',shaOk);addLn('href reporting    ',hrefOk?'pass':'fail',hrefOk);addLn('https check       ',isHttps?'pass':'fail',isHttps);addLn('punycode check    ',puny?'pass':'fail',puny);pre.appendChild(code);det.appendChild(sum);det.appendChild(pre);p.appendChild(det);var b=document.createElement('button');b.id='poke-sec-close';b.style.cssText='background:#fff;color:#000;border:none;padding:8px 20px;border-radius:18px;font-weight:bold;cursor:pointer;';b.textContent='Close';m.appendChild(ic);m.appendChild(t);m.appendChild(p);m.appendChild(b);o.appendChild(m);document.body.appendChild(o);o.onclick=function(e){if(e.target===o||e.target.id==='poke-sec-close')o.remove();};})()"></i>
+<% } %>   
 
                               		 	               <% } %>   
 
