@@ -373,7 +373,8 @@ function fetchUrls(urls) {
   
   }
   }
-var popupMenu = document.getElementById("popupMenu");
+ 
+   var popupMenu = document.getElementById("popupMenu");
 var loopOption = document.getElementById("loopOption");
 var speedOption = document.getElementById("speedOption");
 var boostOption = document.getElementById("boostOption");
@@ -385,7 +386,9 @@ var loopedIndicator = document.getElementById("loopedIndicator");
 loopedIndicator.style.display = "none";
 
 let audioCtx, source, gainNode, compressorNode, analyzer;
+
 let audioState = localStorage.getItem("audioMode") || "none";
+
 let normalizerInterval = null;
 let dataArray = null;
 let currentAutoGain = 1.0;
@@ -691,120 +694,6 @@ function getNextSpeed(currentSpeed) {
 
     return speeds[(closestIndex + 1) % speeds.length];
 }
-
-var configurePlayerStyle = document.createElement("style");
-configurePlayerStyle.innerHTML = `
-    .configure-player-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 99998; display: none; }
-    .configure-player-popup { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #282828; color: #fff; width: 320px; border-radius: 12px; padding: 16px 0; z-index: 99999; display: none; font-family: Roboto, Arial, sans-serif; box-shadow: 0 10px 32px rgba(0,0,0,0.5); }
-    .configure-player-header { padding: 0 24px 16px; font-size: 16px; font-weight: 500; border-bottom: 1px solid #3f3f3f; display: flex; justify-content: space-between; align-items: center; }
-    .configure-player-close { cursor: pointer; font-size: 20px; color: #aaa; background: none; border: none; padding: 0; outline: none; }
-    .configure-player-close:hover { color: #fff; }
-    .configure-player-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 24px; cursor: pointer; }
-    .configure-player-row:hover { background: #3f3f3f; }
-    .configure-player-label { font-size: 14px; pointer-events: none; }
-    .configure-switch { position: relative; display: inline-block; width: 36px; height: 14px; pointer-events: none; }
-    .configure-switch input { opacity: 0; width: 0; height: 0; }
-    .configure-slider { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: #717171; transition: .2s; border-radius: 14px; }
-    .configure-slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: -2px; bottom: -3px; background-color: #b1b1b1; transition: .2s; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
-    input:checked + .configure-slider { background-color: #a6c7ff; }
-    input:checked + .configure-slider:before { transform: translateX(20px); background-color: #3ea6ff; }
-`;
-document.head.appendChild(configurePlayerStyle);
-
-var configurePlayerOverlay = document.createElement("div");
-configurePlayerOverlay.className = "configure-player-overlay";
-
-var configurePlayerPopup = document.createElement("div");
-configurePlayerPopup.className = "configure-player-popup";
-configurePlayerPopup.innerHTML = `
-    <div class="configure-player-header">
-        Settings
-        <button class="configure-player-close">&times;</button>
-    </div>
-    <div class="configure-player-row" id="rowDescToggle">
-        <span class="configure-player-label">Use Description Button</span>
-        <label class="configure-switch">
-            <input type="checkbox" id="configureDescToggle">
-            <span class="configure-slider"></span>
-        </label>
-    </div>
-    <div class="configure-player-row" id="rowGridToggle">
-        <span class="configure-player-label">Disable Grid Discover</span>
-        <label class="configure-switch">
-            <input type="checkbox" id="configureGridToggle">
-            <span class="configure-slider"></span>
-        </label>
-    </div>
-`;
-
-document.body.appendChild(configurePlayerOverlay);
-document.body.appendChild(configurePlayerPopup);
-
-var configureDescToggle = document.getElementById("configureDescToggle");
-var configureGridToggle = document.getElementById("configureGridToggle");
-var rowDescToggle = document.getElementById("rowDescToggle");
-var rowGridToggle = document.getElementById("rowGridToggle");
-var configurePlayerClose = configurePlayerPopup.querySelector(".configure-player-close");
-
-if (localStorage.getItem("DontUseYoutubeStyleDescriptionOpeningFS") === "true") {
-    configureDescToggle.checked = true;
-}
-if (localStorage.getItem("CloseFullScreenDiscover") === "true") {
-    configureGridToggle.checked = true;
-}
-
-rowDescToggle.addEventListener("click", function() {
-    configureDescToggle.checked = !configureDescToggle.checked;
-    var event = new Event('change');
-    configureDescToggle.dispatchEvent(event);
-});
-
-rowGridToggle.addEventListener("click", function() {
-    configureGridToggle.checked = !configureGridToggle.checked;
-    var event = new Event('change');
-    configureGridToggle.dispatchEvent(event);
-});
-
-configureDescToggle.addEventListener("change", function() {
-    if (this.checked) {
-        localStorage.setItem("DontUseYoutubeStyleDescriptionOpeningFS", "true");
-    } else {
-        localStorage.removeItem("DontUseYoutubeStyleDescriptionOpeningFS");
-    }
-});
-
-configureGridToggle.addEventListener("change", function() {
-    if (this.checked) {
-        localStorage.setItem("CloseFullScreenDiscover", "true");
-    } else {
-        localStorage.removeItem("CloseFullScreenDiscover");
-    }
-});
-
-function closeConfigurePlayerPopup() {
-    configurePlayerOverlay.style.display = "none";
-    configurePlayerPopup.style.display = "none";
-}
-
-configurePlayerClose.addEventListener("click", closeConfigurePlayerPopup);
-configurePlayerOverlay.addEventListener("click", closeConfigurePlayerPopup);
-
-document.addEventListener("click", function(event) {
-    var settingsBtn = event.target.closest("#SettingsOption");
-    
-    if (settingsBtn) {
-        event.preventDefault();
-        event.stopPropagation(); 
-        
-        configurePlayerOverlay.style.display = "block";
-        configurePlayerPopup.style.display = "block";
-        
-        if (popupMenu) {
-            popupMenu.style.display = "none";
-        }
-    }
-});
-
 
 const GoogleTranslateEndpoint = "https://translate.google.com/_/TranslateWebserverUi/data/batchexecute?rpcids=MkEWBc&rt=c"
 // @license-end
