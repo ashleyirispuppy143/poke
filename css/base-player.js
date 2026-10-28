@@ -21,7 +21,7 @@
  * ///////////////////////////////////////////////////////////////////////////
  * "It takes a lot of hard work to make something simple." ~ Steve Jobs 
  */
- const SyncLevel = {
+const SyncLevel = {
   driftSeconds: 0,
   driftMs: 0,
   synced: true,
@@ -269,6 +269,32 @@ window.SyncLevel = SyncLevel;
       return '';
     };
 
+    var buildThumbCandidates = function(rawThumbUrl, href) {
+      var vidMatch = (href || '').match(/[?&]v=([a-zA-Z0-9_-]{11})/) || (rawThumbUrl || '').match(/\/vi\/([a-zA-Z0-9_-]{11})\//);
+      var vid = vidMatch && vidMatch[1] ? vidMatch[1] : '';
+      var maxRes = '';
+      var hqRes = '';
+
+      if (rawThumbUrl) {
+        var cleanUrl = rawThumbUrl.replace(/\?sqp=[^&"']*(?:&rs=[^&"']*)?/i, '');
+        if (/\/(hqdefault|mqdefault|sddefault|default|maxresdefault|maxres)\.jpg/i.test(cleanUrl)) {
+          maxRes = cleanUrl.replace(/\/(hqdefault|mqdefault|sddefault|default|maxresdefault|maxres)\.jpg/i, '/maxresdefault.jpg');
+          hqRes = cleanUrl.replace(/\/(hqdefault|mqdefault|sddefault|default|maxresdefault|maxres)\.jpg/i, '/hqdefault.jpg');
+        } else {
+          maxRes = rawThumbUrl;
+          hqRes = rawThumbUrl;
+        }
+      } else if (vid) {
+        maxRes = compat.proxyThumbnailUrl('https://invid-api.poketube.fun/vi/' + vid + '/maxresdefault.jpg');
+        hqRes = compat.proxyThumbnailUrl('https://invid-api.poketube.fun/vi/' + vid + '/hqdefault.jpg');
+      }
+
+      return {
+        primary: maxRes || hqRes || rawThumbUrl || '',
+        fallback: hqRes || rawThumbUrl || ''
+      };
+    };
+
     var readRecommendedVideos = function() {
       var container = document.querySelector('.recommended-list');
       if (!container) return [];
@@ -305,6 +331,8 @@ window.SyncLevel = SyncLevel;
           }
         }
 
+        var thumbs = buildThumbCandidates(thumbUrl, href);
+
         var durEl = node.querySelector('.video-length');
         var durationText = durEl ? (durEl.textContent || '').trim() : '';
 
@@ -312,11 +340,9 @@ window.SyncLevel = SyncLevel;
         var author = channelEl ? (channelEl.textContent || '').replace(/\s+/g, ' ').trim() : '';
 
         var viewsContainer = node.querySelector('.video-views');
-        var viewsHtml = '';
         var viewsCount = '';
         var publishedText = '';
         if (viewsContainer) {
-          viewsHtml = viewsContainer.innerHTML.trim();
           var vcEl = viewsContainer.querySelector('viewcounttext');
           if (vcEl) {
             viewsCount = (vcEl.textContent || '').replace(/\s+/g, ' ').trim();
@@ -332,10 +358,10 @@ window.SyncLevel = SyncLevel;
         results.push({
           href: href,
           title: title,
-          thumbUrl: thumbUrl,
+          thumbUrl: thumbs.primary,
+          fallbackThumbUrl: thumbs.fallback,
           durationText: durationText,
           author: author,
-          viewsHtml: viewsHtml,
           viewCountText: viewsCount,
           publishedText: publishedText
         });
@@ -657,8 +683,12 @@ window.SyncLevel = SyncLevel;
       '  display: flex;',
       '  align-items: center;',
       '  justify-content: center;',
-      '  padding: 10px 0 8px 0;',
+      '  padding: 12px 0 10px 0;',
       '  flex-shrink: 0;',
+      '  cursor: grab;',
+      '}',
+      '.alabaster-rec-top-bar:active {',
+      '  cursor: grabbing;',
       '}',
       '.alabaster-rec-hide-btn {',
       '  width: 40px;',
@@ -679,9 +709,7 @@ window.SyncLevel = SyncLevel;
       '  overflow-y: auto;',
       '  overflow-x: hidden;',
       '  overscroll-behavior: contain;',
-      '}',
-      '.alabaster-rec-drawer.is-peek .alabaster-rec-scroll {',
-      '  overflow-y: hidden;',
+      '  -webkit-overflow-scrolling: touch;',
       '}',
       '.alabaster-rec-scroll::-webkit-scrollbar {',
       '  width: 6px;',
@@ -711,17 +739,17 @@ window.SyncLevel = SyncLevel;
       '  color: #f1f1f1;',
       '  border-radius: 14px;',
       '  padding: 10px;',
-      '  background: rgba(12, 12, 12, 0.72);',
-      '  backdrop-filter: blur(16px);',
-      '  -webkit-backdrop-filter: blur(16px);',
-      '  border: 1px solid rgba(255, 255, 255, 0.08);',
-      '  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);',
+      '  background: rgba(12, 12, 12, 0.78);',
+      '  backdrop-filter: blur(18px);',
+      '  -webkit-backdrop-filter: blur(18px);',
+      '  border: 1px solid rgba(255, 255, 255, 0.1);',
+      '  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);',
       '  transition: background 0.18s ease, transform 0.18s ease, border-color 0.18s ease;',
       '  min-width: 0;',
       '}',
       '.alabaster-rec-card:hover {',
-      '  background: rgba(24, 24, 24, 0.86);',
-      '  border-color: rgba(255, 255, 255, 0.18);',
+      '  background: rgba(26, 26, 26, 0.9);',
+      '  border-color: rgba(255, 255, 255, 0.22);',
       '  transform: translateY(-2px);',
       '}',
       '.alabaster-rec-thumb-wrap {',
@@ -790,6 +818,13 @@ window.SyncLevel = SyncLevel;
       '  white-space: nowrap;',
       '  overflow: hidden;',
       '  text-overflow: ellipsis;',
+      '}',
+      '.alabaster-rec-play-unicode {',
+      '  display: inline-block;',
+      '  font-size: 10px;',
+      '  margin-right: 4px;',
+      '  color: #cccccc;',
+      '  transform: translateY(-0.5px);',
       '}'
     ].join('\n');
     document.head.appendChild(styleEl);
@@ -831,14 +866,67 @@ window.SyncLevel = SyncLevel;
         rootEl.appendChild(fallbackBar);
       }
 
+      var getNativeFsElement = function() {
+        return document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement || null;
+      };
+
       var checkIsPlayerFullscreen = function() {
         if (!rootEl) return false;
         return Boolean(
+          getNativeFsElement() ||
           (typeof player.isFullscreen === 'function' && player.isFullscreen()) ||
-          document.fullscreenElement ||
-          document.webkitFullscreenElement ||
-          rootEl.classList.contains('vjs-fullscreen')
+          rootEl.classList.contains('vjs-fullscreen') ||
+          rootEl.classList.contains('vjs-full-window')
         );
+      };
+
+      var origExitFs = typeof player.exitFullscreen === 'function' ? player.exitFullscreen.bind(player) : null;
+      player.exitFullscreen = function() {
+        if (getNativeFsElement()) {
+          try {
+            var p = origExitFs ? origExitFs() : (document.exitFullscreen ? document.exitFullscreen() : null);
+            if (p && typeof p.catch === 'function') p.catch(function() {});
+            return p;
+          } catch (_) {}
+        }
+        if (typeof player.exitFullWindow === 'function') {
+          try { player.exitFullWindow(); } catch (_) {}
+        }
+        if (rootEl) {
+          rootEl.classList.remove('vjs-fullscreen');
+          rootEl.classList.remove('vjs-full-window');
+        }
+        if (typeof player.isFullscreen === 'function') {
+          try { player.isFullscreen(false); } catch (_) {}
+        }
+        player.trigger('fullscreenchange');
+        return Promise.resolve();
+      };
+
+      var origReqFs = typeof player.requestFullscreen === 'function' ? player.requestFullscreen.bind(player) : null;
+      player.requestFullscreen = function() {
+        try {
+          if (origReqFs) {
+            var p = origReqFs();
+            if (p && typeof p.catch === 'function') {
+              p.catch(function() {
+                if (typeof player.enterFullWindow === 'function') {
+                  try { player.enterFullWindow(); } catch (_) {}
+                }
+                if (rootEl) rootEl.classList.add('vjs-fullscreen');
+                player.trigger('fullscreenchange');
+              });
+            }
+            return p;
+          }
+        } catch (_) {
+          if (typeof player.enterFullWindow === 'function') {
+            try { player.enterFullWindow(); } catch (_) {}
+          }
+          if (rootEl) rootEl.classList.add('vjs-fullscreen');
+          player.trigger('fullscreenchange');
+        }
+        return Promise.resolve();
       };
 
       var tryRestorePersistentFullscreen = function() {
@@ -849,38 +937,38 @@ window.SyncLevel = SyncLevel;
         if (!wantFs) return;
         try { sessionStorage.removeItem(FS_PERSIST_KEY); } catch (_) {}
 
-        var enterFs = function() {
-          if (checkIsPlayerFullscreen()) return true;
-          try {
-            if (typeof player.requestFullscreen === 'function') {
-              var p = player.requestFullscreen();
-              if (p && typeof p.catch === 'function') {
-                p.catch(function() {
-                  if (typeof player.enterFullWindow === 'function') player.enterFullWindow();
-                });
-              }
-              return true;
-            }
-            if (rootEl && rootEl.requestFullscreen) {
-              rootEl.requestFullscreen().catch(function() {
-                if (typeof player.enterFullWindow === 'function') player.enterFullWindow();
-              });
-              return true;
-            }
-          } catch (_) {
-            if (typeof player.enterFullWindow === 'function') {
-              try { player.enterFullWindow(); } catch (_) {}
-            }
+        if (typeof player.enterFullWindow === 'function') {
+          try { player.enterFullWindow(); } catch (_) {}
+        }
+        if (rootEl) {
+          rootEl.classList.add('vjs-fullscreen');
+        }
+        player.trigger('fullscreenchange');
+
+        var upgradeToNativeOnGesture = function(evt) {
+          if (evt && evt.target && evt.target.closest && evt.target.closest('.vjs-fullscreen-control')) {
+            document.removeEventListener('click', upgradeToNativeOnGesture, true);
+            document.removeEventListener('keydown', upgradeToNativeOnGesture, true);
+            return;
           }
-          return false;
+          if (!checkIsPlayerFullscreen()) {
+            document.removeEventListener('click', upgradeToNativeOnGesture, true);
+            document.removeEventListener('keydown', upgradeToNativeOnGesture, true);
+            return;
+          }
+          if (!getNativeFsElement() && rootEl && rootEl.requestFullscreen) {
+            try {
+              var p = rootEl.requestFullscreen();
+              if (p && typeof p.catch === 'function') p.catch(function() {});
+            } catch (_) {}
+          }
+          document.removeEventListener('click', upgradeToNativeOnGesture, true);
+          document.removeEventListener('keydown', upgradeToNativeOnGesture, true);
         };
 
-        setTimeout(enterFs, 60);
-        player.one('play', enterFs);
-        player.one('playing', enterFs);
+        document.addEventListener('click', upgradeToNativeOnGesture, true);
+        document.addEventListener('keydown', upgradeToNativeOnGesture, true);
       };
-
-      tryRestorePersistentFullscreen();
 
       var fsDescToggle = null;
       var fsDescDrawer = null;
@@ -1207,15 +1295,15 @@ window.SyncLevel = SyncLevel;
         recHideBtn.type = 'button';
         recHideBtn.className = 'alabaster-rec-hide-btn';
         recHideBtn.setAttribute('aria-label', 'Hide recommendations');
-        recHideBtn.style.cssText = 'width:40px;height:40px;border-radius:50%;background:rgba(18, 18, 18, 0.82);border:1px solid rgba(255, 255, 255, 0.22);color:#ffffff;padding:0;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:background 0.18s ease, border-color 0.18s ease, transform 0.15s ease;';
+        recHideBtn.style.cssText = 'width:40px;height:40px;border-radius:50%;background:rgba(18, 18, 18, 0.85);border:1px solid rgba(255, 255, 255, 0.24);color:#ffffff;padding:0;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:background 0.18s ease, border-color 0.18s ease, transform 0.15s ease;';
         recHideBtn.addEventListener('mouseenter', function() {
-          recHideBtn.style.background = 'rgba(38, 38, 38, 0.94)';
-          recHideBtn.style.borderColor = 'rgba(255, 255, 255, 0.38)';
+          recHideBtn.style.background = 'rgba(38, 38, 38, 0.96)';
+          recHideBtn.style.borderColor = 'rgba(255, 255, 255, 0.42)';
           recHideBtn.style.transform = 'scale(1.06)';
         });
         recHideBtn.addEventListener('mouseleave', function() {
-          recHideBtn.style.background = 'rgba(18, 18, 18, 0.82)';
-          recHideBtn.style.borderColor = 'rgba(255, 255, 255, 0.22)';
+          recHideBtn.style.background = 'rgba(18, 18, 18, 0.85)';
+          recHideBtn.style.borderColor = 'rgba(255, 255, 255, 0.24)';
           recHideBtn.style.transform = 'scale(1)';
         });
         recHideBtn.innerHTML = [
@@ -1243,87 +1331,95 @@ window.SyncLevel = SyncLevel;
           recGrid.innerHTML = '';
 
           for (var i = 0; i < list.length; i++) {
-            var item = list[i];
-            if (!item || !item.href) continue;
+            (function(item) {
+              if (!item || !item.href) return;
 
-            var card = document.createElement('a');
-            card.className = 'alabaster-rec-card';
-            card.href = item.href;
+              var card = document.createElement('a');
+              card.className = 'alabaster-rec-card';
+              card.href = item.href;
 
-            card.addEventListener('click', function() {
-              if (checkIsPlayerFullscreen()) {
-                try { sessionStorage.setItem(FS_PERSIST_KEY, '1'); } catch (_) {}
+              card.addEventListener('click', function() {
+                if (checkIsPlayerFullscreen()) {
+                  try { sessionStorage.setItem(FS_PERSIST_KEY, '1'); } catch (_) {}
+                }
+              });
+
+              var thumbWrap = document.createElement('div');
+              thumbWrap.className = 'alabaster-rec-thumb-wrap';
+
+              var img = document.createElement('img');
+              img.className = 'alabaster-rec-thumb';
+              img.loading = 'lazy';
+              img.alt = item.title || '';
+
+              var triedFallback = false;
+              var applyFallbackThumb = function() {
+                if (triedFallback) return;
+                triedFallback = true;
+                if (item.fallbackThumbUrl && img.src !== item.fallbackThumbUrl) {
+                  img.src = item.fallbackThumbUrl;
+                }
+              };
+
+              img.addEventListener('error', applyFallbackThumb, false);
+              img.addEventListener('load', function() {
+                if (img.naturalWidth === 120 && img.naturalHeight === 90) {
+                  applyFallbackThumb();
+                }
+              }, false);
+
+              img.src = item.thumbUrl || item.fallbackThumbUrl || '';
+              thumbWrap.appendChild(img);
+
+              if (item.durationText) {
+                var durBadge = document.createElement('span');
+                durBadge.className = 'alabaster-rec-duration';
+                durBadge.textContent = item.durationText;
+                thumbWrap.appendChild(durBadge);
               }
-            });
 
-            var thumbWrap = document.createElement('div');
-            thumbWrap.className = 'alabaster-rec-thumb-wrap';
+              var metaWrap = document.createElement('div');
+              metaWrap.className = 'alabaster-rec-meta';
 
-            var img = document.createElement('img');
-            img.className = 'alabaster-rec-thumb';
-            img.loading = 'lazy';
-            img.alt = item.title || '';
-            img.src = item.thumbUrl || '';
-            thumbWrap.appendChild(img);
+              var titleEl = document.createElement('div');
+              titleEl.className = 'alabaster-rec-title';
+              titleEl.textContent = item.title || '';
+              metaWrap.appendChild(titleEl);
 
-            if (item.durationText) {
-              var durBadge = document.createElement('span');
-              durBadge.className = 'alabaster-rec-duration';
-              durBadge.textContent = item.durationText;
-              thumbWrap.appendChild(durBadge);
-            }
+              if (item.author) {
+                var authorEl = document.createElement('div');
+                authorEl.className = 'alabaster-rec-author';
+                authorEl.textContent = item.author;
+                metaWrap.appendChild(authorEl);
+              }
 
-            var metaWrap = document.createElement('div');
-            metaWrap.className = 'alabaster-rec-meta';
-
-            var titleEl = document.createElement('div');
-            titleEl.className = 'alabaster-rec-title';
-            titleEl.textContent = item.title || '';
-            metaWrap.appendChild(titleEl);
-
-            if (item.author) {
-              var authorEl = document.createElement('div');
-              authorEl.className = 'alabaster-rec-author';
-              authorEl.textContent = item.author;
-              metaWrap.appendChild(authorEl);
-            }
-
-            var viewsEl = document.createElement('div');
-            viewsEl.className = 'video-views';
-            if (item.viewsHtml) {
-              viewsEl.innerHTML = item.viewsHtml;
-            } else {
+              var viewsEl = document.createElement('div');
+              viewsEl.className = 'video-views';
               var vcNode = document.createElement('viewcounttext');
               vcNode.style.cssText = 'margin-right: 6px;margin-left: 1px;';
-              vcNode.innerHTML = '<i class="fa-light fa-play"></i> ' + (item.viewCountText || '');
+              var playSym = document.createElement('span');
+              playSym.className = 'alabaster-rec-play-unicode';
+              playSym.textContent = '\u25B6';
+              vcNode.appendChild(playSym);
+              vcNode.appendChild(document.createTextNode(' ' + (item.viewCountText || '')));
               viewsEl.appendChild(vcNode);
               if (item.publishedText) {
                 viewsEl.appendChild(document.createTextNode(' ' + item.publishedText));
               }
-            }
-            metaWrap.appendChild(viewsEl);
+              metaWrap.appendChild(viewsEl);
 
-            card.appendChild(thumbWrap);
-            card.appendChild(metaWrap);
-            recGrid.appendChild(card);
+              card.appendChild(thumbWrap);
+              card.appendChild(metaWrap);
+              recGrid.appendChild(card);
+            })(list[i]);
           }
 
           return recGrid.children.length > 0;
         };
 
-        var getPeekHeightPx = function() {
-          var firstCard = recGrid.querySelector('.alabaster-rec-card');
-          if (firstCard) {
-            var cHeight = firstCard.getBoundingClientRect().height;
-            if (cHeight > 40) return Math.round(cHeight + 86);
-          }
-          var pH = rootEl.clientHeight || 480;
-          return Math.min(Math.max(Math.round(pH * 0.44), 210), 320);
-        };
-
         var getFullHeightPx = function() {
           var pH = rootEl.clientHeight || 480;
-          return Math.round(pH * 0.8);
+          return Math.round(pH * 0.78);
         };
 
         var applyRecStage = function(stage) {
@@ -1331,11 +1427,10 @@ window.SyncLevel = SyncLevel;
             stage = 0;
           }
           if (stage > 0 && !buildRecCards()) return;
-          recStage = stage;
+          recStage = stage > 0 ? 1 : 0;
           recDrawer.classList.remove('is-dragging');
 
-          if (stage === 0) {
-            recDrawer.classList.remove('is-peek');
+          if (recStage === 0) {
             recDrawer.classList.remove('is-visible');
             recDrawer.style.transform = 'translate3d(0, 100%, 0)';
             recDrawer.style.opacity = '0';
@@ -1349,24 +1444,8 @@ window.SyncLevel = SyncLevel;
                 recScroll.scrollTop = 0;
               }
             }, 280);
-          } else if (stage === 1) {
+          } else {
             recDrawer.style.display = 'flex';
-            recDrawer.classList.add('is-peek');
-            if (recOpenBtn) {
-              recOpenBtn.classList.add('is-open');
-              recOpenBtn.setAttribute('aria-expanded', 'true');
-            }
-            recScroll.scrollTop = 0;
-            var peekH = getPeekHeightPx();
-            recDrawer.style.height = peekH + 'px';
-            compat.raf(function() {
-              recDrawer.classList.add('is-visible');
-              recDrawer.style.transform = 'translate3d(0, 0, 0)';
-              recDrawer.style.opacity = '1';
-            });
-          } else if (stage === 2) {
-            recDrawer.style.display = 'flex';
-            recDrawer.classList.remove('is-peek');
             if (recOpenBtn) {
               recOpenBtn.classList.add('is-open');
               recOpenBtn.setAttribute('aria-expanded', 'true');
@@ -1381,62 +1460,21 @@ window.SyncLevel = SyncLevel;
           }
         };
 
-        ['click', 'mousedown', 'pointerdown', 'touchstart', 'touchend'].forEach(function(evName) {
+        ['click', 'mousedown', 'pointerdown', 'touchstart', 'touchend', 'wheel'].forEach(function(evName) {
           recDrawer.addEventListener(evName, function(evt) {
             evt.stopPropagation();
           }, false);
         });
 
-        recHideBtn.addEventListener('click', function(evt) {
-          evt.preventDefault();
-          evt.stopPropagation();
-          applyRecStage(0);
-        });
-
-        var wheelAccum = 0;
-        var wheelResetTimer = 0;
-
-        recDrawer.addEventListener('wheel', function(evt) {
-          evt.stopPropagation();
-          var dy = evt.deltaY;
-          if (recStage === 1) {
-            evt.preventDefault();
-            wheelAccum += dy;
-            clearTimeout(wheelResetTimer);
-            wheelResetTimer = setTimeout(function() { wheelAccum = 0; }, 220);
-            if (wheelAccum > 35) {
-              wheelAccum = 0;
-              applyRecStage(2);
-            } else if (wheelAccum < -35) {
-              wheelAccum = 0;
-              applyRecStage(0);
-            }
-          } else if (recStage === 2) {
-            if (recScroll.scrollTop <= 0 && dy < 0) {
-              evt.preventDefault();
-              wheelAccum += dy;
-              clearTimeout(wheelResetTimer);
-              wheelResetTimer = setTimeout(function() { wheelAccum = 0; }, 220);
-              if (wheelAccum < -45) {
-                wheelAccum = 0;
-                applyRecStage(0);
-              }
-            } else {
-              wheelAccum = 0;
-            }
-          }
-        }, { passive: false });
-
         var isPointInControlBarCenterGap = function(clientX, clientY, targetEl) {
           if (!checkIsPlayerFullscreen()) return false;
-          var bar = player.controlBar && player.controlBar.el && player.controlBar.el();
-          if (!bar) return false;
-          var barRect = bar.getBoundingClientRect();
-          if (clientY < barRect.top - 12 || clientY > barRect.bottom + 8) return false;
-
           if (targetEl && recOpenBtn && (targetEl === recOpenBtn || recOpenBtn.contains(targetEl))) {
             return true;
           }
+          var bar = player.controlBar && player.controlBar.el && player.controlBar.el();
+          if (!bar) return false;
+          var barRect = bar.getBoundingClientRect();
+          if (clientY < barRect.top + 4 || clientY > barRect.bottom) return false;
 
           if (targetEl && targetEl !== bar) {
             var curr = targetEl;
@@ -1464,20 +1502,20 @@ window.SyncLevel = SyncLevel;
             }
           }
 
-          var leftBoundary = barRect.left + 140;
-          var rightBoundary = barRect.right - 90;
+          var leftBoundary = barRect.left + 150;
+          var rightBoundary = barRect.right - 100;
 
           var timeBtn = bar.querySelector('.vjs-player-time-toggle');
           if (timeBtn) {
             var tRect = timeBtn.getBoundingClientRect();
-            if (tRect.width > 0) leftBoundary = Math.max(leftBoundary, tRect.right + 8);
+            if (tRect.width > 0) leftBoundary = Math.max(leftBoundary, tRect.right + 16);
           }
 
           var rightButtons = bar.querySelectorAll('.vjs-picture-in-picture-control, .vjs-fullscreen-control, .vjs-subs-caps-button, .vjs-playback-rate, .vjs-quality-selector');
           for (var i = 0; i < rightButtons.length; i++) {
             var rbRect = rightButtons[i].getBoundingClientRect();
             if (rbRect.width > 0 && rbRect.left > barRect.left + barRect.width * 0.45) {
-              rightBoundary = Math.min(rightBoundary, rbRect.left - 8);
+              rightBoundary = Math.min(rightBoundary, rbRect.left - 16);
             }
           }
 
@@ -1490,8 +1528,7 @@ window.SyncLevel = SyncLevel;
           source: '',
           startX: 0,
           startY: 0,
-          startHeight: 0,
-          baseStage: 0
+          startHeight: 0
         };
 
         var onDragStart = function(clientX, clientY, targetEl, sourceType) {
@@ -1499,13 +1536,10 @@ window.SyncLevel = SyncLevel;
           if (sourceType === 'bar') {
             if (recStage !== 0) return false;
             if (!isPointInControlBarCenterGap(clientX, clientY, targetEl)) return false;
-          } else if (sourceType === 'drawer') {
+          } else if (sourceType === 'topbar') {
             if (recStage === 0) return false;
-            if (targetEl && recHideBtn && (targetEl === recHideBtn || recHideBtn.contains(targetEl))) return false;
-            if (targetEl && targetEl.closest && targetEl.closest('a.alabaster-rec-card')) {
-              if (recStage === 2 && recScroll.scrollTop > 0) return false;
-            }
-            if (recStage === 2 && recScroll.scrollTop > 2) return false;
+          } else {
+            return false;
           }
 
           dragState.active = true;
@@ -1513,8 +1547,7 @@ window.SyncLevel = SyncLevel;
           dragState.source = sourceType;
           dragState.startX = clientX;
           dragState.startY = clientY;
-          dragState.baseStage = recStage;
-          dragState.startHeight = recStage === 0 ? 0 : (recDrawer.getBoundingClientRect().height || getPeekHeightPx());
+          dragState.startHeight = recStage === 0 ? 0 : (recDrawer.getBoundingClientRect().height || getFullHeightPx());
           return true;
         };
 
@@ -1524,12 +1557,16 @@ window.SyncLevel = SyncLevel;
           var dx = clientX - dragState.startX;
 
           if (!dragState.engaged) {
-            if (Math.abs(dy) < 10) return;
-            if (Math.abs(dx) > Math.abs(dy) * 1.1) {
+            if (Math.abs(dy) < 24) return;
+            if (Math.abs(dx) > Math.abs(dy) * 0.65) {
               dragState.active = false;
               return;
             }
-            if (dragState.source === 'bar' && dy < 10) {
+            if (dragState.source === 'bar' && dy < 24) {
+              dragState.active = false;
+              return;
+            }
+            if (dragState.source === 'topbar' && dy > -20) {
               dragState.active = false;
               return;
             }
@@ -1540,28 +1577,23 @@ window.SyncLevel = SyncLevel;
             dragState.engaged = true;
             recDrawer.style.display = 'flex';
             recDrawer.classList.add('is-dragging');
-            if (dragState.baseStage === 0) {
-              recDrawer.classList.add('is-peek');
-            }
           }
 
           if (evt && evt.cancelable) evt.preventDefault();
 
-          var peekH = getPeekHeightPx();
           var fullH = getFullHeightPx();
 
-          if (dragState.baseStage === 0) {
-            var pullUp = Math.max(0, dy);
-            var h = Math.min(fullH, pullUp);
-            recDrawer.style.height = Math.max(peekH, h) + 'px';
-            var offset = Math.max(0, peekH - pullUp);
+          if (dragState.source === 'bar') {
+            var pullUp = Math.max(0, Math.min(fullH, dy));
+            recDrawer.style.height = fullH + 'px';
+            var offset = Math.max(0, fullH - pullUp);
             recDrawer.style.transform = 'translate3d(0, ' + offset + 'px, 0)';
-            recDrawer.style.opacity = String(Math.min(1, pullUp / (peekH * 0.55)));
-          } else {
-            var nextH = Math.max(40, Math.min(fullH + 30, dragState.startHeight + dy));
-            recDrawer.style.height = nextH + 'px';
-            recDrawer.style.transform = 'translate3d(0, 0, 0)';
-            recDrawer.style.opacity = String(Math.min(1, Math.max(0.2, nextH / peekH)));
+            recDrawer.style.opacity = String(Math.min(1, pullUp / (fullH * 0.45)));
+          } else if (dragState.source === 'topbar') {
+            var pullDown = Math.max(0, -dy);
+            recDrawer.style.height = fullH + 'px';
+            recDrawer.style.transform = 'translate3d(0, ' + pullDown + 'px, 0)';
+            recDrawer.style.opacity = String(Math.max(0, 1 - pullDown / (fullH * 0.6)));
           }
         };
 
@@ -1569,24 +1601,18 @@ window.SyncLevel = SyncLevel;
           if (!dragState.active) return;
           var wasEngaged = dragState.engaged;
           var dy = dragState.startY - clientY;
-          var base = dragState.baseStage;
+          var src = dragState.source;
           dragState.active = false;
           dragState.engaged = false;
 
           if (!wasEngaged) return;
 
-          if (base === 0) {
-            if (dy > 190) applyRecStage(2);
-            else if (dy > 38) applyRecStage(1);
+          if (src === 'bar') {
+            if (dy > 65) applyRecStage(1);
             else applyRecStage(0);
-          } else if (base === 1) {
-            if (dy > 45) applyRecStage(2);
-            else if (dy < -40) applyRecStage(0);
+          } else if (src === 'topbar') {
+            if (dy < -65) applyRecStage(0);
             else applyRecStage(1);
-          } else if (base === 2) {
-            if (dy < -140) applyRecStage(0);
-            else if (dy < -45) applyRecStage(1);
-            else applyRecStage(2);
           }
         };
 
@@ -1597,9 +1623,9 @@ window.SyncLevel = SyncLevel;
           }
         }, false);
 
-        recDrawer.addEventListener('mousedown', function(evt) {
+        recTopBar.addEventListener('mousedown', function(evt) {
           if (evt.button !== 0) return;
-          onDragStart(evt.clientX, evt.clientY, evt.target, 'drawer');
+          onDragStart(evt.clientX, evt.clientY, evt.target, 'topbar');
         }, false);
 
         window.addEventListener('mousemove', function(evt) {
@@ -1618,10 +1644,10 @@ window.SyncLevel = SyncLevel;
           onDragStart(t.clientX, t.clientY, evt.target, 'bar');
         }, { passive: true });
 
-        recDrawer.addEventListener('touchstart', function(evt) {
+        recTopBar.addEventListener('touchstart', function(evt) {
           if (!evt.touches || evt.touches.length !== 1) return;
           var t = evt.touches[0];
-          onDragStart(t.clientX, t.clientY, evt.target, 'drawer');
+          onDragStart(t.clientX, t.clientY, evt.target, 'topbar');
         }, { passive: true });
 
         window.addEventListener('touchmove', function(evt) {
@@ -1636,21 +1662,12 @@ window.SyncLevel = SyncLevel;
           onDragEnd(t.clientY);
         }, false);
 
-        var barWheelAccum = 0;
-        var barWheelTimer = 0;
-        rootEl.addEventListener('wheel', function(evt) {
-          if (recStage !== 0 || !checkIsPlayerFullscreen()) return;
-          if (!isPointInControlBarCenterGap(evt.clientX, evt.clientY, evt.target)) return;
+        recHideBtn.addEventListener('click', function(evt) {
           evt.preventDefault();
           evt.stopPropagation();
-          barWheelAccum += evt.deltaY;
-          clearTimeout(barWheelTimer);
-          barWheelTimer = setTimeout(function() { barWheelAccum = 0; }, 220);
-          if (barWheelAccum > 30 || barWheelAccum < -35) {
-            barWheelAccum = 0;
-            applyRecStage(2);
-          }
-        }, { passive: false });
+          if (dragState.engaged) return;
+          applyRecStage(0);
+        });
 
         rootEl.addEventListener('mousedown', function(evt) {
           if (recStage !== 0 && recDrawer && !recDrawer.contains(evt.target) && (!recOpenBtn || !recOpenBtn.contains(evt.target))) {
@@ -1719,7 +1736,7 @@ window.SyncLevel = SyncLevel;
             evt.preventDefault();
             evt.stopPropagation();
             if (dragState.engaged) return;
-            applyRecStage(recStage === 0 ? 2 : 0);
+            applyRecStage(recStage === 0 ? 1 : 0);
           });
 
           cBar.appendChild(recOpenBtn);
@@ -1878,12 +1895,12 @@ window.SyncLevel = SyncLevel;
             recOpenBtn.setAttribute('aria-expanded', 'false');
             recStage = 0;
             recDrawer.classList.remove('is-visible');
-            recDrawer.classList.remove('is-peek');
             recDrawer.style.display = 'none';
           }
         }
       };
 
+      tryRestorePersistentFullscreen();
       syncFullscreenTitleBarVisibility();
       player.on('fullscreenchange', syncFullscreenTitleBarVisibility);
       document.addEventListener('fullscreenchange', syncFullscreenTitleBarVisibility, false);
