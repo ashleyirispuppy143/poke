@@ -764,7 +764,8 @@ app.get("/api/tenor", async function (req, res) {
   });
 
   app.get("/settings", function (req, res) {
-    renderTemplate(res, req, "content-settings.ejs");
+   res.redirect(301, "/player-settings");
+
   });
 
 
