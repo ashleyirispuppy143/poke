@@ -1,4 +1,5 @@
 const {  getRandomArbitrary } = require("../ptutils/libpt-coreutils.js");
+const { translate } = require("../translate-backend.js");
 const path = require("path");
 const fs = require("node:fs");
 const CleanCSS = require("clean-css");
@@ -555,136 +556,36 @@ app.get("/notepad", function (req, res) {
   });
 
 app.get("/translate", async function (req, res) {
-  const text = req.query.input;
-  const from = req.query.from_language || "auto";
-  const to = req.query.to_language || "en";
+  let result = {
+    translatedText: "",
+    pronunciation: "",
+    definitions: {},
+    translations: {},
+    sourceLanguage: ""
+  };
 
-  let translatedText = "";
-  let pronunciation = "";
-  let definitions = {};
-  let translations = {};
-  let detectedSourceLanguage = from;
-
-  if (text) {
+  if (req.query.input) {
     try {
-      const { fetch } = await import("undici");
-
-      const endpoint = "https://translate.google.com/_/TranslateWebserverUi/data/batchexecute?rpcids=MkEWBc&rt=c";
-      const reqJSON = [[text, from, to, true], [null]];
-      const reqPayload = [[["MkEWBc", JSON.stringify(reqJSON), null, "generic"]]];
-      const body = "f.req=" + encodeURIComponent(JSON.stringify(reqPayload));
-
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded;charset=utf-8"
-        },
-        body
-      });
-
-      const responseText = await response.text();
-      const match = responseText.match(/\n\d+\n(.*)\n\d+\n/);
-
-      if (match?.[1]) {
-        const raw = JSON.parse(match[1]);
-        const data = raw?.[0]?.[2];
-
-        if (data) {
-          const json_ = JSON.parse(data);
-
-          const variant = json_?.[1]?.[0]?.[0];
-          if (Array.isArray(variant)) {
-            if (Array.isArray(variant[5])) {
-              for (const segment of variant[5]) {
-                if (segment?.[2] === true && translatedText !== "") {
-                  translatedText += " ";
-                }
-                if (segment?.[0]) {
-                  translatedText += segment[0];
-                }
-              }
-            } else if (variant[0] != null) {
-              translatedText = variant[0];
-            }
-          }
-
-          if (json_?.[0]?.[2] != null) detectedSourceLanguage = json_[0][2];
-          if (json_?.[1]?.[0]?.[0]?.[1] != null) pronunciation = json_[1][0][0][1];
-
-          const defGroups = json_?.[3]?.[1]?.[0];
-          if (Array.isArray(defGroups)) {
-            for (const group of defGroups) {
-              if (Array.isArray(group) && group.length > 0) {
-                const defType = group[0] ?? "unknown";
-                definitions[defType] = [];
-
-                if (Array.isArray(group[1])) {
-                  for (const defBox of group[1]) {
-                    const entry = {};
-                    if (defBox?.[4]?.[0]?.[0] != null) entry.dictionary = defBox[4][0][0];
-                    if (defBox?.[0] != null) entry.definition = defBox[0];
-                    if (defBox?.[1] != null) entry.use_in_sentence = defBox[1];
-
-                    if (Array.isArray(defBox?.[5])) {
-                      const synonymsMap = {};
-                      for (const synBox of defBox[5]) {
-                        const synType = synBox?.[1]?.[0]?.[0] ?? "";
-                        if (Array.isArray(synBox?.[0])) {
-                          synonymsMap[synType] = synBox[0].map(w => w?.[0]).filter(Boolean);
-                        }
-                      }
-                      entry.synonyms = synonymsMap;
-                    }
-                    definitions[defType].push(entry);
-                  }
-                }
-              }
-            }
-          }
-
-          const transBox = json_?.[3]?.[5]?.[0];
-          if (Array.isArray(transBox)) {
-            for (const box of transBox) {
-              if (Array.isArray(box) && box.length > 0) {
-                const transType = box[0] ?? "unknown";
-                translations[transType] = {};
-
-                if (Array.isArray(box[1])) {
-                  for (const item of box[1]) {
-                    const name = item?.[0];
-                    if (name != null) {
-                      translations[transType][name] = {};
-                      if (item?.[3] != null) {
-                        let freq = String(Math.trunc(Number(item[3])));
-                        if (freq === "3") freq = "1";
-                        else if (freq === "1") freq = "3";
-
-                        translations[transType][name].frequency = `${freq}/3`;
-                        translations[transType][name].words = Array.isArray(item[2]) ? item[2] : [];
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
+      result = await translate(
+        req.query.input,
+        req.query.from_language,
+        req.query.to_language
+      );
     } catch (err) {
       console.error("Translation error:", err);
     }
   }
 
   renderTemplate(res, req, "translate.ejs", {
-    translation: translatedText,
+    translation: result.translatedText,
     text: req.query.input || "enter text here",
     from_language: req.query.from_language,
     to_language: req.query.to_language,
     isMobile: req.useragent?.isMobile,
-    pronunciation,
-    definitions,
-    translations,
-    detected_language: detectedSourceLanguage === "auto" ? "" : detectedSourceLanguage
+    pronunciation: result.pronunciation,
+    definitions: result.definitions,
+    translations: result.translations,
+    detected_language: result.sourceLanguage
   });
 });
   
