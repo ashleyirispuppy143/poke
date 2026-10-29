@@ -75,6 +75,7 @@ Poke uses Free Software codecs! No non-free components included :3
    - git.lgbt: `$ git clone https://git.lgbt/mirror/poke.git` [sync every 10mins]
    - Mopgit :`$ git clone https://git.mopigames.dev/mopi/poke` [sync every ?]
    - mschae23  `$ git clone https://code.mschae23.de/mirror/poke` [sync every ?]
+   - g: `$ git clone http://g.ggt.bz/m/p` [sync every 15mins]
 
     not reccomended, unstable
     - none!!! yippee
