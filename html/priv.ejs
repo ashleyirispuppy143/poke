@@ -240,7 +240,7 @@
       </p>
       <div class="meta-row" aria-label="Document metadata">
         <span class="badge">Instance: <span class="mono">poketube.fun</span></span>
-        <span class="badge">Version date: <time datetime="2026-05-15">May 15, 2026 version 2</time></span>
+        <span class="badge">Version date: <time datetime="2026-10-29">October 29, 2026</time></span>
       </div>
     </div>
   </section>
@@ -254,6 +254,7 @@
           <li><a href="#overview">Overview</a></li>
           <li><a href="#summary">TL;DR</a></li>
           <li><a href="#ownership">Ownership</a></li>
+          <li><a href="#hosting">Infrastructure &amp; Hosting</a></li>
           <li><a href="#initiative-privacy">Initiative Site Privacy</a></li>
           <li><a href="#what-we-collect">What We Do/Don't Collect</a></li>
           <li><a href="#stats">How we improve Poke</a></li>
@@ -283,15 +284,13 @@
       <section id="whats-new" class="update-box" aria-labelledby="whats-new-heading" role="region">
         <h3 id="whats-new-heading">
           What's New - Policy Update
-          <span class="when">May 15, 2026 version 2</span>
+          <span class="when">October 29, 2026</span>
         </h3>
         <p style="margin-top:6px; color: #eaeaea;">Highlights:</p>
         <ul>
-          <li><strong>New section: Health &amp; Traffic Pages.</strong> We added clear privacy notes for <code>/health</code>, <code>/traffic</code>, and <code>/_pokeresource/stats</code>.</li>
-          <li><strong>New traffic transparency wording.</strong> The <code>/traffic</code> page shows anonymous route popularity and total request counts. It stores route totals, not people.</li>
-          <li><strong>Updated anti-DDoS wording.</strong> The old PokeStopSkids wording has been replaced with the newer <strong>PokeResourceGuard</strong> behavior, including event loop, CPU, memory, route pressure, and temporary client cooldowns.</li>
-          <li><strong>Clarified persistent data.</strong> PokeResourceGuard can save <code>popularpaths.json</code>, which contains anonymous route counts, tracking start time, and total request count only.</li>
-        </ul>
+          <li><strong>New Translate backend!!</strong> Poke now uses its own built-in privacy translation backend (<a href="https://codeberg.org/ashleyirispuppy/poke/src/branch/main/src/libpoketube/translate-backend.js" target="_blank" rel="noopener"><code>translate-backend.js</code></a>) instead of relying on SimplyTranslate.org. It uses Google as the engine and is completely proxied through our backend.</li>
+          <li><strong>Clarified Weather Geocoding behavior!</strong> Place lookup / geocoding on the weather page is proxied when JavaScript is disabled, but connects directly from the front-end when JavaScript is enabled.</li>
+         </ul>
         <div class="update-actions" aria-label="Update actions">
           <button type="button" id="dismissUpdate" aria-label="Dismiss this update notice">Dismiss</button>
         </div>
@@ -317,12 +316,13 @@
             <li><strong>Anonymous server health and traffic stats exist.</strong> <code>/health</code> and <code>/traffic</code> show aggregate server and route totals.</li>
             <li><strong>The <code>/traffic</code> page stores route counts, not people.</strong> The persistent traffic file contains total request count, tracking start time, and normalized route totals.</li>
             <li><strong>No third-party trackers.</strong> Yippe!!</li>
-            <li><strong>YouTube can't see what you watch here.</strong> It's all done on the backend.</li>
+            <li><strong>YouTube can't see what you watch here....or even our server's IP.</strong> Requests are handled on the backend and proxied through Mullvad VPN using Gluetun.</li>
             <li><strong>Anti-DDoS protection does not store raw IP addresses in persistent stats.</strong> It uses temporary in-memory client counters and anonymous salted logging when needed.</li>
           </ul>
           <br>
           <ul>
             <li><strong>Poke Account:</strong> no email required, no personal info needed.</li>
+            <li><strong>Hosting:</strong> Front-end is hosted in Germany via Skrime (<a href="https://skrime.eu/imprint" target="_blank" rel="noopener">imprint</a>); backend is hosted in the Netherlands via RoyaleHosting.</li>
             <li><strong>Poke Maps:</strong> uses OpenStreetMap data; map tiles and attribution may have separate privacy rules depending on the tile server you use.</li>
             <li><strong>No required analytics cookies.</strong> Preferences and the anonymous video stats ID live in local storage on your device.</li>
           </ul>
@@ -335,6 +335,24 @@
           The Poke service and this default instance (<span class="mono">poketube.fun</span>) are owned and operated by the <strong>Poke Project</strong>.
           Learn more at <a href="https://initiative.poketube.fun/" rel="noopener">initiative.poketube.fun</a>.
         </p>
+      </section>
+
+      <section id="hosting" aria-labelledby="hosting-heading">
+        <h2 id="hosting-heading" class="section">Infrastructure &amp; Hosting</h2>
+        <p>
+          To keep Poke fast, resilient, and private, our infrastructure is split between specialized European providers and wrapped in additional network privacy layers:
+        </p>
+        <ul>
+          <li>
+            <strong>Front-end Hosting (Germany):</strong> Our front-end is hosted on <a href="https://skrime.eu/" target="_blank" rel="noopener">skrime.eu</a>. German law applies to the front-end infrastructure, and you can check the provider's legal details on their <a href="https://skrime.eu/imprint" target="_blank" rel="noopener">imprint page</a>.
+          </li>
+          <li>
+            <strong>Backend Hosting (Netherlands):</strong> Our backend servers are hosted in the Netherlands with <a href="https://royalehosting.net/" target="_blank" rel="noopener">royalehosting.net</a>.
+          </li>
+          <li>
+            <strong>Mullvad VPN &amp; Gluetun Proxy:</strong> Our backend is proxied through <a href="https://mullvad.net/" target="_blank" rel="noopener">Mullvad VPN</a> using <strong>Gluetun</strong>. Because all upstream traffic goes through this encrypted tunnel, YouTube cannot even see our backend server making requests, let alone you.
+          </li>
+        </ul>
       </section>
 
       <section id="initiative-privacy" aria-labelledby="initiative-privacy-heading">
@@ -802,12 +820,13 @@
         <details class="block">
           <summary>Geocoding / Place Lookup</summary>
           <p>
-            Uses <a href="https://nominatim.openstreetmap.org/" rel="noopener" target="_blank">nominatim.openstreetmap.org</a> OpenStreetMap Nominatim.
+            Uses <a href="https://nominatim.openstreetmap.org/" rel="noopener" target="_blank">nominatim.openstreetmap.org</a> (OpenStreetMap Nominatim).
             Privacy: <a href="https://osmfoundation.org/wiki/Privacy_Policy" rel="noopener" target="_blank">OSMF Privacy Policy</a>.
           </p>
           <p><strong>How it works:</strong></p>
           <ul>
-            <li>The request is proxied through Poke's backend, never directly from your browser.</li>
+            <li><strong>When JavaScript is disabled:</strong> The request is proxied through Poke's backend, never directly from your browser.</li>
+            <li><strong>When JavaScript is enabled:</strong> Geocoding / Place Lookup is <strong>not proxied</strong> on the front-end, meaning your browser connects directly to Nominatim to look up locations.</li>
           </ul>
         </details>
         <details class="block">
@@ -825,17 +844,23 @@
       </section>
 
       <section id="translate" aria-labelledby="translate-heading">
-        <h2 id="translate-heading" class="section">Translate Page SimplyTranslate</h2>
+        <h2 id="translate-heading" class="section">Translate Page</h2>
         <p>
-          Our translate page does <strong>not</strong> send your data directly to Google or SimplyTranslate.org from your browser.
-          Instead, all requests are proxied through our own backend servers. When you use the page, only the necessary parameters are passed securely on the server side:
+          Poke uses its own built-in privacy translation backend!
+          This service uses Google as the translation engine, and all requests are completely proxied through our own backend servers. Your browser never connects to Google directly.
+        </p>
+        <p>
+          When you use the page, only the necessary parameters are passed securely on the server side:
           <code>from</code> source language, <code>to</code> target language, and <code>text</code> the content you entered.
         </p>
         <p>
-          We rely on the community-run <a href="https://simplytranslate.org/" rel="noopener" target="_blank">SimplyTranslate</a> service, a privacy-friendly translation front-end.
-          SimplyTranslate is a <strong>free software</strong> project: you can see the
-          <a href="https://codeberg.org/ManeraKai/simplytranslate" rel="noopener" target="_blank">source code</a> and its
-          <a href="https://codeberg.org/ManeraKai/simplytranslate/raw/branch/main/legal_notice.txt" rel="noopener" target="_blank">legal notice</a>.
+          Because Poke is <strong>free software</strong>, you can inspect the full translation backend implementation right in our source repository:
+          <br>
+          <code>
+            <a href="https://codeberg.org/ashleyirispuppy/poke/src/branch/main/src/libpoketube/translate-backend.js" rel="noopener" target="_blank">
+              src/libpoketube/translate-backend.js
+            </a>
+          </code>
         </p>
       </section>
 
@@ -879,7 +904,7 @@
         <h2 id="gdpr-heading" class="section">Legal Bases for Processing GDPR / EU Law</h2>
         <p>
           The Poke Project and its primary instance <span class="mono">poketube.fun</span> operate under the jurisdiction of the
-          <strong>European Union</strong> and comply with the principles of the
+          <strong>European Union</strong> (with front-end infrastructure hosted in <strong>Germany</strong> via <a href="https://skrime.eu/" target="_blank" rel="noopener">Skrime</a> see <a href="https://skrime.eu/imprint" target="_blank" rel="noopener">imprint</a> and backend servers in the <strong>Netherlands</strong> via <a href="https://royalehosting.net/" target="_blank" rel="noopener">RoyaleHosting</a>) and comply with German law and the principles of the
           <strong>General Data Protection Regulation GDPR</strong> Regulation EU 2016/679.
         </p>
         <ul>
@@ -1062,7 +1087,7 @@
     !function(){
       const updateBox = document.getElementById('whats-new');
       const dismissBtn = document.getElementById('dismissUpdate');
-      const KEY = 'poke_privacy_update_2026_05_15_dismissed';
+      const KEY = 'poke_privacy_update_2026_10_29_dismissed';
       try{
         if(localStorage.getItem(KEY)==='1'){ updateBox && (updateBox.hidden = true); }
       }catch{}
