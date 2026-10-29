@@ -21,7 +21,7 @@
  * ///////////////////////////////////////////////////////////////////////////
  * "It takes a lot of hard work to make something simple." ~ Steve Jobs 
  */
- const SyncLevel = {
+const SyncLevel = {
   driftSeconds: 0,
   driftMs: 0,
   synced: true,
@@ -162,7 +162,7 @@ window.SyncLevel = SyncLevel;
       try {
         var parsed = new URL(trimmed, window.location.href);
         var host = (parsed.hostname || '').toLowerCase();
-        if (host.indexOf('ggpht.com') !== -1 || host.indexOf('googleusercontent.com') !== -1 || host.indexOf('img.') !== -1 || host.indexOf('image') !== -1) {
+        if (host.indexOf('ytimg.com') !== -1 || host.indexOf('ytimage') !== -1 || host.indexOf('ggpht.com') !== -1 || host.indexOf('googleusercontent.com') !== -1 || host.indexOf('img.') !== -1 || host.indexOf('image') !== -1) {
           return proxyBase + encodeURIComponent(parsed.href);
         }
         return parsed.href;
@@ -340,8 +340,8 @@ window.SyncLevel = SyncLevel;
           hqRes = rawThumbUrl;
         }
       } else if (vid) {
-        maxRes = compat.proxyThumbnailUrl('https://invid-api.poketube.fun/vi/' + vid + '/maxresdefault.jpg');
-        hqRes = compat.proxyThumbnailUrl('https://invid-api.poketube.fun/vi/' + vid + '/hqdefault.jpg');
+        maxRes = compat.proxyThumbnailUrl('https://i.ytimg.com/vi/' + vid + '/maxresdefault.jpg');
+        hqRes = compat.proxyThumbnailUrl('https://i.ytimg.com/vi/' + vid + '/hqdefault.jpg');
       }
 
       return {
@@ -1744,6 +1744,12 @@ window.SyncLevel = SyncLevel;
             return;
           }
 
+          var cBarEl = player.controlBar && player.controlBar.el && player.controlBar.el();
+          var isInsideControlBar = Boolean(
+            (cBarEl && cBarEl.contains(target)) ||
+            (target && target.closest && target.closest('.vjs-control-bar, .vjs-progress-control, .vjs-slider'))
+          );
+
           var clickedOutsideRec = Boolean(
             recStage !== 0 &&
             recDrawer &&
@@ -1753,6 +1759,7 @@ window.SyncLevel = SyncLevel;
 
           var clickedOutsideDesc = Boolean(
             isFsDescOpen &&
+            !isInsideControlBar &&
             fsDescDrawer &&
             !fsDescDrawer.contains(target) &&
             (!fsDescToggle || !fsDescToggle.contains(target)) &&
@@ -1760,9 +1767,6 @@ window.SyncLevel = SyncLevel;
           );
 
           if (!clickedOutsideRec && !clickedOutsideDesc) return;
-
-          var cBarEl = player.controlBar && player.controlBar.el && player.controlBar.el();
-          var isInsideControlBar = Boolean(cBarEl && cBarEl.contains(target));
 
           if (clickedOutsideRec && typeof applyRecStage === 'function') {
             applyRecStage(0);
