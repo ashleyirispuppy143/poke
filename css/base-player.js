@@ -728,12 +728,16 @@ window.SyncLevel = SyncLevel;
       '.alabaster-fs-comments-body {',
       '  padding: 10px 14px 20px 14px;',
       '}',
-      '.alabaster-fs-comments-body .comment-list {',
+      '.alabaster-fs-comments-drawer .comment-list,',
+      '.alabaster-fs-comments-drawer .comment-list.left-padding,',
+      '.alabaster-fs-comments-drawer .comment-list.left-padding:hover {',
       '  background: rgba(255, 255, 255, 0.06) !important;',
       '  border: 1px solid rgba(255, 255, 255, 0.08) !important;',
       '  border-radius: 18px !important;',
       '  padding: 12px 14px !important;',
       '  margin-bottom: 4px !important;',
+      '  filter: none !important;',
+      '  -webkit-filter: none !important;',
       '}',
       '.alabaster-fs-comments-body .thumb .avatar img {',
       '  width: 36px !important;',
@@ -773,28 +777,21 @@ window.SyncLevel = SyncLevel;
       '  color: #f1f1f1 !important;',
       '}',
       '.video-js .vjs-alabaster-comments-btn, .vjs-alabaster-comments-btn {',
-      '  width: 42px !important;',
-      '  height: 42px !important;',
-      '  min-width: 42px !important;',
-      '  display: none;',
-      '  align-items: center !important;',
-      '  justify-content: center !important;',
-      '  cursor: pointer !important;',
-      '  color: #ffffff !important;',
-      '  background: transparent !important;',
-      '  border: none !important;',
-      '  padding: 0 !important;',
-      '  border-radius: 8px !important;',
-      '  flex: 0 0 42px !important;',
-      '  align-self: center !important;',
-      '  transition: background 0.18s ease, transform 0.15s ease !important;',
-      '}',
-      '.video-js .vjs-alabaster-comments-btn:hover, .vjs-alabaster-comments-btn:hover,',
-      '.video-js .vjs-alabaster-comments-btn.is-active, .vjs-alabaster-comments-btn.is-active {',
-      '  background: rgba(255, 255, 255, 0.12) !important;',
-      '}',
-      '.video-js .vjs-alabaster-comments-btn:active, .vjs-alabaster-comments-btn:active {',
-      '  transform: scale(0.94) !important;',
+      '  width:var(--poke-custom-player-button-size)!important;',
+      '  height:var(--poke-custom-player-button-size)!important;',
+      '  min-width:var(--poke-custom-player-button-size)!important;',
+      '  cursor:pointer!important;',
+      '  border-radius:50%!important;',
+      '  background:var(--poke-custom-player-button-bg)!important;',
+      '  background-color:var(--poke-custom-player-button-bg)!important;',
+      '  background-image:none!important;',
+      '  border:1px solid var(--poke-custom-player-button-border)!important;',
+      '  box-shadow:var(--poke-custom-player-button-shadow)!important;',
+      '  display:none;',
+      '  align-items:center!important;',
+      '  justify-content:center!important;',
+      '  color:#ffffff!important;',
+      '  padding:0!important;',
       '}',
       '.alabaster-rec-open-btn {',
       '  position: absolute;',
@@ -1425,6 +1422,28 @@ window.SyncLevel = SyncLevel;
         player.on('pause', syncDescToggleWithUserActivity);
       }
 
+      var positionCommentsBtn = function() {
+        var barElNode = player.controlBar && player.controlBar.el && player.controlBar.el();
+        if (!barElNode || !fsCommentsBtn) return;
+        var pipEl = barElNode.querySelector('.vjs-picture-in-picture-control');
+        var fsEl = barElNode.querySelector('.vjs-fullscreen-control');
+        if (pipEl && pipEl.parentNode) {
+          if (fsCommentsBtn.nextSibling !== pipEl) {
+            pipEl.parentNode.insertBefore(fsCommentsBtn, pipEl);
+          }
+          var pipOrder = window.getComputedStyle ? window.getComputedStyle(pipEl).order : '';
+          if (pipOrder && pipOrder !== '0' && pipOrder !== 'auto') {
+            fsCommentsBtn.style.order = pipOrder;
+          }
+        } else if (fsEl && fsEl.parentNode) {
+          if (fsCommentsBtn.nextSibling !== fsEl) {
+            fsEl.parentNode.insertBefore(fsCommentsBtn, fsEl);
+          }
+        } else if (fsCommentsBtn.parentNode !== barElNode) {
+          barElNode.appendChild(fsCommentsBtn);
+        }
+      };
+
       if (rootEl && !rootEl.querySelector('.alabaster-fs-comments-drawer')) {
         fsCommentsDrawer = document.createElement('aside');
         fsCommentsDrawer.className = 'alabaster-fs-comments-drawer';
@@ -1592,7 +1611,7 @@ window.SyncLevel = SyncLevel;
         if (cBarForComments && !cBarForComments.querySelector('.vjs-alabaster-comments-btn')) {
           fsCommentsBtn = document.createElement('button');
           fsCommentsBtn.type = 'button';
-          fsCommentsBtn.className = 'vjs-control vjs-button vjs-alabaster-comments-btn';
+          fsCommentsBtn.className = 'vjs-alabaster-comments-btn vjs-control vjs-button';
           fsCommentsBtn.setAttribute('aria-label', 'Comments');
           fsCommentsBtn.setAttribute('title', 'Comments');
           fsCommentsBtn.setAttribute('aria-expanded', 'false');
@@ -1617,15 +1636,7 @@ window.SyncLevel = SyncLevel;
             setCommentsDrawerState(!isFsCommentsOpen);
           });
 
-          var pipBtn = cBarForComments.querySelector('.vjs-picture-in-picture-control');
-          var fsBtn = cBarForComments.querySelector('.vjs-fullscreen-control');
-          if (pipBtn && pipBtn.parentNode === cBarForComments) {
-            cBarForComments.insertBefore(fsCommentsBtn, pipBtn);
-          } else if (fsBtn && fsBtn.parentNode === cBarForComments) {
-            cBarForComments.insertBefore(fsCommentsBtn, fsBtn);
-          } else {
-            cBarForComments.appendChild(fsCommentsBtn);
-          }
+          positionCommentsBtn();
         }
       }
 
@@ -2279,6 +2290,7 @@ window.SyncLevel = SyncLevel;
         }
 
         bindTitleClickHandlers();
+        positionCommentsBtn();
 
         var useLegacyDescButton = isStorageFlagEnabled(LEGACY_DESC_BTN_KEY);
         var hasDescriptionNode = Boolean(document.querySelector('.descriptionHtml'));
@@ -2358,6 +2370,50 @@ window.SyncLevel = SyncLevel;
         }
       };
 
+      var bar = player.controlBar;
+      if (bar) {
+        var barEl = bar.el && bar.el();
+        if (barEl && !barEl.querySelector('.vjs-player-time-toggle')) {
+          var timeBtn = document.createElement('button');
+          timeBtn.type = 'button';
+          timeBtn.className = 'vjs-button vjs-control vjs-player-time-toggle';
+          var textSpan = document.createElement('span');
+          textSpan.className = 'vjs-control-text';
+          textSpan.textContent = '-0:00 / 0:00';
+          timeBtn.appendChild(textSpan);
+
+          var showCurrentMode = false;
+          var cachedValidDur = 0;
+          var refreshTimeLabel = function() {
+            var rawDur = player.duration();
+            if (typeof rawDur === 'number' && !isNaN(rawDur) && isFinite(rawDur) && rawDur > 0) {
+              cachedValidDur = rawDur;
+            }
+            var dur = cachedValidDur || 0;
+            var cur = player.currentTime() || 0;
+            if (dur > 0 && cur > dur) cur = dur;
+            var rem = Math.max(0, dur - cur);
+            if (showCurrentMode) {
+              textSpan.textContent = compat.formatClock(cur) + ' / ' + compat.formatClock(dur);
+            } else {
+              textSpan.textContent = '-' + compat.formatClock(rem) + ' / ' + compat.formatClock(dur);
+            }
+          };
+
+          timeBtn.addEventListener('click', function() {
+            showCurrentMode = !showCurrentMode;
+            refreshTimeLabel();
+          });
+
+          player.on('timeupdate', refreshTimeLabel);
+          player.on('loadedmetadata', refreshTimeLabel);
+          player.on('durationchange', refreshTimeLabel);
+          player.on('ended', refreshTimeLabel);
+          barEl.appendChild(timeBtn);
+        }
+      }
+
+      positionCommentsBtn();
       syncFullscreenTitleBarVisibility();
       player.on('fullscreenchange', syncFullscreenTitleBarVisibility);
       document.addEventListener('fullscreenchange', syncFullscreenTitleBarVisibility, false);
@@ -2369,49 +2425,6 @@ window.SyncLevel = SyncLevel;
         document.removeEventListener('webkitfullscreenchange', syncFullscreenTitleBarVisibility, false);
         window.removeEventListener('storage', syncFullscreenTitleBarVisibility, false);
       });
-
-      var bar = player.controlBar;
-      if (!bar) return;
-
-      var barEl = bar.el && bar.el();
-      if (barEl && !barEl.querySelector('.vjs-player-time-toggle')) {
-        var timeBtn = document.createElement('button');
-        timeBtn.type = 'button';
-        timeBtn.className = 'vjs-button vjs-control vjs-player-time-toggle';
-        var textSpan = document.createElement('span');
-        textSpan.className = 'vjs-control-text';
-        textSpan.textContent = '-0:00 / 0:00';
-        timeBtn.appendChild(textSpan);
-
-        var showCurrentMode = false;
-        var cachedValidDur = 0;
-        var refreshTimeLabel = function() {
-          var rawDur = player.duration();
-          if (typeof rawDur === 'number' && !isNaN(rawDur) && isFinite(rawDur) && rawDur > 0) {
-            cachedValidDur = rawDur;
-          }
-          var dur = cachedValidDur || 0;
-          var cur = player.currentTime() || 0;
-          if (dur > 0 && cur > dur) cur = dur;
-          var rem = Math.max(0, dur - cur);
-          if (showCurrentMode) {
-            textSpan.textContent = compat.formatClock(cur) + ' / ' + compat.formatClock(dur);
-          } else {
-            textSpan.textContent = '-' + compat.formatClock(rem) + ' / ' + compat.formatClock(dur);
-          }
-        };
-
-        timeBtn.addEventListener('click', function() {
-          showCurrentMode = !showCurrentMode;
-          refreshTimeLabel();
-        });
-
-        player.on('timeupdate', refreshTimeLabel);
-        player.on('loadedmetadata', refreshTimeLabel);
-        player.on('durationchange', refreshTimeLabel);
-        player.on('ended', refreshTimeLabel);
-        barEl.appendChild(timeBtn);
-      }
     });
   }
 
@@ -4803,8 +4816,6 @@ window.SyncLevel = SyncLevel;
     initAlabasterPlayer();
   }
 })();
-
-
 (function () {
   'use strict';
 
