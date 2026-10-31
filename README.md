@@ -18,7 +18,7 @@
 <div align="center">
   <a href="#welcome">Welcome!</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#features">Features</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#no-non-free-codec-needed">No Non-Free Codec</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#hosting-poke">Hosting</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#poke-community">Community</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#legal">Legal</a>
   <br><br>
-  <a href="https://alternativeto.net/software/poketube/about/?utm_source=badge&utm_medium=referral" target="_blank">
+  <a href="https://alternativeto.net/software/poketube/about/" target="_blank">
   <img src="https://alternativeto.net/static/badges/badge-wide-dark.svg"
        alt="PokeTube | AlternativeTo"
        width="284" height="54"
