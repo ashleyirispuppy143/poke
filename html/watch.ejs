@@ -498,7 +498,7 @@ window.authorchannelname = "<%- VideoData?.author
   .replace(/\s+/g,' ')
   .trim()
 %>";
-
+window.avatarurl = "/avatars/<%= VideoData.authorThumbnails[1].url.replace("https://yt3.ggpht.com/", "") %>"
 window.proxyurl = "<%- media_proxy_url %>/proxy?url="
 </script>
 
