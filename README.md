@@ -18,8 +18,14 @@
 <div align="center">
   <a href="#welcome">Welcome!</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#features">Features</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#no-non-free-codec-needed">No Non-Free Codec</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#hosting-poke">Hosting</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#poke-community">Community</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#legal">Legal</a>
   <br><br>
-  
+  <a href="https://alternativeto.net/software/poketube/about/?utm_source=badge&utm_medium=referral" target="_blank">
+  <img src="https://alternativeto.net/static/badges/badge-wide-dark.svg"
+       alt="PokeTube | AlternativeTo"
+       width="284" height="54"
+       style="width: 284px; height: 54px;" />
+</a><br>
   <img src="https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/badges/StandWithUkraine.svg" alt="Stand with Ukraine">    <img src="https://codeberg.org/ashleyirispuppy/pages/raw/branch/main/images/pr.svg?v=5">
+  
   <img src="https://codeberg.org/ashleyirispuppy/pages/raw/branch/main/images/trans-badge.svg">
   <img src="https://codeberg.org/ashleyirispuppy/pages/raw/branch/main/images/free-Palestine.svg"><br>
 <img src="https://img.shields.io/liberapay/goal/poke_software_initiative.svg?logo=liberapay">
@@ -32,6 +38,7 @@
 <br> <img src="https://img.shields.io/badge/Backend-Express.js-000000?logo=express" alt="Express.js">
  <img src="https://img.shields.io/badge/Frontend-EJS-F4D03F" alt="EJS">
 <img src="https://img.shields.io/badge/Language-JavaScript-F7DF1E?logo=javascript&logoColor=black" alt="JavaScript">
+
 </div>
 <br>
 
@@ -129,4 +136,5 @@ TL;DR: we dont collect or share your personal info that's it lol
 
 <p align="center"> <a href="https://www.amd.com/en/products/processors/server/epyc/7003-series/amd-epyc-7543.html"> <img width="65" height="65" src="https://codeberg.org/ashleyirispuppy/pages/raw/branch/main/amd.jpeg" alt="AMD EPYC"> </a> <a href="https://ubuntu.com/server"> <img width="65" height="65" src="https://res.cloudinary.com/canonical/image/fetch/f_auto,q_auto,fl_sanitize,w_317/https%3A%2F%2Fassets.ubuntu.com%2Fv1%2Ff76dd871-ubuntu-certified.png" alt="Ubuntu Certified"> </a> </p> <p align="center"> <small>Poke is proudly powered by AMD + Ubuntu servers!!!!!!!!!! (via Skrime Hosting). Parts of Poke ran on Glitch.com from <i>2021–2023</i>.</small> </p> <p align="center"> <a href="https://glitch.com/"> <img src="https://blog.glitch.com/apple-touch-icon.png" alt="Glitch logo"> </a> </p>
   <p align="center"> 
- Poke contains some LLM-assisted code. Please look  <a href="https://codeberg.org/ashleyirispuppy/poke/src/branch/main/llm-contribution-policy.md">here</a>  for more information. If you have a problem with that, please know that this is the best compromise we could've made for the sake of the project. We do not have 100% knowledge on and don't require knowledge of whether someone used a LLM while making a pull-request or LLM assistance unless they specify. </p>
+ Poke may or may not contain some LLM-assisted code. Please look  <a href="https://codeberg.org/ashleyirispuppy/poke/src/branch/main/llm-contribution-policy.md">here</a>  for more information. We do not have 100% knowledge on and don't require knowledge of whether someone used a LLM while making a pull-request or LLM assistance unless they specify. </p>
+ 
