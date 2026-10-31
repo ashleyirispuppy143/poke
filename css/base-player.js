@@ -537,7 +537,7 @@ window.SyncLevel = SyncLevel;
       '    background: rgba(255, 255, 255, 0.1) !important;',
       '  }',
       '}',
-      '.alabaster-fs-desc-drawer {',
+      '.alabaster-fs-desc-drawer, .alabaster-fs-comments-drawer {',
       '  position: absolute;',
       '  top: 70px;',
       '  right: 34px;',
@@ -564,21 +564,23 @@ window.SyncLevel = SyncLevel;
       '  transform: translateY(-10px) scale(0.98);',
       '  transition: opacity 0.24s cubic-bezier(0.22, 1, 0.36, 1), transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);',
       '}',
-      '.alabaster-fs-desc-drawer::-webkit-scrollbar {',
+      '.alabaster-fs-desc-drawer::-webkit-scrollbar, .alabaster-fs-comments-drawer::-webkit-scrollbar {',
       '  width: 6px;',
       '}',
-      '.alabaster-fs-desc-drawer::-webkit-scrollbar-track {',
+      '.alabaster-fs-desc-drawer::-webkit-scrollbar-track, .alabaster-fs-comments-drawer::-webkit-scrollbar-track {',
       '  background: transparent;',
       '}',
-      '.alabaster-fs-desc-drawer::-webkit-scrollbar-thumb {',
+      '.alabaster-fs-desc-drawer::-webkit-scrollbar-thumb, .alabaster-fs-comments-drawer::-webkit-scrollbar-thumb {',
       '  background: rgba(255, 255, 255, 0.22);',
       '  border-radius: 999px;',
       '}',
-      '.alabaster-fs-desc-drawer::-webkit-scrollbar-thumb:hover {',
+      '.alabaster-fs-desc-drawer::-webkit-scrollbar-thumb:hover, .alabaster-fs-comments-drawer::-webkit-scrollbar-thumb:hover {',
       '  background: rgba(255, 255, 255, 0.38);',
       '}',
       '.alabaster-fs-desc-drawer.is-visible,',
-      '.vjs-user-inactive.vjs-playing .alabaster-fs-desc-drawer.is-visible {',
+      '.vjs-user-inactive.vjs-playing .alabaster-fs-desc-drawer.is-visible,',
+      '.alabaster-fs-comments-drawer.is-visible,',
+      '.vjs-user-inactive.vjs-playing .alabaster-fs-comments-drawer.is-visible {',
       '  opacity: 1 !important;',
       '  visibility: visible !important;',
       '  pointer-events: auto !important;',
@@ -596,7 +598,7 @@ window.SyncLevel = SyncLevel;
       '  display: flex;',
       '  flex-direction: column;',
       '  align-items: flex-start;',
-      '  gap: 10px;',
+      '  gap: 6px;',
       '  flex: 1 1 auto;',
       '  min-width: 0;',
       '}',
@@ -610,11 +612,20 @@ window.SyncLevel = SyncLevel;
       '  letter-spacing: -0.2px;',
       '  word-break: break-word;',
       '}',
+      '.alabaster-fs-comments-sub {',
+      '  font-size: 12.5px;',
+      '  font-weight: 700;',
+      '  font-stretch: ultra-expanded;',
+      '  color: #bbbbbb;',
+      '  margin: 0;',
+      '  line-height: 1.3;',
+      '}',
       '.alabaster-fs-desc-channel-row {',
       '  display: flex;',
       '  align-items: center;',
       '  gap: 10px;',
       '  min-width: 0;',
+      '  margin-top: 4px;',
       '}',
       '.alabaster-fs-desc-channel-avatar {',
       '  width: 32px;',
@@ -690,7 +701,7 @@ window.SyncLevel = SyncLevel;
       '  color: #dcdcdc;',
       '  line-height: 1.2;',
       '}',
-      '.alabaster-fs-desc-body {',
+      '.alabaster-fs-desc-body, .alabaster-fs-comments-body {',
       '  padding: 12px 20px 22px 20px;',
       '  font-size: 14px;',
       '  font-weight: 600;',
@@ -705,14 +716,85 @@ window.SyncLevel = SyncLevel;
       '  font-weight: 600;',
       '  font-stretch: expanded;',
       '}',
-      '.alabaster-fs-desc-body a {',
+      '.alabaster-fs-desc-body a, .alabaster-fs-comments-body a {',
       '  color: #3ea6ff;',
       '  text-decoration: none;',
       '  font-weight: 600;',
       '  font-stretch: expanded;',
       '}',
-      '.alabaster-fs-desc-body a:hover {',
+      '.alabaster-fs-desc-body a:hover, .alabaster-fs-comments-body a:hover {',
       '  text-decoration: underline;',
+      '}',
+      '.alabaster-fs-comments-body {',
+      '  padding: 10px 14px 20px 14px;',
+      '}',
+      '.alabaster-fs-comments-body .comment-list {',
+      '  background: rgba(255, 255, 255, 0.06) !important;',
+      '  border: 1px solid rgba(255, 255, 255, 0.08) !important;',
+      '  border-radius: 18px !important;',
+      '  padding: 12px 14px !important;',
+      '  margin-bottom: 4px !important;',
+      '}',
+      '.alabaster-fs-comments-body .thumb .avatar img {',
+      '  width: 36px !important;',
+      '  height: 36px !important;',
+      '  border-radius: 50% !important;',
+      '  object-fit: cover !important;',
+      '  margin-right: 10px !important;',
+      '}',
+      '.alabaster-fs-comments-body .desc h5 {',
+      '  display: flex !important;',
+      '  align-items: center !important;',
+      '  flex-wrap: wrap !important;',
+      '  gap: 6px !important;',
+      '  margin: 0 0 6px 0 !important;',
+      '  padding: 0 !important;',
+      '}',
+      '.alabaster-fs-comments-body .comments-author {',
+      '  margin: 0 !important;',
+      '  font-size: 13px !important;',
+      '  font-weight: 700 !important;',
+      '}',
+      '.alabaster-fs-comments-body .comments-author a {',
+      '  color: #ffffff !important;',
+      '}',
+      '.alabaster-fs-comments-body .date-publish {',
+      '  margin: 0 !important;',
+      '  font-size: 11.5px !important;',
+      '  opacity: 0.68 !important;',
+      '}',
+      '.alabaster-fs-comments-body .date-publish a {',
+      '  color: #cccccc !important;',
+      '}',
+      '.alabaster-fs-comments-body p.comment {',
+      '  margin: 4px 0 0 0 !important;',
+      '  font-size: 13.5px !important;',
+      '  line-height: 1.48 !important;',
+      '  color: #f1f1f1 !important;',
+      '}',
+      '.video-js .vjs-alabaster-comments-btn, .vjs-alabaster-comments-btn {',
+      '  width: 42px !important;',
+      '  height: 42px !important;',
+      '  min-width: 42px !important;',
+      '  display: none;',
+      '  align-items: center !important;',
+      '  justify-content: center !important;',
+      '  cursor: pointer !important;',
+      '  color: #ffffff !important;',
+      '  background: transparent !important;',
+      '  border: none !important;',
+      '  padding: 0 !important;',
+      '  border-radius: 8px !important;',
+      '  flex: 0 0 42px !important;',
+      '  align-self: center !important;',
+      '  transition: background 0.18s ease, transform 0.15s ease !important;',
+      '}',
+      '.video-js .vjs-alabaster-comments-btn:hover, .vjs-alabaster-comments-btn:hover,',
+      '.video-js .vjs-alabaster-comments-btn.is-active, .vjs-alabaster-comments-btn.is-active {',
+      '  background: rgba(255, 255, 255, 0.12) !important;',
+      '}',
+      '.video-js .vjs-alabaster-comments-btn:active, .vjs-alabaster-comments-btn:active {',
+      '  transform: scale(0.94) !important;',
       '}',
       '.alabaster-rec-open-btn {',
       '  position: absolute;',
@@ -919,6 +1001,15 @@ window.SyncLevel = SyncLevel;
     document.head.appendChild(styleEl);
   }
 
+  function hasValidCommentsOnPage() {
+    var commentsEl = document.querySelector('.comments');
+    if (!commentsEl) return false;
+    if (commentsEl.querySelector('.single-comment, .comment-list, p.comment')) return true;
+    var rawText = (commentsEl.textContent || '').trim().toLowerCase();
+    if (!rawText || rawText.indexOf('comments not found') !== -1) return false;
+    return true;
+  }
+
   function SetAlabasterUI(player, onRetryCallback) {
     var info = metadataParser.read();
     injectAlabasterFsDescriptionStyles();
@@ -974,6 +1065,12 @@ window.SyncLevel = SyncLevel;
       var isFsDescOpen = false;
       var setDrawerState = null;
 
+      var fsCommentsBtn = null;
+      var fsCommentsDrawer = null;
+      var fsCommentsBody = null;
+      var isFsCommentsOpen = false;
+      var setCommentsDrawerState = null;
+
       var getTitleElements = function() {
         if (!rootEl) return [];
         return rootEl.querySelectorAll('.vjs-title-bar-title, [class*="vjs-title-bar-title"]');
@@ -1012,7 +1109,7 @@ window.SyncLevel = SyncLevel;
         var descNodes = rootEl.querySelectorAll('.vjs-title-bar-description, [class*="vjs-title-bar-description"]');
         for (var i = 0; i < descNodes.length; i++) {
           var dNode = descNodes[i];
-          if (!isFs || !info.description || isFsDescOpen) {
+          if (!isFs || !info.description || isFsDescOpen || isFsCommentsOpen) {
             dNode.style.setProperty('display', 'none', 'important');
             dNode.style.setProperty('visibility', 'hidden', 'important');
             dNode.style.setProperty('opacity', '0', 'important');
@@ -1258,6 +1355,9 @@ window.SyncLevel = SyncLevel;
 
         setDrawerState = function(open) {
           isFsDescOpen = Boolean(open);
+          if (isFsDescOpen && isFsCommentsOpen && typeof setCommentsDrawerState === 'function') {
+            setCommentsDrawerState(false);
+          }
           var isFsNow = checkIsPlayerFullscreen();
           updateTitleBarDescVisibility(isFsNow);
 
@@ -1323,6 +1423,210 @@ window.SyncLevel = SyncLevel;
         player.on('play', syncDescToggleWithUserActivity);
         player.on('playing', syncDescToggleWithUserActivity);
         player.on('pause', syncDescToggleWithUserActivity);
+      }
+
+      if (rootEl && !rootEl.querySelector('.alabaster-fs-comments-drawer')) {
+        fsCommentsDrawer = document.createElement('aside');
+        fsCommentsDrawer.className = 'alabaster-fs-comments-drawer';
+
+        var fsCommentsHeader = document.createElement('div');
+        fsCommentsHeader.className = 'alabaster-fs-desc-header';
+
+        var fsCommentsHeaderInfo = document.createElement('div');
+        fsCommentsHeaderInfo.className = 'alabaster-fs-desc-header-info';
+
+        var fsCommentsHeading = document.createElement('h3');
+        fsCommentsHeading.className = 'alabaster-fs-desc-heading';
+        fsCommentsHeading.textContent = 'Comments';
+
+        var fsCommentsSub = document.createElement('p');
+        fsCommentsSub.className = 'alabaster-fs-comments-sub';
+        fsCommentsSub.style.display = 'none';
+
+        fsCommentsHeaderInfo.appendChild(fsCommentsHeading);
+        fsCommentsHeaderInfo.appendChild(fsCommentsSub);
+
+        var fsCommentsClose = document.createElement('button');
+        fsCommentsClose.type = 'button';
+        fsCommentsClose.className = 'alabaster-fs-desc-close';
+        fsCommentsClose.setAttribute('aria-label', 'Close comments');
+        fsCommentsClose.style.cssText = 'background:transparent;border:none;color:#aaaaaa;padding:0;border-radius:50%;cursor:pointer;transition:background 0.15s ease, color 0.15s ease;';
+        fsCommentsClose.addEventListener('mouseenter', function() {
+          fsCommentsClose.style.background = 'rgba(255, 255, 255, 0.12)';
+          fsCommentsClose.style.color = '#ffffff';
+        });
+        fsCommentsClose.addEventListener('mouseleave', function() {
+          fsCommentsClose.style.background = 'transparent';
+          fsCommentsClose.style.color = '#aaaaaa';
+        });
+        fsCommentsClose.innerHTML = [
+          '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
+          '  <line x1="18" y1="6" x2="6" y2="18"></line>',
+          '  <line x1="6" y1="6" x2="18" y2="18"></line>',
+          '</svg>'
+        ].join('');
+
+        fsCommentsHeader.appendChild(fsCommentsHeaderInfo);
+        fsCommentsHeader.appendChild(fsCommentsClose);
+
+        fsCommentsBody = document.createElement('div');
+        fsCommentsBody.className = 'alabaster-fs-comments-body';
+
+        fsCommentsDrawer.appendChild(fsCommentsHeader);
+        fsCommentsDrawer.appendChild(fsCommentsBody);
+
+        var populateCommentsContent = function() {
+          if (!hasValidCommentsOnPage()) return false;
+          var sourceComments = document.querySelector('.comments');
+          if (!sourceComments) return false;
+
+          var tempClone = document.createElement('div');
+          tempClone.innerHTML = sourceComments.innerHTML;
+
+          var headerBox = null;
+          var h5List = tempClone.querySelectorAll('h5');
+          for (var i = 0; i < h5List.length; i++) {
+            var h5Node = h5List[i];
+            if (!h5Node.closest('.single-comment, .comment-list')) {
+              headerBox = h5Node;
+              break;
+            }
+          }
+
+          if (headerBox) {
+            var headingText = (headerBox.textContent || '').replace(/\s+/g, ' ').trim();
+            fsCommentsHeading.textContent = headingText || 'Comments';
+            var parentHeaderWrap = headerBox.parentNode;
+            var subP = parentHeaderWrap ? parentHeaderWrap.querySelector('p.loaded, p') : null;
+            if (subP && !subP.closest('.single-comment, .comment-list')) {
+              var subTxt = (subP.textContent || '').replace(/\s+/g, ' ').trim();
+              if (subTxt) {
+                fsCommentsSub.textContent = subTxt;
+                fsCommentsSub.style.display = 'block';
+              } else {
+                fsCommentsSub.style.display = 'none';
+              }
+            } else {
+              fsCommentsSub.style.display = 'none';
+            }
+            if (parentHeaderWrap && parentHeaderWrap !== tempClone && !parentHeaderWrap.querySelector('.single-comment, .comment-list')) {
+              if (parentHeaderWrap.parentNode) parentHeaderWrap.parentNode.removeChild(parentHeaderWrap);
+            } else if (headerBox.parentNode) {
+              headerBox.parentNode.removeChild(headerBox);
+            }
+          } else {
+            fsCommentsHeading.textContent = 'Comments';
+            fsCommentsSub.style.display = 'none';
+          }
+
+          var anchorMarkers = tempClone.querySelectorAll('#comments-container, a[href="#top"]');
+          for (var k = 0; k < anchorMarkers.length; k++) {
+            var mk = anchorMarkers[k];
+            var centerParent = mk.closest ? mk.closest('center') : null;
+            if (centerParent && centerParent.parentNode) {
+              centerParent.parentNode.removeChild(centerParent);
+            } else if (mk.parentNode) {
+              mk.parentNode.removeChild(mk);
+            }
+          }
+
+          fsCommentsBody.innerHTML = tempClone.innerHTML;
+          return true;
+        };
+
+        setCommentsDrawerState = function(open) {
+          isFsCommentsOpen = Boolean(open);
+          if (isFsCommentsOpen && !hasValidCommentsOnPage()) {
+            isFsCommentsOpen = false;
+          }
+          if (isFsCommentsOpen && isFsDescOpen && typeof setDrawerState === 'function') {
+            setDrawerState(false);
+          }
+          var isFsNow = checkIsPlayerFullscreen();
+          updateTitleBarDescVisibility(isFsNow);
+
+          if (!fsCommentsDrawer) return;
+          if (isFsCommentsOpen) {
+            if (!populateCommentsContent()) {
+              isFsCommentsOpen = false;
+              return;
+            }
+            if (fsCommentsBtn) {
+              fsCommentsBtn.classList.add('is-active');
+              fsCommentsBtn.setAttribute('aria-expanded', 'true');
+            }
+            fsCommentsDrawer.style.display = 'flex';
+            fsCommentsDrawer.scrollTop = 0;
+            compat.raf(function() {
+              fsCommentsDrawer.classList.add('is-visible');
+            });
+          } else {
+            if (fsCommentsBtn) {
+              fsCommentsBtn.classList.remove('is-active');
+              fsCommentsBtn.setAttribute('aria-expanded', 'false');
+            }
+            fsCommentsDrawer.classList.remove('is-visible');
+            setTimeout(function() {
+              if (!isFsCommentsOpen && fsCommentsDrawer) {
+                fsCommentsDrawer.style.display = 'none';
+              }
+            }, 240);
+          }
+        };
+
+        ['click', 'mousedown', 'pointerdown', 'touchstart', 'touchend', 'wheel'].forEach(function(evName) {
+          fsCommentsDrawer.addEventListener(evName, function(evt) {
+            evt.stopPropagation();
+          }, false);
+        });
+
+        fsCommentsClose.addEventListener('click', function(evt) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          setCommentsDrawerState(false);
+        });
+
+        rootEl.appendChild(fsCommentsDrawer);
+
+        var cBarForComments = player.controlBar && player.controlBar.el && player.controlBar.el();
+        if (cBarForComments && !cBarForComments.querySelector('.vjs-alabaster-comments-btn')) {
+          fsCommentsBtn = document.createElement('button');
+          fsCommentsBtn.type = 'button';
+          fsCommentsBtn.className = 'vjs-control vjs-button vjs-alabaster-comments-btn';
+          fsCommentsBtn.setAttribute('aria-label', 'Comments');
+          fsCommentsBtn.setAttribute('title', 'Comments');
+          fsCommentsBtn.setAttribute('aria-expanded', 'false');
+          fsCommentsBtn.innerHTML = [
+            '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none;">',
+            '  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>',
+            '  <line x1="8" y1="9" x2="16" y2="9"></line>',
+            '  <line x1="8" y1="13" x2="13" y2="13"></line>',
+            '</svg>'
+          ].join('');
+
+          ['mousedown', 'pointerdown', 'touchstart', 'touchend'].forEach(function(evName) {
+            fsCommentsBtn.addEventListener(evName, function(evt) {
+              evt.stopPropagation();
+            }, false);
+          });
+
+          fsCommentsBtn.addEventListener('click', function(evt) {
+            evt.preventDefault();
+            evt.stopPropagation();
+            if (!checkIsPlayerFullscreen() || !hasValidCommentsOnPage()) return;
+            setCommentsDrawerState(!isFsCommentsOpen);
+          });
+
+          var pipBtn = cBarForComments.querySelector('.vjs-picture-in-picture-control');
+          var fsBtn = cBarForComments.querySelector('.vjs-fullscreen-control');
+          if (pipBtn && pipBtn.parentNode === cBarForComments) {
+            cBarForComments.insertBefore(fsCommentsBtn, pipBtn);
+          } else if (fsBtn && fsBtn.parentNode === cBarForComments) {
+            cBarForComments.insertBefore(fsCommentsBtn, fsBtn);
+          } else {
+            cBarForComments.appendChild(fsCommentsBtn);
+          }
+        }
       }
 
       var recDrawer = null;
@@ -1536,6 +1840,7 @@ window.SyncLevel = SyncLevel;
                 cls.indexOf('vjs-play-control') !== -1 ||
                 cls.indexOf('vjs-fullscreen-control') !== -1 ||
                 cls.indexOf('vjs-picture-in-picture') !== -1 ||
+                cls.indexOf('vjs-alabaster-comments-btn') !== -1 ||
                 cls.indexOf('vjs-menu') !== -1 ||
                 cls.indexOf('vjs-player-time-toggle') !== -1 ||
                 cls.indexOf('vjs-time-control') !== -1
@@ -1555,7 +1860,7 @@ window.SyncLevel = SyncLevel;
             if (tRect.width > 0) leftBoundary = Math.max(leftBoundary, tRect.right + 16);
           }
 
-          var rightButtons = bar.querySelectorAll('.vjs-picture-in-picture-control, .vjs-fullscreen-control, .vjs-subs-caps-button, .vjs-playback-rate, .vjs-quality-selector');
+          var rightButtons = bar.querySelectorAll('.vjs-alabaster-comments-btn, .vjs-picture-in-picture-control, .vjs-fullscreen-control, .vjs-subs-caps-button, .vjs-playback-rate, .vjs-quality-selector');
           for (var i = 0; i < rightButtons.length; i++) {
             var rbRect = rightButtons[i].getBoundingClientRect();
             if (rbRect.width > 0 && rbRect.left > barRect.left + barRect.width * 0.45) {
@@ -1766,13 +2071,24 @@ window.SyncLevel = SyncLevel;
             !isTargetInsideTitle(target)
           );
 
-          if (!clickedOutsideRec && !clickedOutsideDesc) return;
+          var clickedOutsideComments = Boolean(
+            isFsCommentsOpen &&
+            !isInsideControlBar &&
+            fsCommentsDrawer &&
+            !fsCommentsDrawer.contains(target) &&
+            (!fsCommentsBtn || !fsCommentsBtn.contains(target))
+          );
+
+          if (!clickedOutsideRec && !clickedOutsideDesc && !clickedOutsideComments) return;
 
           if (clickedOutsideRec && typeof applyRecStage === 'function') {
             applyRecStage(0);
           }
           if (clickedOutsideDesc && typeof setDrawerState === 'function') {
             setDrawerState(false);
+          }
+          if (clickedOutsideComments && typeof setCommentsDrawerState === 'function') {
+            setCommentsDrawerState(false);
           }
 
           if (!isInsideControlBar && !isTargetInsideTitle(target)) {
@@ -1788,8 +2104,9 @@ window.SyncLevel = SyncLevel;
         });
 
         document.addEventListener('keydown', function(evt) {
-          if (evt.key === 'Escape' && recStage !== 0) {
-            applyRecStage(0);
+          if (evt.key === 'Escape') {
+            if (recStage !== 0) applyRecStage(0);
+            if (isFsCommentsOpen && typeof setCommentsDrawerState === 'function') setCommentsDrawerState(false);
           }
         }, false);
 
@@ -1958,12 +2275,14 @@ window.SyncLevel = SyncLevel;
 
         if (!isFs) {
           isFsDescOpen = false;
+          isFsCommentsOpen = false;
         }
 
         bindTitleClickHandlers();
 
         var useLegacyDescButton = isStorageFlagEnabled(LEGACY_DESC_BTN_KEY);
         var hasDescriptionNode = Boolean(document.querySelector('.descriptionHtml'));
+        var hasCommentsNode = hasValidCommentsOnPage();
 
         var titleBars = rootEl.querySelectorAll('.vjs-title-bar, [class*="vjs-title-bar"]');
         for (var i = 0; i < titleBars.length; i++) {
@@ -2008,6 +2327,18 @@ window.SyncLevel = SyncLevel;
           if (!isFs || !hasDescriptionNode) {
             fsDescDrawer.classList.remove('is-visible');
             fsDescDrawer.style.display = 'none';
+          }
+        }
+
+        if (fsCommentsBtn && fsCommentsDrawer) {
+          if (isFs && hasCommentsNode) {
+            fsCommentsBtn.style.setProperty('display', 'inline-flex', 'important');
+          } else {
+            fsCommentsBtn.style.setProperty('display', 'none', 'important');
+            fsCommentsBtn.classList.remove('is-active');
+            fsCommentsBtn.setAttribute('aria-expanded', 'false');
+            fsCommentsDrawer.classList.remove('is-visible');
+            fsCommentsDrawer.style.display = 'none';
           }
         }
 
@@ -4472,6 +4803,8 @@ window.SyncLevel = SyncLevel;
     initAlabasterPlayer();
   }
 })();
+
+
 (function () {
   'use strict';
 
