@@ -304,6 +304,9 @@ window.SyncLevel = SyncLevel;
     var pattern = new RegExp(up + divider + down + views + age, 'i');
 
     var findChannelAvatarUrl = function() {
+      if (typeof window.avatarurl === 'string' && window.avatarurl.trim()) {
+        return window.avatarurl.trim();
+      }
       var el = document.querySelector('.video-chnl-info-pill .avatar, #video-chnl-info-pill .avatar, [class*="video-chnl-info-pill"] .avatar, .avatar');
       if (!el) return '';
       if (el.currentSrc || el.src) return (el.currentSrc || el.src).trim();
@@ -1188,6 +1191,9 @@ window.SyncLevel = SyncLevel;
         var fsDescAvatar = document.createElement('img');
         fsDescAvatar.className = 'alabaster-fs-desc-channel-avatar';
         fsDescAvatar.alt = '';
+        if (typeof window.avatarurl === 'string' && window.avatarurl.trim()) {
+          fsDescAvatar.src = window.avatarurl.trim();
+        }
         fsDescAvatar.style.display = 'none';
 
         var fsDescChannelName = document.createElement('span');
@@ -1233,7 +1239,7 @@ window.SyncLevel = SyncLevel;
           fsDescHeading.textContent = freshMeta.title || info.title || 'Description';
 
           var chName = (typeof window.authorchannelname === 'string' && window.authorchannelname.trim()) ? window.authorchannelname.trim() : freshMeta.author;
-          var avUrl = freshMeta.avatarUrl;
+          var avUrl = (typeof window.avatarurl === 'string' && window.avatarurl.trim()) ? window.avatarurl.trim() : freshMeta.avatarUrl;
 
           if (avUrl) {
             fsDescAvatar.src = avUrl;
@@ -4816,6 +4822,9 @@ window.SyncLevel = SyncLevel;
     initAlabasterPlayer();
   }
 })();
+
+
+
 (function () {
   'use strict';
 
