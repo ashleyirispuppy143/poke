@@ -720,20 +720,31 @@
  
 
   <%- include('./partials/header.ejs') %>
-<%
-  const now = new Date();
-  const snowStart = new Date('2026-11-01T00:00:00+01:00');
-  const snowEnd   = new Date('2027-01-10T23:59:59+01:00');
-  const isSnowSeason = now >= snowStart && now <= snowEnd;
+ <%
+  const utcPlus1 = new Date(Date.now() + 3600000);
+  const month = utcPlus1.getUTCMonth();
+  const day = utcPlus1.getUTCDate();
+  const isSnowSeason = (month >= 10) || (month === 0 && day <= 10);
 %>
 
 <% if (isSnowSeason) { %>
   <canvas id="snow-canvas" aria-hidden="true"></canvas>
 
+  <button
+    id="snow-toggle"
+    type="button"
+    aria-pressed="true"
+    aria-label="Toggle snowfall animation"
+    title="Toggle Snow"
+  >
+    <i class="fa-solid fa-snowflake" aria-hidden="true"></i>
+  </button>
+
   <noscript>
     <style>
-      #snow-canvas {
-        display: none;
+      #snow-canvas,
+      #snow-toggle {
+        display: none !important;
       }
       .noscript-snow,
       .noscript-snow::before,
@@ -780,11 +791,20 @@
         50% { transform: translate3d(25px, 50vh, 0); }
         100% { transform: translate3d(0, 100vh, 0); }
       }
+
+      @media (prefers-reduced-motion: reduce) {
+        .noscript-snow,
+        .noscript-snow::before,
+        .noscript-snow::after {
+          animation: none !important;
+          display: none !important;
+        }
+      }
     </style>
     <div class="noscript-snow" aria-hidden="true"></div>
   </noscript>
 
-   <style>
+  <style>
     #snow-canvas {
       position: fixed;
       top: 0;
@@ -794,59 +814,280 @@
       pointer-events: none;
       z-index: 9999;
     }
+
+    #snow-toggle {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 10000;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      background: rgba(15, 23, 42, 0.75);
+      color: #38bdf8;
+      font-size: 1.2rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+      transition: transform 0.2s ease, background-color 0.2s ease, color 0.2s ease, opacity 0.2s ease;
+    }
+
+    #snow-toggle:hover {
+      transform: scale(1.08);
+      background: rgba(15, 23, 42, 0.9);
+    }
+
+    #snow-toggle:focus-visible {
+      outline: 2px solid #38bdf8;
+      outline-offset: 2px;
+    }
+
+    #snow-toggle[aria-pressed="false"] {
+      color: rgba(255, 255, 255, 0.45);
+      opacity: 0.75;
+    }
+
+    #snow-toggle[aria-pressed="false"]::after {
+      content: "";
+      position: absolute;
+      width: 24px;
+      height: 2px;
+      background-color: rgba(255, 255, 255, 0.7);
+      transform: rotate(-45deg);
+      border-radius: 1px;
+    }
   </style>
 
   <script>
     (() => {
       const canvas = document.getElementById('snow-canvas');
-      if (!canvas) return;
+      const toggleBtn = document.getElementById('snow-toggle');
+      if (!canvas || !toggleBtn) return;
 
+      const STORAGE_KEY = 'snow_effect_enabled';
+      const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
       const ctx = canvas.getContext('2d');
+
       let width = (canvas.width = window.innerWidth);
       let height = (canvas.height = window.innerHeight);
+      let animId = null;
+      let lastTime = performance.now();
+
+      const savedPref = localStorage.getItem(STORAGE_KEY);
+      let isSnowEnabled = savedPref !== null
+        ? savedPref === 'true'
+        : !motionQuery.matches;
 
       window.addEventListener('resize', () => {
         width = canvas.width = window.innerWidth;
         height = canvas.height = window.innerHeight;
-      });
+      }, { passive: true });
 
+      const REPULSION_RADIUS = 110;
+      const REPULSION_RADIUS_SQ = REPULSION_RADIUS * REPULSION_RADIUS;
+      const INV_RADIUS_SQ = 1 / REPULSION_RADIUS_SQ;
+      const REPULSION_STRENGTH = 4.2;
+      const TWO_PI = Math.PI * 2;
+
+      const pointer = {
+        x: 0,
+        y: 0,
+        prevX: 0,
+        active: false,
+        windTarget: 0,
+        windCurrent: 0
+      };
+
+      function onPointerMove(e) {
+        if (!pointer.active) {
+          pointer.prevX = e.clientX;
+          pointer.active = true;
+        }
+        pointer.x = e.clientX;
+        pointer.y = e.clientY;
+      }
+
+      function onPointerLeave() {
+        pointer.active = false;
+      }
+
+      const OPACITY_STYLES = [
+        'rgba(255, 255, 255, 0.45)',
+        'rgba(255, 255, 255, 0.62)',
+        'rgba(255, 255, 255, 0.80)',
+        'rgba(255, 255, 255, 0.95)'
+      ];
       const FLAKE_COUNT = 120;
-      const flakes = Array.from({ length: FLAKE_COUNT }, () => ({
-        x: Math.random() * width,
-        y: Math.random() * height,
-        radius: Math.random() * 3 + 1,
-        speedY: Math.random() * 1.5 + 0.5,
-        speedX: Math.random() * 1 - 0.5,
-        angle: Math.random() * Math.PI * 2,
-        spin: Math.random() * 0.02 + 0.005,
-        opacity: Math.random() * 0.6 + 0.4
-      }));
 
-      function drawAndUpdate() {
+      const buckets = [[], [], [], []];
+      for (let i = 0; i < FLAKE_COUNT; i++) {
+        const radius = Math.random() * 3 + 1;
+        const bucketIndex = i & 3;
+        buckets[bucketIndex].push({
+          x: Math.random() * width,
+          y: Math.random() * height,
+          radius,
+          windFactor: radius * 0.35,
+          speedY: Math.random() * 90 + 30,
+          speedX: Math.random() * 60 - 30,
+          vx: 0,
+          vy: 0,
+          swayAmp: 24,
+          angle: Math.random() * TWO_PI,
+          spin: Math.random() * 1.2 + 0.3
+        });
+      }
+
+      function drawAndUpdate(currentTime) {
+        if (!isSnowEnabled || document.hidden) {
+          animId = null;
+          return;
+        }
+
+        const dt = Math.min((currentTime - lastTime) * 0.001, 0.1);
+        lastTime = currentTime;
+
+        if (pointer.active) {
+          const deltaX = pointer.x - pointer.prevX;
+          pointer.prevX = pointer.x;
+          if (deltaX !== 0) {
+            const nextWind = pointer.windTarget + deltaX * 0.45;
+            pointer.windTarget = nextWind > 90 ? 90 : (nextWind < -90 ? -90 : nextWind);
+          }
+        }
+
+        pointer.windTarget /= (1 + 2.5 * dt);
+        pointer.windCurrent += (pointer.windTarget - pointer.windCurrent) * Math.min(1, 6 * dt);
+        const velocityDamping = 1 / (1 + 4.5 * dt);
+
+        const px = pointer.x;
+        const py = pointer.y;
+        const isPointerActive = pointer.active;
+        const windCur = pointer.windCurrent;
+        const pushScale = REPULSION_STRENGTH * dt;
+
         ctx.clearRect(0, 0, width, height);
 
-        for (const f of flakes) {
-          f.angle += f.spin;
-          f.y += f.speedY;
-          f.x += f.speedX + Math.sin(f.angle) * 0.4;
-
-          if (f.y > height + f.radius) {
-            f.y = -f.radius;
-            f.x = Math.random() * width;
-          }
-          if (f.x > width + f.radius) f.x = -f.radius;
-          if (f.x < -f.radius) f.x = width + f.radius;
-
+        for (let b = 0; b < 4; b++) {
+          const group = buckets[b];
+          ctx.fillStyle = OPACITY_STYLES[b];
           ctx.beginPath();
-          ctx.arc(f.x, f.y, f.radius, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(255, 255, 255, ${f.opacity})`;
+
+          for (let i = 0, len = group.length; i < len; i++) {
+            const f = group[i];
+            f.angle += f.spin * dt;
+
+            if (isPointerActive) {
+              const dx = f.x - px;
+              if (dx > -REPULSION_RADIUS && dx < REPULSION_RADIUS) {
+                const dy = f.y - py;
+                if (dy > -REPULSION_RADIUS && dy < REPULSION_RADIUS) {
+                  const distSq = dx * dx + dy * dy;
+                  if (distSq < REPULSION_RADIUS_SQ) {
+                    const t = 1 - distSq * INV_RADIUS_SQ;
+                    const factor = t * t * pushScale;
+                    f.vx += dx * factor;
+                    f.vy += dy * factor;
+                  }
+                }
+              }
+            }
+
+            f.vx *= velocityDamping;
+            f.vy *= velocityDamping;
+
+            f.y += (f.speedY + f.vy) * dt;
+            f.x += (f.speedX + f.vx + windCur * f.windFactor + Math.sin(f.angle) * f.swayAmp) * dt;
+
+            if (f.y > height + f.radius) {
+              f.y = -f.radius;
+              f.x = Math.random() * width;
+              f.vx = 0;
+              f.vy = 0;
+            }
+            if (f.x > width + f.radius) f.x = -f.radius;
+            else if (f.x < -f.radius) f.x = width + f.radius;
+
+            ctx.moveTo(f.x + f.radius, f.y);
+            ctx.arc(f.x, f.y, f.radius, 0, TWO_PI);
+          }
+
           ctx.fill();
         }
 
-        requestAnimationFrame(drawAndUpdate);
+        animId = requestAnimationFrame(drawAndUpdate);
       }
 
-      drawAndUpdate();
+      function setPointerListeners(attach) {
+        if (attach) {
+          window.addEventListener('pointermove', onPointerMove, { passive: true });
+          window.addEventListener('pointerleave', onPointerLeave, { passive: true });
+        } else {
+          window.removeEventListener('pointermove', onPointerMove);
+          window.removeEventListener('pointerleave', onPointerLeave);
+          pointer.active = false;
+        }
+      }
+
+      function startLoop() {
+        if (animId === null && isSnowEnabled && !document.hidden) {
+          lastTime = performance.now();
+          animId = requestAnimationFrame(drawAndUpdate);
+        }
+      }
+
+      function stopLoop() {
+        if (animId !== null) {
+          cancelAnimationFrame(animId);
+          animId = null;
+        }
+      }
+
+      function applySnowState() {
+        toggleBtn.setAttribute('aria-pressed', String(isSnowEnabled));
+        toggleBtn.title = isSnowEnabled ? 'Turn snow off' : 'Turn snow on';
+        canvas.style.display = isSnowEnabled ? 'block' : 'none';
+        setPointerListeners(isSnowEnabled && !document.hidden);
+
+        if (isSnowEnabled) {
+          startLoop();
+        } else {
+          stopLoop();
+          ctx.clearRect(0, 0, width, height);
+        }
+      }
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          stopLoop();
+          setPointerListeners(false);
+          pointer.windTarget = 0;
+          pointer.windCurrent = 0;
+        } else if (isSnowEnabled) {
+          setPointerListeners(true);
+          startLoop();
+        }
+      });
+
+      toggleBtn.addEventListener('click', () => {
+        isSnowEnabled = !isSnowEnabled;
+        localStorage.setItem(STORAGE_KEY, String(isSnowEnabled));
+        applySnowState();
+      });
+
+      motionQuery.addEventListener('change', (e) => {
+        if (localStorage.getItem(STORAGE_KEY) === null) {
+          isSnowEnabled = !e.matches;
+          applySnowState();
+        }
+      });
+
+      applySnowState();
     })();
   </script>
 <% } %>
