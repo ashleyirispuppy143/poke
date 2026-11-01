@@ -720,6 +720,136 @@
  
 
   <%- include('./partials/header.ejs') %>
+<%
+  const now = new Date();
+  const snowStart = new Date('2026-11-01T00:00:00+01:00');
+  const snowEnd   = new Date('2027-01-10T23:59:59+01:00');
+  const isSnowSeason = now >= snowStart && now <= snowEnd;
+%>
+
+<% if (isSnowSeason) { %>
+  <canvas id="snow-canvas" aria-hidden="true"></canvas>
+
+  <noscript>
+    <style>
+      #snow-canvas {
+        display: none;
+      }
+      .noscript-snow,
+      .noscript-snow::before,
+      .noscript-snow::after {
+        position: fixed;
+        top: -100vh;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        pointer-events: none;
+        z-index: 9999;
+        content: "";
+        background-image: 
+          radial-gradient(4px 4px at 100px 50px, #fff 50%, transparent),
+          radial-gradient(6px 6px at 200px 150px, #fff 50%, transparent),
+          radial-gradient(3px 3px at 300px 250px, #fff 50%, transparent),
+          radial-gradient(4px 4px at 400px 350px, #fff 50%, transparent),
+          radial-gradient(5px 5px at 500px 100px, #fff 50%, transparent),
+          radial-gradient(3px 3px at 50px 200px, #fff 50%, transparent),
+          radial-gradient(4px 4px at 150px 300px, #fff 50%, transparent),
+          radial-gradient(5px 5px at 250px 400px, #fff 50%, transparent),
+          radial-gradient(6px 6px at 350px 500px, #fff 50%, transparent),
+          radial-gradient(3px 3px at 450px 550px, #fff 50%, transparent);
+        background-size: 600px 600px;
+        animation: noscript-snowfall 10s linear infinite;
+      }
+
+      .noscript-snow::before {
+        background-size: 450px 450px;
+        opacity: 0.6;
+        filter: blur(1px);
+        animation-duration: 15s;
+        animation-direction: reverse;
+      }
+
+      .noscript-snow::after {
+        background-size: 750px 750px;
+        opacity: 0.8;
+        animation-duration: 7s;
+      }
+
+      @keyframes noscript-snowfall {
+        0% { transform: translate3d(0, 0, 0); }
+        50% { transform: translate3d(25px, 50vh, 0); }
+        100% { transform: translate3d(0, 100vh, 0); }
+      }
+    </style>
+    <div class="noscript-snow" aria-hidden="true"></div>
+  </noscript>
+
+   <style>
+    #snow-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 9999;
+    }
+  </style>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById('snow-canvas');
+      if (!canvas) return;
+
+      const ctx = canvas.getContext('2d');
+      let width = (canvas.width = window.innerWidth);
+      let height = (canvas.height = window.innerHeight);
+
+      window.addEventListener('resize', () => {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+      });
+
+      const FLAKE_COUNT = 120;
+      const flakes = Array.from({ length: FLAKE_COUNT }, () => ({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        radius: Math.random() * 3 + 1,
+        speedY: Math.random() * 1.5 + 0.5,
+        speedX: Math.random() * 1 - 0.5,
+        angle: Math.random() * Math.PI * 2,
+        spin: Math.random() * 0.02 + 0.005,
+        opacity: Math.random() * 0.6 + 0.4
+      }));
+
+      function drawAndUpdate() {
+        ctx.clearRect(0, 0, width, height);
+
+        for (const f of flakes) {
+          f.angle += f.spin;
+          f.y += f.speedY;
+          f.x += f.speedX + Math.sin(f.angle) * 0.4;
+
+          if (f.y > height + f.radius) {
+            f.y = -f.radius;
+            f.x = Math.random() * width;
+          }
+          if (f.x > width + f.radius) f.x = -f.radius;
+          if (f.x < -f.radius) f.x = width + f.radius;
+
+          ctx.beginPath();
+          ctx.arc(f.x, f.y, f.radius, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255, 255, 255, ${f.opacity})`;
+          ctx.fill();
+        }
+
+        requestAnimationFrame(drawAndUpdate);
+      }
+
+      drawAndUpdate();
+    })();
+  </script>
+<% } %>
 
   <video playsinline muted autoplay>
     <source src="/bg-480.webm" type="video/webm" />
