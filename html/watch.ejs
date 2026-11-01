@@ -1212,12 +1212,36 @@ Offical Discord Server! :3
   <% if (isvidious) { %>
     <% if (!qua) { %>
       <% if (hasHD) { 
+        const availableItags = new Set(
+          (VideoData.adaptiveFormats || []).map(format => String(format.itag))
+        );
+
         let hdItag = '247';
-        VideoData.adaptiveFormats.forEach(format => {
-          if (format.itag == '302') hdItag = '302';
-        });
+        let hdLabel = 'hd720';
+        let hdMime = 'video/mp4';
+
+        if (availableItags.has('302')) {
+          hdItag = '302';
+          hdMime = 'video/webm';
+        } else if (availableItags.has('247')) {
+          hdItag = '247';
+          hdMime = 'video/webm';
+        } else if (availableItags.has('136')) {
+          hdItag = '136';
+          hdMime = 'video/mp4';
+        }
+
+        if (availableItags.has('248')) {
+          hdItag = '248';
+          hdLabel = 'hd1080';
+          hdMime = 'video/webm';
+        } else if (availableItags.has('137')) {
+          hdItag = '137';
+          hdLabel = 'hd1080';
+          hdMime = 'video/mp4';
+        }
       %>
-        <source src="<%=u%>/companion/latest_version?id=<%=VideoData.videoId%>&itag=<%=hdItag%>&local=true"  type="video/mp4" label="hd720" selected="true">
+        <source src="<%=u%>/companion/latest_version?id=<%=VideoData.videoId%>&itag=<%=hdItag%>&local=true" type="<%=hdMime%>" label="<%=hdLabel%>" selected="true">
       <% } else { %>
         <source src="<%=u%>/companion/latest_version?id=<%=VideoData.videoId%>&itag=18&local=true" type="video/mp4" label="sd360" selected="true">
       <% } %>
