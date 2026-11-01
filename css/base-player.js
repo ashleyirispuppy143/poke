@@ -2681,6 +2681,22 @@ window.SyncLevel = SyncLevel;
       var nativeGetVPaused = pausedDesc && pausedDesc.get ? pausedDesc.get.bind(videoEl) : function() { return false; };
       var nativeGetAPaused = pausedDesc && pausedDesc.get ? pausedDesc.get.bind(audioEl) : function() { return false; };
 
+      var loopDesc = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'loop');
+      var nativeSetVLoop = loopDesc && loopDesc.set ? loopDesc.set.bind(videoEl) : null;
+      var nativeSetALoop = loopDesc && loopDesc.set ? loopDesc.set.bind(audioEl) : null;
+      var origSetAttr = Element.prototype.setAttribute.bind(videoEl);
+      var origRemoveAttr = Element.prototype.removeAttribute.bind(videoEl);
+      var origHasAttr = Element.prototype.hasAttribute.bind(videoEl);
+      var origGetAttr = Element.prototype.getAttribute.bind(videoEl);
+
+      var initialLoopState = Boolean(videoEl.loop || origHasAttr('loop') || (typeof player.loop === 'function' && player.loop()));
+      try {
+        if (nativeSetVLoop) nativeSetVLoop(false);
+        if (nativeSetALoop) nativeSetALoop(false);
+        origRemoveAttr('loop');
+        audioEl.removeAttribute('loop');
+      } catch (_) {}
+
       try { nativeVideoPause(); } catch (_) {}
       try { nativeAudioPause(); } catch (_) {}
 
@@ -2696,6 +2712,7 @@ window.SyncLevel = SyncLevel;
 
       var state = {
         wantPlaying: false,
+        loopEnabled: initialLoopState,
         userSeeking: false,
         internalVideoSeeking: false,
         internalAudioSeeking: false,
@@ -2739,6 +2756,57 @@ window.SyncLevel = SyncLevel;
         initialAutoplayAttempt: false,
         reprimingVideoAt: 0
       };
+
+      Object.defineProperty(videoEl, 'loop', {
+        configurable: true,
+        enumerable: true,
+        get: function() {
+          return Boolean(state.loopEnabled);
+        },
+        set: function(val) {
+          state.loopEnabled = Boolean(val);
+          if (nativeSetVLoop) nativeSetVLoop(false);
+          if (nativeSetALoop) nativeSetALoop(false);
+        }
+      });
+
+      videoEl.setAttribute = function(name, value) {
+        if (String(name).toLowerCase() === 'loop') {
+          state.loopEnabled = true;
+          if (nativeSetVLoop) nativeSetVLoop(false);
+          if (nativeSetALoop) nativeSetALoop(false);
+          return;
+        }
+        return origSetAttr(name, value);
+      };
+
+      videoEl.removeAttribute = function(name) {
+        if (String(name).toLowerCase() === 'loop') {
+          state.loopEnabled = false;
+          if (nativeSetVLoop) nativeSetVLoop(false);
+          if (nativeSetALoop) nativeSetALoop(false);
+          return origRemoveAttr(name);
+        }
+        return origRemoveAttr(name);
+      };
+
+      videoEl.hasAttribute = function(name) {
+        if (String(name).toLowerCase() === 'loop') {
+          return Boolean(state.loopEnabled);
+        }
+        return origHasAttr(name);
+      };
+
+      videoEl.getAttribute = function(name) {
+        if (String(name).toLowerCase() === 'loop') {
+          return state.loopEnabled ? '' : null;
+        }
+        return origGetAttr(name);
+      };
+
+      function isLoopActive() {
+        return Boolean(state.loopEnabled || (typeof player.loop === 'function' && player.loop()));
+      }
 
       function getAuthoritativeDuration() {
         var vDur = nativeGetVDur ? nativeGetVDur() : NaN;
@@ -2872,6 +2940,7 @@ window.SyncLevel = SyncLevel;
       }
 
       function isPlaybackCompleted() {
+        if (state.userSeeking) return false;
         if (state.endedCompleted) return true;
         if (audioEl.ended) return true;
         var aDur = getAuthoritativeDuration();
@@ -3021,19 +3090,19 @@ window.SyncLevel = SyncLevel;
         if (state.endedCompleted && state.endedAtTime > 0) return state.endedAtTime;
         var aCur = nativeGetATime();
         var vCur = nativeGetVTime();
-        if (!nativeGetAPaused() && aCur > 0.02) {
-          state.savedMasterTime = aCur;
-          return aCur;
-        }
-        var best = Math.max(aCur || 0, state.savedMasterTime || 0);
-        if (best > 0.02) {
-          if (aCur > 0.02 && Math.abs(aCur - state.savedMasterTime) < 2.5) {
+        if (typeof aCur === 'number' && !isNaN(aCur) && isFinite(aCur)) {
+          if (!nativeGetAPaused() || aCur > 0.02) {
             state.savedMasterTime = aCur;
             return aCur;
           }
-          return best;
+          if (!audioEl.seeking && audioEl.readyState >= 1 && state.savedMasterTime < 0.25) {
+            return aCur;
+          }
         }
-        return vCur || 0;
+        if (state.savedMasterTime > 0.02) {
+          return state.savedMasterTime;
+        }
+        return (typeof aCur === 'number' && !isNaN(aCur)) ? aCur : (vCur || 0);
       }
 
       if (timeDesc && timeDesc.get && timeDesc.set) {
@@ -3044,10 +3113,10 @@ window.SyncLevel = SyncLevel;
             if (state.internalDepth > 0) return nativeGetVTime();
             if (state.userSeeking) return state.seekTarget;
             if (state.endedCompleted && state.endedAtTime > 0) return state.endedAtTime;
-            if (state.buffering && state.frozenDisplayTime > 0) return state.frozenDisplayTime;
+            if (state.buffering && state.frozenDisplayTime >= 0 && state.bufferStartTime > 0) return state.frozenDisplayTime;
             var master = getMasterAnchorTime();
             if (state.wantPlaying || state.hidden || isTabWaking() || isVideoBypassed()) {
-              if (master > 0.02) return master;
+              return master;
             }
             return master > 0.02 ? master : nativeGetVTime();
           },
@@ -3244,7 +3313,7 @@ window.SyncLevel = SyncLevel;
             try { nativeVideoPause(); } catch (_) {}
           }
 
-          if (opts.alignToAnchor && !state.userSeeking && anchor > 0.02) {
+          if (opts.alignToAnchor && !state.userSeeking && anchor >= 0) {
             if (!isVideoBypassed() && !state.hidden && videoEl.readyState >= 1 && !videoEl.seeking && Math.abs(nativeGetVTime() - anchor) > config.alignThreshold) {
               state.internalVideoSeeking = true;
               try { nativeSetVTime(anchor); } catch (_) {}
@@ -3556,7 +3625,7 @@ window.SyncLevel = SyncLevel;
           return;
         }
 
-        if (masterAnchor > 0.05 && Math.abs(aCurNow - masterAnchor) > 0.15 && !audioEl.seeking) {
+        if (Math.abs(aCurNow - masterAnchor) > 0.15 && !audioEl.seeking) {
           freezeBothStreams();
           setBufferSpinner(true);
           seekAudioAndWait(masterAnchor, function() {
@@ -3565,7 +3634,7 @@ window.SyncLevel = SyncLevel;
           return;
         }
 
-        var targetSyncTime = Math.max(aCurNow, masterAnchor);
+        var targetSyncTime = aCurNow;
         if (Math.abs(vCurNow - targetSyncTime) > config.maxStartDesyncSec) {
           if (!nativeGetAPaused() && isTabWaking()) {
             snapVideoToAudioLive(targetSyncTime, 1200);
@@ -3982,6 +4051,20 @@ window.SyncLevel = SyncLevel;
         syncPlaybackState();
       }
 
+      function restartLoopFromBeginning() {
+        state.endedCompleted = false;
+        state.endedAtTime = 0;
+        state.wantPlaying = true;
+        state.savedMasterTime = 0;
+        state.seekTarget = 0;
+        state.frozenDisplayTime = 0;
+        state.driftCount = 0;
+        state.vStallSince = 0;
+        state.aStallSince = 0;
+        player.removeClass('vjs-ended');
+        beginExternalUserSeek(0);
+      }
+
       videoEl.play = function() {
         if (state.internalDepth > 0) return nativeVideoPlay();
         if (window.Alabaster.testErrorActive) window.Alabaster.DisableTestUI();
@@ -3995,12 +4078,9 @@ window.SyncLevel = SyncLevel;
           state.endedCompleted = false;
           state.endedAtTime = 0;
           state.savedMasterTime = 0;
-          setAudioTimeInternally(0);
-          if (videoEl.readyState === 0) {
-            reprimeEvictedVideo(0);
-          } else {
-            setVideoTimeInternally(0);
-          }
+          state.wantPlaying = true;
+          beginExternalUserSeek(0);
+          return window.Promise ? Promise.resolve() : undefined;
         } else if (!isVideoBypassed() && !state.hidden && videoEl.readyState === 0) {
           reprimeEvictedVideo(currentAnchor);
         }
@@ -4151,7 +4231,12 @@ window.SyncLevel = SyncLevel;
         }
         var vTarget = nativeGetVTime();
         var master = getMasterAnchorTime();
+        var dur = getAuthoritativeDuration() || 0;
         if (vTarget < 0.05 && master > 0.5) {
+          if (isLoopActive() && dur > 0 && master >= dur - 1.2) {
+            restartLoopFromBeginning();
+            return;
+          }
           setVideoTimeInternally(master);
           return;
         }
@@ -4292,7 +4377,7 @@ window.SyncLevel = SyncLevel;
         if (state.handlingEnded) return;
         state.handlingEnded = true;
         try {
-          var loopEnabled = Boolean(player.loop() || videoEl.loop || videoEl.hasAttribute('loop'));
+          var loopEnabled = isLoopActive();
           clearPendingWait();
           clearWatchdog();
           setBufferSpinner(false);
@@ -4327,13 +4412,7 @@ window.SyncLevel = SyncLevel;
             if (navigator.mediaSession) navigator.mediaSession.playbackState = 'none';
             return;
           }
-          state.endedCompleted = false;
-          state.endedAtTime = 0;
-          state.wantPlaying = true;
-          state.savedMasterTime = 0;
-          setAudioTimeInternally(0);
-          setVideoTimeInternally(0);
-          syncPlaybackState();
+          restartLoopFromBeginning();
         } finally {
           state.handlingEnded = false;
         }
@@ -4341,15 +4420,6 @@ window.SyncLevel = SyncLevel;
 
       listen(videoEl, 'ended', onStreamEnded, false);
       listen(audioEl, 'ended', onStreamEnded, false);
-
-      var loopWatcher = null;
-      if (window.MutationObserver) {
-        loopWatcher = new MutationObserver(function() {
-          audioEl.loop = Boolean(videoEl.loop || videoEl.hasAttribute('loop'));
-        });
-        loopWatcher.observe(videoEl, { attributes: true, attributeFilter: ['loop'] });
-      }
-      audioEl.loop = Boolean(videoEl.loop || videoEl.hasAttribute('loop'));
 
       var handleTabVisibility = function() {
         var currentlyHidden = Boolean(document.hidden);
@@ -4805,7 +4875,6 @@ window.SyncLevel = SyncLevel;
           ev.target.removeEventListener(ev.type, ev.fn, ev.capture);
         }
         registeredEvents.length = 0;
-        if (loopWatcher) loopWatcher.disconnect();
         clearWatchdog();
         clearPendingWait();
         shield.teardown();
