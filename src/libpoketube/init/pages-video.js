@@ -348,139 +348,215 @@ app.get("/embed/:v", async function (req, res) {
  
   if (req.hostname !== officialHost && config.invapi.includes("invid-api.poketube.fun")) {
     
-    const kaomojis = [
-      "(ó﹏ò｡)", 
-      "( ｡ •̀ ᴖ •́ ｡)", 
-      "(｡>﹏<｡)", 
-      "( ´△｀)", 
-      "૮( > ﻌ < )ა",
-      "( ╥﹏╥ )",
-      "(=^-ω-^=)"
-    ];
-    const randomKaomoji = kaomojis[Math.floor(Math.random() * kaomojis.length)];
+const message = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Configuration Error - Poke</title>
+        <style>
+          @font-face {
+            font-family: "PokeTube Flex";
+            src: url("/static/robotoflex.ttf");
+            font-style: normal;
+            font-stretch: 1% 800%;
+            font-display: swap;
+          }
 
-    const message = `
-      <style>
-         @keyframes gradient {
-          0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
-        }
+          :root {
+            --bg-surface: #0f0f0f;
+            --bg-container: #1e1e1e;
+            --bg-container-high: #282828;
+            --text-primary: #f1f1f1;
+            --text-secondary: #aaaaaa;
+            --accent-primary: #a8c7fa;
+            --accent-on-primary: #062e6f;
+          }
 
-         @keyframes float {
-          0% { transform: translateY(0px); }
-          50% { transform: translateY(-12px); }
-          100% { transform: translateY(0px); }
-        }
+          * {
+            box-sizing: border-box;
+          }
 
-        body {
-          background: linear-gradient(-45deg, #fff0f3, #ffe4e8, #ffcdd2, #fce4ec);
-          background-size: 400% 400%;
-          animation: gradient 12s ease infinite;
-          color: #704c54;
-          /* Offline-safe rounded system fonts! */
-          font-family: ui-rounded, 'Segoe UI Rounded', 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          margin: 0;
-          height: 100vh;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          text-align: center;
-          padding: 0 20px;
-        }
+          body {
+            background-color: var(--bg-surface);
+            color: var(--text-primary);
+            font-family: "PokeTube Flex", Roboto, system-ui, sans-serif;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+          }
 
-        .kaomoji {
-          font-size: 6rem;
-          color: #f080a0;
-          margin-bottom: 10px;
-          font-weight: 700;
-          text-shadow: 0 8px 20px rgba(240, 128, 160, 0.25);
-          animation: float 3s ease-in-out infinite;
-        }
+          header {
+            height: 56px;
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+          }
 
-        h1 { 
-          font-size: 2.4rem; 
-          color: #e06c8f; 
-          margin: 0 0 15px 0;
-          font-weight: 700;
-          letter-spacing: -0.5px;
-        }
+          .logo {
+            height: 28px;
+            width: auto;
+          }
 
-        p {
-          font-size: 1.15rem;
-          max-width: 600px;
-          line-height: 1.6;
-          margin: 0 0 20px 0;
-          font-weight: 500;
-        }
+          main {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 32px;
+          }
 
-        code { 
-          background: rgba(255, 255, 255, 0.7); 
-          color: #d16b88;
-          padding: 4px 10px; 
-          border-radius: 10px; 
-          font-weight: 700;
-          font-size: 1.05rem;
-          box-shadow: 0 2px 5px rgba(0,0,0,0.02);
-        }
+          .error-wrapper {
+            background-color: var(--bg-container);
+            border-radius: 32px;
+            padding: 64px;
+            max-width: 1200px;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 64px;
+          }
 
-        .button {
-          display: inline-block;
-          background: #f48fb1;
-          color: #ffffff;
-          text-decoration: none;
-          font-weight: 700;
-          font-size: 1.1rem;
-          padding: 14px 32px;
-          /* Super rounded corners for maximum coziness */
-          border-radius: 25px; 
-          transition: all 0.3s ease;
-          box-shadow: 0 6px 15px rgba(244, 143, 177, 0.35);
-          margin-top: 20px;
-        }
+          .warning-content {
+            flex: 1;
+            max-width: 680px;
+          }
 
-        .button:hover { 
-          background: #f06292;
-          transform: translateY(-3px);
-          box-shadow: 0 8px 20px rgba(240, 98, 146, 0.4);
-        }
+          h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            font-stretch: 150%;
+            font-variation-settings: "wdth" 150, "wght" 800;
+            margin: 0 0 20px 0;
+            line-height: 1.15;
+            letter-spacing: -0.01em;
+          }
 
-        .admin-note {
-          margin-top: 40px; 
-          font-size: 1rem;
-          color: #a38189;
-          background: rgba(255, 255, 255, 0.4);
-          padding: 18px 30px;
-          border-radius: 20px;
-          font-weight: 600;
-          border: 2px dashed rgba(244, 143, 177, 0.3);
-          max-width: 550px;
-        }
-      </style>
+          p {
+            color: var(--text-secondary);
+            font-size: 1.05rem;
+            line-height: 1.65;
+            margin: 0 0 16px 0;
+          }
 
-      <div class="kaomoji">${randomKaomoji}</div>
-      
-      <h1>Uh oh! A tiny configuration hiccup... ☁️</h1>
-      
-      <p>
-        It looks like this custom instance is trying to use the official <code>Poke</code> API endpoint. 
-      </p>
+          code {
+            background-color: var(--bg-container-high);
+            color: var(--text-primary);
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 0.9rem;
+          }
 
-      <p>
-        <strong>Why is this an issue?</strong> YouTube strictly limits how many videos a single server can request. When multiple sites share the exact same API, the servers quickly get overwhelmed and rate-limited. This causes videos to buffer forever or completely break for everyone! 🥺
-      </p>
+          .admin-box {
+            margin: 28px 0;
+          }
 
-      <p>
-        To keep things running smoothly, every instance needs its own dedicated API. Hosting your own Invidious backend ensures your site runs perfectly without any shared limits or sleepy servers! ✨
-      </p>
+          .admin-box p {
+            margin: 0;
+            font-size: 0.95rem;
+            color: var(--text-primary);
+          }
 
-      <a href="https://docs.invidious.io/installation/" target="_blank" class="button">View the Installation Guide 🌸</a>
+          .actions {
+            margin-top: 32px;
+            display: flex;
+            gap: 12px;
+          }
 
-      <div class="admin-note">
-        <strong>Are you the server admin? 💌</strong> <br>
-        Fixing this is a breeze! Just update your <code>config.json</code> with your newly hosted API link, give your server a quick restart, and you'll be good to go. 
-      </div>
+          .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--accent-primary);
+            color: var(--accent-on-primary);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.95rem;
+            padding: 14px 28px;
+            border-radius: 999px;
+            transition: opacity 0.2s ease, transform 0.1s ease;
+          }
+
+          .btn:hover {
+            opacity: 0.9;
+          }
+
+          .btn:active {
+            transform: scale(0.98);
+          }
+
+          .mascot-container {
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+
+          .mascot-container img {
+            max-width: 320px;
+            height: auto;
+            border-radius: 16px;
+          }
+
+          @media (max-width: 900px) {
+            .error-wrapper {
+              flex-direction: column-reverse;
+              padding: 40px 28px;
+              gap: 32px;
+              text-align: left;
+            }
+            .mascot-container img {
+              max-width: 200px;
+            }
+            h1 {
+              font-size: 1.85rem;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <header>
+          <img src="/css/poke-logo-pride.svg" alt="Poke" class="logo">
+        </header>
+
+        <main>
+          <div class="error-wrapper">
+            <div class="warning-content">
+              <h1>You can't watch videos without changing the API</h1>
+
+              <p>
+                This custom instance is currently configured to use the default Poke API endpoint.
+              </p>
+
+              <p>
+                YouTube aggressively rate-limits traffic and blocks IP addresses fast when too many video requests come from a single server. When multiple instances share the same public backend, the server's IP gets flagged and throttled almost immediately, breaking video playback for everyone. To watch videos on this instance, a dedicated Invidious backend is required.
+              </p>
+
+              <div class="admin-box">
+                <p>
+                  <strong>To SYSADMIN:</strong> Host your own Invidious instance, update the API URL in <code>config.json</code>, and restart the server. Also, don't forget to change the URLs for other Poke services in the configuration as well.
+                </p>
+              </div>
+
+              <div class="actions">
+                <a href="https://docs.invidious.io/installation/" target="_blank" class="btn">
+                  Invidious Setup Guide
+                </a>
+              </div>
+            </div>
+
+            <div class="mascot-container">
+              <img src="/static/poke-mascot-new.webp?v=2" alt="Poke Mascot">
+            </div>
+          </div>
+        </main>
+      </body>
+      </html>
     `;
 
     return res.status(500).send(message);
@@ -488,7 +564,6 @@ app.get("/embed/:v", async function (req, res) {
     
   INNERTUBE.getYouTubePlayerInfo(f, v, contentlang, contentregion).then(
     (data) => {
-      // Drop immediately if request was issued from a past epoch
       if (currentEpoch !== requestEpoch) {
         return res.status(499).send("Request dropped by server.");
       }
