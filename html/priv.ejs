@@ -11,7 +11,6 @@
   <meta content="summary_large_image" name="twitter:card">
   <link href="/css/yt-ukraine.svg?v=7" rel="icon">
   <style>
-    /* Custom Fonts */
     @font-face {
       src: url("/static/robotoflex.ttf");
       font-family: "PokeTube Flex";
@@ -20,6 +19,42 @@
       font-display: swap;
     }
     
+    :root { 
+      --md-sys-color-background: #141218;
+      --md-sys-color-on-background: #E6E0E9;
+      --md-sys-color-surface: #141218;
+      --md-sys-color-surface-container-lowest: #0F0D13;
+      --md-sys-color-surface-container-low: #1D1B20;
+      --md-sys-color-surface-container: #211F26;
+      --md-sys-color-surface-container-high: #2B2930;
+      --md-sys-color-surface-container-highest: #36343B;
+      --md-sys-color-on-surface: #E6E0E9;
+      --md-sys-color-on-surface-variant: #CAC4D0;
+      
+      --md-sys-color-primary: #ffabcc;
+      --md-sys-color-on-primary: #3e001d;
+      --md-sys-color-primary-container: #5c1834;
+      --md-sys-color-on-primary-container: #ffabcc;
+      
+      --md-sys-color-secondary: #CCC2DC;
+      --md-sys-color-on-secondary: #332D41;
+      --md-sys-color-secondary-container: #4A4458;
+      --md-sys-color-on-secondary-container: #E8DEF8;
+      
+      --md-sys-color-tertiary: #EFB8C8;
+      --md-sys-color-on-tertiary: #492532;
+      --md-sys-color-tertiary-container: #633B48;
+      --md-sys-color-on-tertiary-container: #FFD8E4;
+      
+      --md-sys-color-outline: #938F99;
+      --md-sys-color-outline-variant: #49454F;
+
+      --ptd-branding-container: #4a1029; /* idk what else color to use weh */
+      --ptd-on-branding-container: #ffeaef;
+      --ptd-on-branding-color: #ffabcc;
+      --ptd-on-pink-primary: #3e001d;
+    }
+
     *, *::before, *::after { box-sizing: border-box; }
     
     html {
@@ -30,37 +65,34 @@
     
     body {
       margin: 0; padding: 0;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif;
+      font-family: "PokeTube Flex", system-ui, -apple-system, sans-serif;
       line-height: 1.6;
-      color: #eaeaea;
-      background: #0b0b0b;
+      color: var(--md-sys-color-on-background);
+      background: var(--md-sys-color-background);
     }
     
-    a { color: #ffabcc; text-decoration: none; transition: color 0.2s; }
-    a:hover { color: #ff8cb6; text-decoration: underline; }
+    a { color: var(--md-sys-color-primary); text-decoration: none; transition: color 0.2s; font-weight: 500; }
+    a:hover { color: var(--md-sys-color-primary-container); text-decoration: underline; }
     img { max-width: 100%; height: auto; }
-    code, pre, kbd, samp { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "DejaVu Sans Mono", monospace; font-size: .95em; }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "DejaVu Sans Mono", monospace; }
+    code, pre, kbd, samp { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; font-size: .95em; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
 
-    /* Header */
     header.site {
       position: sticky; top: 0; z-index: 50;
-      background: rgba(11, 11, 11, 0.8);
+      background: rgba(20, 18, 24, 0.85);
       backdrop-filter: blur(12px);
-      border-bottom: 1px solid rgba(255, 171, 204, 0.1);
+      border-bottom: 1px solid var(--md-sys-color-surface-container-high);
     }
     .nav-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 24px; max-width: 1200px; margin: 0 auto; }
-    .brand { display: inline-flex; align-items: center; gap: 10px; color: #fff; font-weight: 800; text-decoration: none; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--md-sys-color-on-surface); font-weight: 800; text-decoration: none; }
     .brand img { height: 32px; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.5)); }
 
-    /* Hero Branding Area */
     .hero-branding {
       position: relative;
       background: linear-gradient(135deg, #a83258 0%, #ffabbc 80%);
       padding: 80px 20px 120px;
       text-align: center;
       overflow: hidden;
-      border-bottom: 1px solid rgba(255, 171, 204, 0.2);
     }
 
     .hype-container {
@@ -114,9 +146,16 @@
     .doc-lede { font-size: 1.1rem; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.5); margin: 0 0 24px 0; }
     
     .meta-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
-    .badge { background: rgba(0,0,0,0.6); border: 1px solid rgba(255,171,204,0.3); color: #fff; border-radius: 8px; padding: 8px 16px; font-size: 0.9rem; font-weight: 500; }
+    .badge { 
+      background: var(--md-sys-color-surface-container-highest); 
+      color: var(--md-sys-color-on-surface); 
+      border-radius: 16px; 
+      padding: 8px 16px; 
+      font-size: 0.9rem; 
+      font-weight: 600; 
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    }
 
-    /* Main Layout Structure */
     .layout-wrapper {
       display: flex;
       gap: 32px;
@@ -128,32 +167,26 @@
       align-items: flex-start;
     }
 
-    /* Sidebar TOC */
     .sidebar {
       flex: 0 0 280px;
       position: sticky;
       top: 90px;
-      background: #141414;
-      border: 1px solid #2a2a2a;
-      border-radius: 16px;
+      background: var(--md-sys-color-surface-container-low);
+      border-radius: 24px;
       padding: 24px;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.6);
     }
 
-    .sidebar h2 { font-family: "PokeTube Flex", sans-serif; margin: 0 0 16px 0; font-size: 1.2rem; color: #ffabcc; font-stretch: expanded; border-bottom: 1px solid #2a2a2a; padding-bottom: 8px; }
+    .sidebar h2 { font-family: "PokeTube Flex", sans-serif; margin: 0 0 16px 0; font-size: 1.2rem; color: var(--md-sys-color-primary); font-weight: 600; font-stretch: expanded; border-bottom: 1px solid var(--md-sys-color-outline-variant); padding-bottom: 12px; }
     .sidebar ul { margin: 0; padding-left: 0; list-style: none; }
     .sidebar li { margin: 8px 0; }
-    .sidebar a { color: #cfcfcf; font-size: 0.95rem; transition: color 0.2s; display: block; }
-    .sidebar a:hover { color: #ffabcc; text-decoration: none; transform: translateX(4px); }
+    .sidebar a { color: var(--md-sys-color-on-surface-variant); font-size: 0.95rem; transition: all 0.2s; display: block; font-weight: 500; }
+    .sidebar a:hover { color: var(--md-sys-color-primary); text-decoration: none; transform: translateX(4px); }
 
-    /* Content Area */
     .content {
       flex: 1;
-      background: #141414;
-      border: 1px solid #2a2a2a;
-      border-radius: 16px;
+      background: var(--md-sys-color-surface-container-low);
+      border-radius: 24px;
       padding: 40px;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.6);
       min-width: 0;
     }
 
@@ -162,48 +195,57 @@
       margin: 40px 0 16px 0;
       font-size: clamp(1.4rem, 3vw, 1.8rem);
       padding-bottom: 8px;
-      border-bottom: 1px solid #2a2a2a;
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
       font-stretch: expanded;
-      color: #fff;
+      font-weight: 600;
+      color: var(--md-sys-color-on-surface);
     }
     h2.section:first-child { margin-top: 0; }
 
-    p { margin: 16px 0; color: #d1d1d1; }
-    ul { margin: 16px 0 16px 24px; color: #d1d1d1; }
+    p { margin: 16px 0; color: var(--md-sys-color-on-surface-variant); }
+    ul { margin: 16px 0 16px 24px; color: var(--md-sys-color-on-surface-variant); }
     li { margin-bottom: 6px; }
 
     .callout {
-      background: rgba(255, 171, 204, 0.05); border-left: 4px solid #ffabcc; color: #eaeaea;
-      padding: 16px 20px; border-radius: 0 12px 12px 0; margin: 24px 0; font-weight: 500;
+      background: var(--md-sys-color-secondary-container); 
+      color: var(--md-sys-color-on-secondary-container);
+      padding: 16px 20px; 
+      border-radius: 16px; 
+      margin: 24px 0; 
+      font-weight: 500;
     }
 
     details.block {
-      background: #0f0f0f; border: 1px solid #222; border-radius: 12px; padding: 16px; margin: 16px 0;
-      transition: border-color 0.2s;
+      background: var(--md-sys-color-surface-container); 
+      border-radius: 16px; 
+      padding: 16px 20px; 
+      margin: 16px 0;
+      transition: background-color 0.2s;
     }
-    details.block:hover { border-color: #333; }
-    details.block summary { cursor: pointer; font-weight: bold; color: #fff; font-size: 1.05rem; outline: none; }
+    details.block:hover { background: var(--md-sys-color-surface-container-high); }
+    details.block summary { cursor: pointer; font-weight: 600; color: var(--md-sys-color-primary); font-size: 1.05rem; outline: none; }
     details.block p:last-child, details.block ul:last-child { margin-bottom: 0; }
     details.block p:first-of-type { margin-top: 16px; }
 
     .update-box {
-      margin: 0 0 32px 0; padding: 20px; border-radius: 16px;
-      background: linear-gradient(to right, #1a0a11, #141414);
-      border: 1px solid rgba(255, 171, 204, 0.3);
-      box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+      margin: 0 0 32px 0; padding: 24px; border-radius: 24px;
+      background: var(--ptd-branding-container);
+      color: var(--ptd-on-branding-container);
     }
-    .update-box h3 { margin: 0 0 12px 0; font-size: 1.2rem; color: #ffabcc; font-family: "PokeTube Flex", sans-serif; }
-    .update-box .when { display: inline-block; margin-left: 12px; padding: 4px 10px; border-radius: 999px; font-size: .85rem; color: #fff; background: rgba(255, 171, 204, 0.15); border: 1px solid rgba(255, 171, 204, 0.2); font-family: system-ui, sans-serif; font-weight: normal;}
-    .update-actions { margin-top: 16px; }
-    .update-actions button { appearance: none; border: 1px solid rgba(255, 171, 204, 0.4); background: rgba(255, 171, 204, 0.1); color: #fff; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: .95rem; font-weight: bold; transition: all 0.2s; }
-    .update-actions button:hover { background: rgba(255, 171, 204, 0.2); border-color: #ffabcc; }
+    .update-box h3 { margin: 0 0 12px 0; font-size: 1.2rem; color: var(--ptd-on-branding-color); font-family: "PokeTube Flex", sans-serif; font-weight: 600; }
+    .update-box .when { display: inline-block; margin-left: 12px; padding: 4px 12px; border-radius: 16px; font-size: .85rem; color: var(--ptd-on-pink-primary); background: var(--ptd-on-branding-color); font-family: system-ui, sans-serif; font-weight: 600;}
+    .update-box p, .update-box ul { color: var(--ptd-on-branding-container); }
+    .update-box a { color: var(--ptd-on-branding-color); font-weight: 600; }
+    .update-actions { margin-top: 20px; }
+    .update-actions button { appearance: none; border: none; background: var(--ptd-on-branding-color); color: var(--ptd-on-pink-primary); padding: 10px 24px; border-radius: 100px; cursor: pointer; font-size: .95rem; font-weight: 600; transition: all 0.2s; }
+    .update-actions button:hover { background: var(--ptd-on-branding-container); color: var(--ptd-branding-container); }
 
-    .small { font-size: .9rem; color: #a1a1a1; }
-    pre.small { background: #0a0a0a; padding: 16px; border-radius: 8px; border: 1px solid #222; overflow-x: auto; color: #c4c4c4; }
+    .small { font-size: .9rem; color: var(--md-sys-color-on-surface-variant); }
+    pre.small { background: var(--md-sys-color-surface-container-highest); padding: 16px; border-radius: 16px; overflow-x: auto; color: var(--md-sys-color-on-surface); }
 
-    footer.site { text-align: center; color: #666; margin: 40px 0 60px; font-weight: 500; }
-    footer.site a { color: #888; }
-    footer.site a:hover { color: #ffabcc; }
+    footer.site { text-align: center; color: var(--md-sys-color-on-surface-variant); margin: 40px 0 60px; font-weight: 500; }
+    footer.site a { color: var(--md-sys-color-on-surface-variant); }
+    footer.site a:hover { color: var(--md-sys-color-primary); }
 
     @media (max-width: 900px) {
       .layout-wrapper { flex-direction: column; margin-top: -30px; gap: 20px; }
@@ -286,7 +328,7 @@
           What's New - Policy Update
           <span class="when">October 29, 2026</span>
         </h3>
-        <p style="margin-top:6px; color: #eaeaea;">Highlights:</p>
+        <p style="margin-top:6px;">Highlights:</p>
         <ul>
           <li><strong>New Translate backend!!</strong> Poke now uses its own built-in privacy translation backend (<a href="https://codeberg.org/ashleyirispuppy/poke/src/branch/main/src/libpoketube/translate-backend.js" target="_blank" rel="noopener"><code>translate-backend.js</code></a>) instead of relying on SimplyTranslate.org. It uses Google as the engine and is completely proxied through our backend.</li>
           <li><strong>Clarified Weather Geocoding behavior!</strong> Place lookup / geocoding on the weather page is proxied when JavaScript is disabled, but connects directly from the front-end when JavaScript is enabled.</li>
@@ -322,7 +364,7 @@
           <br>
           <ul>
             <li><strong>Poke Account:</strong> no email required, no personal info needed.</li>
-            <li><strong>Hosting:</strong> Front-end is hosted in Germany via Skrime (<a href="https://skrime.eu/imprint" target="_blank" rel="noopener">imprint</a>); backend is hosted in the Netherlands via RoyaleHosting.</li>
+            <li><strong>Hosting:</strong> Front-end is hosted in Germany via Skrime; backend is hosted in the Netherlands via RoyaleHosting.</li>
             <li><strong>Poke Maps:</strong> uses OpenStreetMap data; map tiles and attribution may have separate privacy rules depending on the tile server you use.</li>
             <li><strong>No required analytics cookies.</strong> Preferences and the anonymous video stats ID live in local storage on your device.</li>
           </ul>
@@ -463,7 +505,7 @@
   </ul>
 
   <details class="block">
-    <summary><strong>Why this is not user tracking</strong></summary>
+    <summary>Why this is not user tracking</summary>
 
     <p>
       Tracking systems are designed to follow people around, build profiles,
@@ -485,7 +527,7 @@
   </details>
 
   <details class="block">
-    <summary><strong>Why we record the video ID</strong></summary>
+    <summary>Why we record the video ID</summary>
 
     <p>
       We record the video ID so we can understand aggregate demand on this instance.
@@ -499,7 +541,7 @@
   </details>
 
   <details class="block">
-    <summary><strong>Why we store an anonymous random viewer ID in localStorage</strong></summary>
+    <summary>Why we store an anonymous random viewer ID in localStorage</summary>
 
     <p>
       We store a random anonymous viewer ID so the same browser does not look like
@@ -513,7 +555,7 @@
   </details>
 
   <details class="block">
-    <summary><strong>Why we record the browser and operating system family</strong></summary>
+    <summary>Why we record the browser and operating system family</summary>
 
     <p>
       Browser and operating system compatibility matters for a video frontend.
@@ -619,151 +661,32 @@
 
 <section id="resource-guard" aria-labelledby="resource-guard-heading">
   <h2 id="resource-guard-heading" class="section">Anti-DDoS Protection <code>PokeResourceGuard</code></h2>
-
+  
   <p>
-    Poke has a built-in resource protection system called <strong>PokeResourceGuard</strong>.
-    It protects the server from request floods, overloaded routes, noisy clients, and sudden
-    spikes that could make the instance slow for everyone.
+    Poke has a built-in protection system called <strong>PokeResourceGuard</strong>. It protects the server from request floods and noisy clients.
   </p>
 
   <p>
-    Older public endpoint names may still mention <strong>PokeStopSkids</strong> for compatibility,
-    but the newer system is PokeResourceGuard. It watches server pressure and decides when to
-    gently shed expensive requests so normal browsing and video watching can keep working.
+    The guard monitors server health and request rates. When the server is under pressure, it may slow down or reject expensive requests to keep the instance usable.
   </p>
-
-  <h3>What PokeResourceGuard watches</h3>
 
   <p>
-    PokeResourceGuard samples server health about once per second. It checks:
+    To stop abuse, it keeps temporary client request counters in memory. These counters are not saved to disk, expire after inactivity, and disappear when the server restarts.
   </p>
 
+  <h3>What is NOT saved</h3>
   <ul>
-    <li>Node.js event loop delay</li>
-    <li>CPU usage</li>
-    <li>memory usage</li>
-    <li>requests per second</li>
-    <li>active request counts</li>
-    <li>request kinds, such as status, static, page, background, heavy, or other</li>
-    <li>temporary per-client request pressure</li>
+    <li>No raw IP addresses are stored persistently.</li>
+    <li>No cookies or browser fingerprints are used for this.</li>
+    <li>No personal browsing profiles are created.</li>
   </ul>
 
   <p>
-    The guard uses those signals to classify the server as <code>healthy</code>,
-    <code>warm</code>, <code>stressed</code>, or <code>critical</code>. When the server
-    is healthy, requests pass normally. When it is under pressure, the guard may slow down
-    or reject expensive requests before the whole instance becomes unusable.
-  </p>
-
-  <h3>Temporary in-memory client counters</h3>
-
-  <p>
-    To stop abuse, PokeResourceGuard keeps temporary client counters in memory.
-    These counters are used for sliding-window request totals, request cost totals,
-    heavy request totals, soft page passes, rejects, and cooldowns.
+    If a request is rejected, a temporary operational log might be printed using a random, temporary salt generated when the server starts. Proxy headers are only used for routing, not tracking.
   </p>
 
   <p>
-    This means the server can temporarily tell whether a connection is making too many
-    expensive requests. That is necessary for abuse prevention. The important privacy
-    part is that these client counters are in memory, expire, and are not part of the
-    persistent traffic file.
-  </p>
-
-  <p>
-    Client state is cleaned up after inactivity, and cooldown levels decay over time.
-    When the server restarts, the in-memory client counters disappear.
-  </p>
-
-  <h3>What PokeResourceGuard does not save persistently</h3>
-
-  <ul>
-    <li>No raw IP addresses are stored in <code>popularpaths.json</code></li>
-    <li>No cookies are stored by the guard for route traffic stats</li>
-    <li>No browser fingerprints are created</li>
-    <li>No account identifiers are used</li>
-    <li>No full user-agent strings are saved in the traffic file</li>
-    <li>No per-person browsing profile is created</li>
-    <li>No cross-site tracking happens</li>
-  </ul>
-
-  <h3>Logging during abuse or rejection</h3>
-
-  <p>
-    If the guard rejects a request or applies a cooldown, it may print a server-side
-    operational log entry. These logs are meant for debugging abuse and overload.
-    They use a random boot-time salt to anonymize the client address into a short
-    value like <code>anon-xxxxxxxx</code>. The salt is generated when the server starts,
-    so the anonymized value is not a stable long-term identity.
-  </p>
-
-  <p>
-    Rejection logs may include aggregate counters such as recent request totals,
-    heavy request totals, reject counts, cost score, pressure score, current guard
-    state, CPU state, memory state, and event loop state. They are not meant to
-    identify a person.
-  </p>
-
-  <h3>Known bots and infrastructure</h3>
-
-  <p>
-    PokeResourceGuard recognizes some well-known bot and infrastructure user agents.
-    This can reduce request cost or avoid punishing useful automated traffic such as
-    search engines, feed readers, fediverse previews, link preview bots, uptime monitors,
-    and CDN infrastructure.
-  </p>
-
-  <p>
-    This is not used to build a personal fingerprint. It is a broad operational rule
-    so that a search crawler and a normal browser do not always get treated exactly
-    the same during server pressure.
-  </p>
-
-  <h3>Cloudflare and proxy awareness</h3>
-
-  <p>
-    Poke includes trust-proxy auto-configuration so it can work correctly behind
-    common deployment platforms and proxies. It may look at proxy-related headers
-    such as <code>x-forwarded-for</code>, <code>x-forwarded-proto</code>,
-    <code>x-real-ip</code>, <code>cf-ray</code>, and similar headers when deciding
-    whether the instance is behind a trusted proxy.
-  </p>
-
-  <p>
-    This is used for correct routing, HTTPS handling, and safe request handling.
-    It is not a third-party analytics system and it is not used to create personal
-    profiles.
-  </p>
-
-  <h3>Live stats and source code</h3>
-
-  <p>
-    You can see the current state of the resource guard at
-    <a href="/health">/health</a>. The traffic view is at
-    <a href="/traffic">/traffic</a>. Raw JSON is available at
-    <a href="/_pokeresource/stats">/_pokeresource/stats</a>.
-  </p>
-
-  <p>
-    Compatibility endpoints may also exist:
-    <a href="/_poketraffic/stats">/_poketraffic/stats</a>,
-    <a href="/_pokestopskids/stats">/_pokestopskids/stats</a>, and
-    <a href="/_pokeoverload/stats">/_pokeoverload/stats</a>.
-  </p>
-
-  <p>
-    The full implementation is in the source code:
-    <br>
-    <code>
-      <a href="https://codeberg.org/ashleyirispuppy/poke">
-        codeberg.org/ashleyirispuppy/poke
-      </a>
-    </code>
-  </p>
-
-  <p>
-    Anyone can read exactly how it works, verify what data is stored, and run their
-    own instance with their own settings.
+    Live stats are available at <a href="/health">/health</a> and <a href="/traffic">/traffic</a>.
   </p>
 </section>
 
@@ -904,7 +827,7 @@
         <h2 id="gdpr-heading" class="section">Legal Bases for Processing GDPR / EU Law</h2>
         <p>
           The Poke Project and its primary instance <span class="mono">poketube.fun</span> operate under the jurisdiction of the
-          <strong>European Union</strong> (with front-end infrastructure hosted in <strong>Germany</strong> via <a href="https://skrime.eu/" target="_blank" rel="noopener">Skrime</a> see <a href="https://skrime.eu/imprint" target="_blank" rel="noopener">imprint</a> and backend servers in the <strong>Netherlands</strong> via <a href="https://royalehosting.net/" target="_blank" rel="noopener">RoyaleHosting</a>) and comply with German law and the principles of the
+          <strong>European Union</strong> (with front-end infrastructure hosted in <strong>Germany</strong> via Skrime and backend servers in the <strong>Netherlands</strong> via RoyaleHosting) and comply with German law and the principles of the
           <strong>General Data Protection Regulation GDPR</strong> Regulation EU 2016/679.
         </p>
         <ul>
