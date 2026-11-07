@@ -55,10 +55,10 @@
       --md-sys-color-surface-container-highest: #36343B;
       --md-sys-color-on-surface: #E6E0E9;
       --md-sys-color-on-surface-variant: #CAC4D0;
-      --md-sys-color-primary: #D0BCFF;
-      --md-sys-color-on-primary: #381E72;
-      --md-sys-color-primary-container: #4F378B;
-      --md-sys-color-on-primary-container: #EADDFF;
+      --md-sys-color-primary: #ffabcc;
+      --md-sys-color-on-primary: #3e001d;
+      --md-sys-color-primary-container: #5c1834;
+      --md-sys-color-on-primary-container: #ffabcc;
       --md-sys-color-secondary: #CCC2DC;
       --md-sys-color-on-secondary: #332D41;
       --md-sys-color-secondary-container: #4A4458;
@@ -198,7 +198,7 @@
 
     .featured-card {
       background: var(--md-sys-color-surface-container-low);
-      border-radius: 24px; /* Material You shape */
+      border-radius: 24px; 
       padding: 32px;
       transition: background-color 0.25s ease, transform 0.25s cubic-bezier(0.2, 0, 0, 1);
       display: flex;
@@ -248,8 +248,8 @@
     
      .btn-link {
       display: inline-block;
-      background: var(--md-sys-color-primary-container);
-      color: var(--md-sys-color-on-primary-container);
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
       padding: 12px 24px;
       border-radius: 100px;
       font-weight: 600;
@@ -258,8 +258,8 @@
       border: none;
     }
     .btn-link:hover { 
-      background: var(--md-sys-color-primary); 
-      color: var(--md-sys-color-on-primary); 
+      background: var(--md-sys-color-primary-container); 
+      color: var(--md-sys-color-on-primary-container); 
       text-decoration: none; 
     }
 
@@ -751,10 +751,8 @@
         });
 
         if (matchedDetails) {
-          // Programmatically click the summary to trigger the modal logic above
-          matchedDetails.querySelector('summary').click();
+           matchedDetails.querySelector('summary').click();
           
-          // Optionally smooth scroll to the section so users see where it came from under the modal overlay
           matchedDetails.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
       }
@@ -763,7 +761,6 @@
       closeBtn.addEventListener('click', closeModal);
       
       modal.addEventListener('click', (e) => {
-        // Only close if clicking the dark overlay area, not the surface
         if (e.target === modal) {
           closeModal();
         }
