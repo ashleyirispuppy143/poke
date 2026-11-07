@@ -15,7 +15,7 @@
   You should have received a copy of the GNU General Public License
   along with this program. If not, see https://www.gnu.org/licenses/.
 -->
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -34,12 +34,9 @@
   <meta name="twitter:title" content="Poke | Terms & Policies">
   <meta name="twitter:description" content="The legal stuff that will probably put you to sleep... but is still super important!">
   <meta name="twitter:image" content="/static/poke-embed.webp">
-
-  <!-- Favicon -->
-  <link href="/css/yt-ukraine.svg?v=7" rel="icon">
+   <link href="/css/yt-ukraine.svg?v=7" rel="icon">
   <style>
-    /* Custom Fonts */
-    @font-face {
+     @font-face {
       src: url("/static/robotoflex.ttf");
       font-family: "PokeTube Flex";
       font-style: normal;
@@ -48,49 +45,72 @@
     }
 
     :root { 
-      --bg: #0b0b0b; 
-      --surface: #141414; 
-      --surface-border: #2a2a2a;
-      --fg: #f3f3f3; 
-      --muted: #a1a1a1; 
-      --accent: #ffabcc; 
-      --accent-hover: #ff8cb6;
+      --md-sys-color-background: #141218;
+      --md-sys-color-on-background: #E6E0E9;
+      --md-sys-color-surface: #141218;
+      --md-sys-color-surface-container-lowest: #0F0D13;
+      --md-sys-color-surface-container-low: #1D1B20;
+      --md-sys-color-surface-container: #211F26;
+      --md-sys-color-surface-container-high: #2B2930;
+      --md-sys-color-surface-container-highest: #36343B;
+      --md-sys-color-on-surface: #E6E0E9;
+      --md-sys-color-on-surface-variant: #CAC4D0;
+      --md-sys-color-primary: #D0BCFF;
+      --md-sys-color-on-primary: #381E72;
+      --md-sys-color-primary-container: #4F378B;
+      --md-sys-color-on-primary-container: #EADDFF;
+      --md-sys-color-secondary: #CCC2DC;
+      --md-sys-color-on-secondary: #332D41;
+      --md-sys-color-secondary-container: #4A4458;
+      --md-sys-color-on-secondary-container: #E8DEF8;
+      --md-sys-color-tertiary: #EFB8C8;
+      --md-sys-color-on-tertiary: #492532;
+      --md-sys-color-tertiary-container: #633B48;
+      --md-sys-color-on-tertiary-container: #FFD8E4;
+      --md-sys-color-outline: #938F99;
+      --md-sys-color-outline-variant: #49454F;
     }
 
     * { box-sizing: border-box; }
 
     html, body { 
       margin: 0; padding: 0; height: 100%; 
-      background: var(--bg); color: var(--fg); 
-      font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif; 
+      background: var(--md-sys-color-background); 
+      color: var(--md-sys-color-on-background); 
+      font: 16px/1.5 "PokeTube Flex", system-ui, -apple-system, sans-serif; 
       overflow-x: hidden;
     }
 
-    a { color: var(--accent); text-decoration: none; transition: color 0.2s; font-weight: 500; }
-    a:hover { color: var(--accent-hover); text-decoration: underline; }
+    a { 
+      color: var(--md-sys-color-primary); 
+      text-decoration: none; 
+      transition: color 0.2s; 
+      font-weight: 500; 
+    }
+    a:hover { 
+      color: var(--md-sys-color-primary-container); 
+      text-decoration: underline; 
+    }
 
-    /* Header */
-    header.site {
+     header.site {
       position: sticky; top: 0; z-index: 50;
-      background: rgba(11, 11, 11, 0.8);
+      background: rgba(20, 18, 24, 0.85); 
       backdrop-filter: blur(12px);
-      border-bottom: 1px solid rgba(255, 171, 204, 0.1);
+      border-bottom: 1px solid var(--md-sys-color-surface-container-high);
     }
     .nav-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 24px; max-width: 1200px; margin: 0 auto; }
-    .brand { display: inline-flex; align-items: center; gap: 10px; color: #fff; font-weight: 800; text-decoration: none; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--md-sys-color-on-surface); font-weight: 800; text-decoration: none; }
     .brand img { height: 32px; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.5)); }
 
-    /* Hero Branding Area */
     .hero-branding {
       position: relative;
       background: linear-gradient(135deg, #a83258 0%, #ffabbc 80%);
       padding: 100px 20px 140px;
       text-align: center;
       overflow: hidden;
-      border-bottom: 1px solid rgba(255, 171, 204, 0.2);
     }
  
-     .hype-container {
+    .hype-container {
       position: absolute;
       top: 50%; left: 50%;
       transform: translate(-50%, -50%) rotate(-8deg);
@@ -102,7 +122,7 @@
       z-index: 0;
       pointer-events: none;
       width: 150%;
-      height: 90%; /* Leaves breathing room at top and bottom */
+      height: 90%; 
     }
 
     .hype-text {
@@ -118,8 +138,7 @@
     .hype-text:nth-child(odd) { opacity: 0.12; margin-left: -5%; }
     .hype-text:nth-child(even) { opacity: 0.08; margin-left: 5%; }
 
-    /* Mascot */
-    .mascot {
+     .mascot {
       position: absolute;
       bottom: 0; 
       right: 5%;
@@ -130,8 +149,7 @@
       pointer-events: none;
     }
 
-    /* Hero Content without background */
-    .hero-content {
+     .hero-content {
       position: relative;
       z-index: 3;
       max-width: 800px;
@@ -163,8 +181,7 @@
       font-weight: 500;
     }
 
-    /* Main Container */
-    .wrap {
+     .wrap {
       max-width: 1200px;
       margin: -60px auto 60px;
       padding: 0 20px;
@@ -172,8 +189,7 @@
       z-index: 10;
     }
 
-    /* Featured Cards Row */
-    .featured-grid {
+     .featured-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
       gap: 24px;
@@ -181,69 +197,81 @@
     }
 
     .featured-card {
-      background: var(--surface);
-      border: 1px solid var(--surface-border);
-      border-radius: 20px;
+      background: var(--md-sys-color-surface-container-low);
+      border-radius: 24px; /* Material You shape */
       padding: 32px;
-      box-shadow: 0 15px 35px rgba(0,0,0,0.6);
-      transition: transform 0.2s ease, border-color 0.2s ease;
+      transition: background-color 0.25s ease, transform 0.25s cubic-bezier(0.2, 0, 0, 1);
       display: flex;
       flex-direction: column;
     }
     
     .featured-card:hover {
-      transform: translateY(-5px);
-      border-color: rgba(255, 171, 204, 0.4);
+      background: var(--md-sys-color-surface-container-high);
+      transform: translateY(-4px);
     }
 
     .featured-card h2 {
       font-family: "PokeTube Flex", sans-serif;
-      font-size: 1.8rem;
+      font-size: 1.6rem;
+      font-weight: 600;
       font-stretch: expanded;
-      color: #fff;
+      color: var(--md-sys-color-on-surface);
       margin: 0 0 8px 0;
     }
 
-    .update-badge {
+     .update-badge {
       display: inline-block;
-      background: linear-gradient(135deg, #2b1e72, #4a35cc);
-      color: #fff;
-      padding: 6px 12px;
-      border-radius: 8px;
+      background: var(--md-sys-color-tertiary-container);
+      color: var(--md-sys-color-on-tertiary-container);
+      padding: 6px 16px;
+      border-radius: 16px;
       font-size: 0.85rem;
-      font-weight: 800;
+      font-weight: 600;
       letter-spacing: 0.5px;
       text-transform: uppercase;
       margin-bottom: 16px;
-      box-shadow: 0 4px 10px rgba(74, 53, 204, 0.3);
       width: max-content;
     }
 
-    .date { color: var(--muted); font-size: 0.9rem; margin-bottom: 16px; font-weight: 500; }
-    .featured-card p { color: #d1d1d1; margin: 0 0 24px 0; flex-grow: 1; }
-    
-    .btn-link {
-      display: inline-block;
-      background: rgba(255, 171, 204, 0.1);
-      color: var(--accent);
-      border: 1px solid rgba(255, 171, 204, 0.3);
-      padding: 10px 20px;
-      border-radius: 10px;
-      font-weight: bold;
-      text-align: center;
-      transition: all 0.2s;
+    .date { 
+      color: var(--md-sys-color-on-surface-variant); 
+      font-size: 0.9rem; 
+      margin-bottom: 16px; 
+      font-weight: 500; 
     }
-    .btn-link:hover { background: var(--accent); color: #000; text-decoration: none; }
+
+    .featured-card p { 
+      color: var(--md-sys-color-on-surface-variant); 
+      margin: 0 0 24px 0; 
+      flex-grow: 1; 
+    }
+    
+     .btn-link {
+      display: inline-block;
+      background: var(--md-sys-color-primary-container);
+      color: var(--md-sys-color-on-primary-container);
+      padding: 12px 24px;
+      border-radius: 100px;
+      font-weight: 600;
+      text-align: center;
+      transition: background-color 0.2s, transform 0.1s;
+      border: none;
+    }
+    .btn-link:hover { 
+      background: var(--md-sys-color-primary); 
+      color: var(--md-sys-color-on-primary); 
+      text-decoration: none; 
+    }
 
      .section-title {
       font-family: "PokeTube Flex", sans-serif;
-      font-size: 2.2rem;
+      font-size: 2rem;
+      font-weight: 600;
       font-stretch: expanded;
-      color: #fff;
+      color: var(--md-sys-color-on-surface);
       text-align: center;
       margin: 60px 0 40px;
       padding-bottom: 16px;
-      border-bottom: 1px solid var(--surface-border);
     }
 
      .policies-grid {
@@ -254,28 +282,27 @@
     }
 
     details.policy-card {
-      background: #111;
-      border: 1px solid #222;
-      border-radius: 16px;
+      background: var(--md-sys-color-surface-container-low);
+      border-radius: 24px;
       padding: 24px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-      transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+      transition: background-color 0.3s cubic-bezier(0.2, 0, 0, 1), transform 0.3s cubic-bezier(0.2, 0, 0, 1);
     }
 
-    /* Enhanced hover states for both JS (button) and No-JS (dropdown) */
     details.policy-card:hover { 
-      background: #161616; 
-      border-color: rgba(255, 171, 204, 0.4); 
-      transform: translateY(-3px);
-      box-shadow: 0 12px 30px rgba(0,0,0,0.6);
+      background: var(--md-sys-color-surface-container-high);
+      transform: translateY(-2px);
     }
-    details.policy-card[open] { background: var(--surface); border-color: rgba(255, 171, 204, 0.2); transform: none; }
+    details.policy-card[open] { 
+      background: var(--md-sys-color-surface-container); 
+      transform: none; 
+    }
 
     details.policy-card summary {
       font-family: "PokeTube Flex", sans-serif;
       font-size: 1.3rem;
+      font-weight: 600;
       font-stretch: expanded;
-      color: var(--accent);
+      color: var(--md-sys-color-primary);
       cursor: pointer;
       list-style: none; /* Hide default arrow */
       display: flex;
@@ -285,26 +312,24 @@
       user-select: none;
     }
 
-     details.policy-card summary::after {
+    details.policy-card summary::after {
       content: "↗";
       font-family: system-ui, sans-serif;
       font-size: 1.4rem;
       transition: transform 0.3s ease, color 0.3s;
-      color: var(--muted);
+      color: var(--md-sys-color-on-surface-variant);
       font-weight: 300;
     }
     
-    details.policy-card:hover summary::after { color: var(--accent); }
+    details.policy-card:hover summary::after { color: var(--md-sys-color-primary); }
     
-    /* Fallback indicator for No-JS open state */
-    .no-js details.policy-card summary::after { content: "↓"; }
-    .no-js details.policy-card[open] summary::after { transform: rotate(180deg); color: var(--accent); }
+     .no-js details.policy-card summary::after { content: "↓"; }
+    .no-js details.policy-card[open] summary::after { transform: rotate(180deg); color: var(--md-sys-color-primary); }
 
-    /* The content inner wraps the actual policy text so we can grab it cleanly */
     details.policy-card .content-inner {
       padding-top: 16px;
       margin-top: 16px;
-      border-top: 1px solid #2a2a2a;
+      border-top: 1px solid var(--md-sys-color-outline-variant);
       animation: slideDown 0.3s ease-out;
     }
 
@@ -313,34 +338,43 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
-    details.policy-card p { margin: 12px 0; color: #cfcfcf; }
-    details.policy-card ul { margin: 12px 0 12px 24px; color: #cfcfcf; }
+    details.policy-card p { margin: 12px 0; color: var(--md-sys-color-on-surface-variant); }
+    details.policy-card ul { margin: 12px 0 12px 24px; color: var(--md-sys-color-on-surface-variant); }
     details.policy-card li { margin-bottom: 6px; }
     
     .legal-block {
-      background: #080808;
-      border: 1px solid #1f1f1f;
-      padding: 16px;
-      border-radius: 12px;
+      background: var(--md-sys-color-secondary-container);
+      padding: 16px 20px;
+      border-radius: 16px;
       margin-top: 16px;
     }
-    .legal-block p { color: #888 !important; font-size: 0.85rem; margin: 4px 0 !important; }
-    .legal-block strong { color: #aaa; }
+    .legal-block p { 
+      color: var(--md-sys-color-on-secondary-container) !important; 
+      font-size: 0.9rem; 
+      margin: 4px 0 !important; 
+    }
+    .legal-block strong { color: var(--md-sys-color-on-secondary-container); font-weight: 800; }
 
-    /* Nested Details fix (e.g. inside DMCA) */
-    details.policy-card details { background: #0a0a0a; border: 1px solid #222; border-radius: 12px; padding: 12px 16px; margin: 16px 0; transition: border-color 0.2s; }
-    details.policy-card details:hover { border-color: #444; }
-    details.policy-card details summary { font-size: 1.1rem; color: #fff; font-family: system-ui, sans-serif; font-stretch: normal; }
-    details.policy-card details summary::after { content: "+"; font-size: 1.4rem; color: var(--muted); }
-    details.policy-card details[open] summary::after { content: "−"; }
+    /* Nested Details (e.g. inside DMCA) - M3 Outlined Card Style */
+    details.policy-card details { 
+      background: var(--md-sys-color-surface-container-lowest); 
+      border: 1px solid var(--md-sys-color-outline-variant); 
+      border-radius: 16px; 
+      padding: 12px 16px; 
+      margin: 16px 0; 
+      transition: border-color 0.2s; 
+    }
+    details.policy-card details:hover { border-color: var(--md-sys-color-outline); }
+    details.policy-card details summary { font-size: 1.1rem; color: var(--md-sys-color-on-surface); font-family: "PokeTube Flex", system-ui, sans-serif; font-weight: 500; font-stretch: normal; }
+    details.policy-card details summary::after { content: "+"; font-size: 1.4rem; color: var(--md-sys-color-on-surface-variant); }
+    details.policy-card details[open] summary::after { content: "-"; }
 
-    /* Modal Styles */
-    .modal-overlay {
+     .modal-overlay {
       position: fixed;
       top: 0; left: 0;
       width: 100vw; height: 100vh;
-      background: rgba(0, 0, 0, 0.75);
-      backdrop-filter: blur(10px);
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -357,17 +391,16 @@
     }
 
     .modal-window {
-      background: var(--surface);
-      border: 1px solid rgba(255, 171, 204, 0.3);
-      border-radius: 24px;
-      padding: 40px;
+      background: var(--md-sys-color-surface-container-high);
+      border-radius: 28px;  
+      padding: 32px;
       max-width: 800px;
       width: 100%;
       max-height: 85vh;
       overflow-y: auto;
-      box-shadow: 0 25px 60px rgba(0,0,0,0.8);
-      transform: translateY(30px) scale(0.97);
-      transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      box-shadow: 0px 8px 12px 6px rgba(0, 0, 0, 0.15), 0px 4px 4px rgba(0, 0, 0, 0.3);
+      transform: translateY(20px) scale(0.97);
+      transition: transform 0.4s cubic-bezier(0.2, 0, 0, 1);
       position: relative;
     }
 
@@ -375,43 +408,43 @@
       transform: translateY(0) scale(1);
     }
 
-    .modal-close {
+     .modal-close {
       position: absolute;
       top: 24px; right: 24px;
-      background: rgba(255, 171, 204, 0.1);
-      border: 1px solid rgba(255, 171, 204, 0.2);
-      color: var(--accent);
-      font-size: 1.5rem;
-      width: 44px; height: 44px;
-      border-radius: 50%;
+      background: transparent;
+      color: var(--md-sys-color-on-surface-variant);
+      border: none;
+      font-size: 2rem;
+      width: 48px; height: 48px;
+      border-radius: 100px;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: all 0.2s ease;
+      transition: background-color 0.2s ease, color 0.2s ease;
       line-height: 0;
     }
 
     .modal-close:hover {
-      background: var(--accent);
-      color: #000;
-      transform: rotate(90deg);
+      background: var(--md-sys-color-surface-container-highest);
+      color: var(--md-sys-color-on-surface);
     }
 
     .modal-title {
       font-family: "PokeTube Flex", sans-serif;
-      font-size: 2.2rem;
+      font-size: 2rem;
+      font-weight: 600;
       font-stretch: expanded;
-      color: #fff;
+      color: var(--md-sys-color-on-surface);
       margin-top: 0;
       margin-bottom: 24px;
       padding-bottom: 20px;
-      border-bottom: 1px solid var(--surface-border);
-      padding-right: 50px; /* Leave space for close button */
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
+      padding-right: 50px; 
     }
 
     .modal-body {
-      color: #dfdfdf;
+      color: var(--md-sys-color-on-surface-variant);
       font-size: 1.05rem;
       line-height: 1.6;
     }
@@ -420,27 +453,30 @@
     .modal-body ul { margin-bottom: 18px; padding-left: 24px; }
     .modal-body li { margin-bottom: 8px; }
     
-    /* Apply nested details fix specifically for modal body too */
-    .modal-body details { background: #0a0a0a; border: 1px solid #222; border-radius: 12px; padding: 12px 16px; margin: 16px 0; }
-    .modal-body details summary { font-size: 1.1rem; color: #fff; font-family: system-ui, sans-serif; cursor: pointer; display: flex; justify-content: space-between; align-items: center; list-style: none; user-select: none; }
-    .modal-body details summary::after { content: "+"; font-size: 1.4rem; color: var(--muted); transition: transform 0.2s; }
-    .modal-body details[open] summary::after { content: "−"; color: var(--accent); }
-    .modal-body details .content-inner { display: none; } /* Prevents duplication if copied directly */
+     .modal-body details { background: var(--md-sys-color-surface-container-lowest); border: 1px solid var(--md-sys-color-outline-variant); border-radius: 16px; padding: 12px 16px; margin: 16px 0; }
+    .modal-body details summary { font-size: 1.1rem; color: var(--md-sys-color-on-surface); font-family: "PokeTube Flex", system-ui, sans-serif; cursor: pointer; display: flex; justify-content: space-between; align-items: center; list-style: none; user-select: none; }
+    .modal-body details summary::after { content: "+"; font-size: 1.4rem; color: var(--md-sys-color-on-surface-variant); transition: transform 0.2s; }
+    .modal-body details[open] summary::after { content: "-"; color: var(--md-sys-color-primary); }
+    .modal-body details .content-inner { display: none; } 
 
-
-    .outro-text {
+     .outro-text {
       text-align: center;
       margin: 60px auto 0;
       max-width: 800px;
-      color: var(--muted);
+      color: var(--md-sys-color-on-surface-variant);
       font-size: 1.05rem;
       padding: 32px;
-      background: rgba(255, 171, 204, 0.03);
-      border-radius: 20px;
-      border: 1px solid rgba(255, 171, 204, 0.1);
+      background: var(--md-sys-color-surface-container-low);
+      border-radius: 24px;
+      border: none;
     }
 
-    footer.site { text-align: center; color: #666; margin: 40px 0 60px; font-weight: 500; }
+    footer.site { 
+      text-align: center; 
+      color: var(--md-sys-color-on-surface-variant); 
+      margin: 40px 0 60px; 
+      font-weight: 500; 
+    }
     
     @media (max-width: 800px) {
       .hero-branding { padding: 80px 20px 100px; }
@@ -448,14 +484,13 @@
       .doc-title { font-size: clamp(38px, 10vw, 60px); }
       .wrap { margin-top: -30px; }
       .featured-card { padding: 24px; }
-      .modal-window { padding: 24px; border-radius: 16px; }
-      .modal-title { font-size: 1.8rem; }
+      .modal-window { padding: 24px; }
+      .modal-title { font-size: 1.6rem; }
     }
   </style>
 </head>
 <body class="no-js">
-  <!-- Small script to remove fallback classes quickly to prevent flash -->
-  <script>document.body.classList.remove('no-js'); document.body.classList.add('js-enabled');</script>
+   <script>document.body.classList.remove('no-js'); document.body.classList.add('js-enabled');</script>
 
   <header class="site" role="banner">
     <div class="nav-row">
@@ -728,7 +763,7 @@
       closeBtn.addEventListener('click', closeModal);
       
       modal.addEventListener('click', (e) => {
-        // Only close if clicking the dark overlay area, not the white box
+        // Only close if clicking the dark overlay area, not the surface
         if (e.target === modal) {
           closeModal();
         }
