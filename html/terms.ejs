@@ -304,7 +304,7 @@
       font-stretch: expanded;
       color: var(--md-sys-color-primary);
       cursor: pointer;
-      list-style: none; /* Hide default arrow */
+      list-style: none; 
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -355,7 +355,9 @@
     }
     .legal-block strong { color: var(--md-sys-color-on-secondary-container); font-weight: 800; }
 
-    /* Nested Details (e.g. inside DMCA) - M3 Outlined Card Style */
+    /* Nested Details (e.g. inside our DMCA poup), i have tried to replicate the M3 standarts for it but ig it didint work as nice? */
+    /* something i learned is do not vibecode if you want to design a UI, or do anything really, you should be able to design stuff yourself and learn, this tries to replicate the M3 style as much as possible but seems like i lowk failed, but thats alright! i had a effort for it! */
+    /* P.S: Poke is proudly not vibecoded! There are some places where vibecoded code unfo is there but im trying to replace them all with my own code ! */
     details.policy-card details { 
       background: var(--md-sys-color-surface-container-lowest); 
       border: 1px solid var(--md-sys-color-outline-variant); 
@@ -695,7 +697,6 @@
       const closeBtn = modal.querySelector('.modal-close');
       const summaries = document.querySelectorAll('.policy-card summary');
 
-      // Function to open the modal and lock background scrolling
       function openModal(title, contentHTML) {
         modalTitle.textContent = title;
         modalBody.innerHTML = contentHTML;
@@ -704,13 +705,11 @@
         document.body.style.overflow = 'hidden'; 
       }
 
-      // Function to close the modal and restore background
       function closeModal() {
         modal.classList.remove('active');
         modal.setAttribute('aria-hidden', 'true');
         document.body.style.overflow = '';
         
-        // Wait for animation to finish before clearing content
         setTimeout(() => { 
           if(!modal.classList.contains('active')) {
             modalBody.innerHTML = ''; 
@@ -718,11 +717,9 @@
         }, 300);
       }
 
-      // Intercept clicks on our policy cards
-      summaries.forEach(summary => {
+       summaries.forEach(summary => {
         summary.addEventListener('click', (e) => {
-          // Prevent the default `<details>` dropdown action since JS is available
-          e.preventDefault(); 
+        e.preventDefault(); 
           
           const details = summary.parentElement;
           const title = summary.textContent.trim();
@@ -734,15 +731,12 @@
         });
       });
 
-      // Handle URL Query Parameters (e.g. ?policy=Warranty)
       const urlParams = new URLSearchParams(window.location.search);
       const targetPolicy = urlParams.get('policy');
       
       if (targetPolicy) {
-        // Normalize the search string to lower case and handle spaces/hyphens
         const normalizedTarget = targetPolicy.toLowerCase().replace(/-/g, ' ');
         
-        // Find matching policy card by data attribute or summary text
         const matchedDetails = Array.from(document.querySelectorAll('.policy-card')).find(card => {
           const dataPolicy = card.getAttribute('data-policy');
           const titleText = card.querySelector('summary').textContent.toLowerCase();
@@ -757,7 +751,6 @@
         }
       }
 
-      // Close events
       closeBtn.addEventListener('click', closeModal);
       
       modal.addEventListener('click', (e) => {
