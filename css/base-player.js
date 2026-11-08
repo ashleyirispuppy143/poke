@@ -54,6 +54,7 @@ window.SyncLevel = SyncLevel;
   const MUTE_PERSIST_KEY = 'alabaster_muted';
   const LEGACY_DESC_BTN_KEY = 'DontUseAlabasterStyleDescriptionOpeningFS';
   const DISABLE_FS_DISCOVER_KEY = 'CloseFullScreenDiscover';
+  const SHOW_DISLIKES_FS_DESC_KEY = 'ShowDislikesOnFullScreenDesc';
 
   function isStorageFlagEnabled(key) {
     try {
@@ -66,30 +67,30 @@ window.SyncLevel = SyncLevel;
     }
   }
 
-function formatShortPublishDate(rawDateStr) {
-  var str = String(rawDateStr || '').trim();
-  var parts = str.split(/\s+/);
-  var day = parts[0] || '';
-  var monthRaw = parts[1] || '';
-  var year = parts[2] || '';
-  var shortMonth = monthRaw
-    ? monthRaw.charAt(0).toUpperCase() + monthRaw.slice(1, 3).toLowerCase()
-    : '';
-  var dayMonth = (day + ' ' + shortMonth).trim();
-  var currentYear = String(new Date().getFullYear());
+  function formatShortPublishDate(rawDateStr) {
+    var str = String(rawDateStr || '').trim();
+    var parts = str.split(/\s+/);
+    var day = parts[0] || '';
+    var monthRaw = parts[1] || '';
+    var year = parts[2] || '';
+    var shortMonth = monthRaw
+      ? monthRaw.charAt(0).toUpperCase() + monthRaw.slice(1, 3).toLowerCase()
+      : '';
+    var dayMonth = (day + ' ' + shortMonth).trim();
+    var currentYear = String(new Date().getFullYear());
 
-  if (year === currentYear) {
+    if (year === currentYear) {
+      return {
+        top: dayMonth,
+        bottom: year
+      };
+    }
     return {
-      top: dayMonth,
-      bottom: year
+      top: year,
+      bottom: dayMonth
     };
   }
-  return {
-    top: year,
-    bottom: dayMonth
-  };
-}
-  
+
   var config = {
     minPlayBuffer: 0.25,
     minResumeBuffer: 0.55,
@@ -483,15 +484,6 @@ function formatShortPublishDate(rawDateStr) {
     var styleEl = document.createElement('style');
     styleEl.id = 'alabaster-fs-desc-styles';
     styleEl.textContent = [
-      '.video-js .vjs-error-display,',
-      '.vjs-error-display,',
-      '.video-js.vjs-error .vjs-error-display,',
-      '.video-js .vjs-modal-dialog.vjs-error-display {',
-      '  display: none !important;',
-      '  visibility: hidden !important;',
-      '  opacity: 0 !important;',
-      '  pointer-events: none !important;',
-      '}',
       '.alabaster-fs-desc-toggle {',
       '  position: absolute;',
       '  top: 22px;',
@@ -1043,76 +1035,15 @@ function formatShortPublishDate(rawDateStr) {
     return true;
   }
 
-  function suppressNativeVjsErrorDisplay(player) {
-    if (!player) return;
-    var errDisplay = player.getChild && player.getChild('ErrorDisplay');
-    if (errDisplay) {
-      try {
-        if (typeof errDisplay.hide === 'function') errDisplay.hide();
-        if (typeof errDisplay.close === 'function') errDisplay.close();
-        var edEl = errDisplay.el && errDisplay.el();
-        if (edEl) edEl.style.setProperty('display', 'none', 'important');
-      } catch (_) {}
-    }
-
-    var origErrorFn = typeof player.error === 'function' ? player.error.bind(player) : null;
-    var handlingPlayerErr = false;
-
-    if (origErrorFn) {
-      player.error = function(err) {
-        if (err === undefined) {
-          return null;
-        }
-        if (err === null) {
-          try { player.removeClass('vjs-error'); } catch (_) {}
-          return origErrorFn(null);
-        }
-        if (!handlingPlayerErr) {
-          handlingPlayerErr = true;
-          try {
-            var code = (err && (err.code || err.status)) || 'MEDIA_ERR';
-            var msg = (err && err.message) ? String(err.message) : ('An error occurred while loading the media streams (' + code + ').');
-            SyncLevel.error = String(code);
-            try { origErrorFn(null); } catch (_) {}
-            try { player.removeClass('vjs-error'); } catch (_) {}
-            if (typeof window.Alabaster._showErrorUI === 'function') {
-              window.Alabaster._showErrorUI(msg, 'Video unavailable');
-            }
-          } finally {
-            handlingPlayerErr = false;
-          }
-        }
-        return null;
-      };
-    }
-
-    player.on('error', function(evt) {
-      if (evt) {
-        if (typeof evt.stopImmediatePropagation === 'function') evt.stopImmediatePropagation();
-        if (typeof evt.stopPropagation === 'function') evt.stopPropagation();
-      }
-      try { player.removeClass('vjs-error'); } catch (_) {}
-      if (typeof window.Alabaster._showErrorUI === 'function') {
-        var errMsg = SyncLevel.error
-          ? ('An error occurred while loading the media streams (' + SyncLevel.error + ').')
-          : 'An error occurred while loading the media streams. Please try again later.';
-        window.Alabaster._showErrorUI(errMsg, 'Video unavailable');
-      }
-    });
-  }
-
   function SetAlabasterUI(player, onRetryCallback) {
     var info = metadataParser.read();
     injectAlabasterFsDescriptionStyles();
-    suppressNativeVjsErrorDisplay(player);
 
     if (info.artworkUrl && typeof player.poster === 'function' && !player.poster()) {
       player.poster(info.artworkUrl);
     }
 
     player.ready(function() {
-      suppressNativeVjsErrorDisplay(player);
-
       var existingTitleBar = player.getChild('TitleBar');
       if (!existingTitleBar && player.addChild) {
         existingTitleBar = player.addChild('TitleBar', {
@@ -1417,9 +1348,12 @@ function formatShortPublishDate(rawDateStr) {
 
           fsDescBody.innerHTML = '';
 
+          var showDislikes = isStorageFlagEnabled(SHOW_DISLIKES_FS_DESC_KEY);
           var pubDateFormatted = formatShortPublishDate(window.formattedPublishDate);
+          var thirdVal = showDislikes ? freshMeta.dislikes : pubDateFormatted.top;
+          var thirdLabel = showDislikes ? 'Dislikes' : pubDateFormatted.bottom;
 
-          if (freshMeta.views || freshMeta.likes || pubDateFormatted.top) {
+          if (freshMeta.views || freshMeta.likes || thirdVal) {
             var statsBar = document.createElement('div');
             statsBar.className = 'alabaster-fs-desc-stats';
 
@@ -1440,7 +1374,7 @@ function formatShortPublishDate(rawDateStr) {
 
             addStatCol(freshMeta.views, 'Views');
             addStatCol(freshMeta.likes, 'Likes');
-            addStatCol(pubDateFormatted.top, pubDateFormatted.bottom);
+            addStatCol(thirdVal, thirdLabel);
 
             fsDescBody.appendChild(statsBar);
           }
@@ -2372,7 +2306,6 @@ function formatShortPublishDate(rawDateStr) {
         rootEl.appendChild(errOverlay);
 
         window.Alabaster._showErrorUI = function(subMsg, headlineMsg) {
-          try { player.removeClass('vjs-error'); } catch (_) {}
           errHeadline.textContent = headlineMsg || 'Video unavailable';
           errSubText.textContent = subMsg || 'An error occurred while loading the media streams. Please try again later.';
           errOverlay.style.display = 'flex';
@@ -2442,6 +2375,8 @@ function formatShortPublishDate(rawDateStr) {
           if (!isFs || !hasDescriptionNode) {
             fsDescDrawer.classList.remove('is-visible');
             fsDescDrawer.style.display = 'none';
+          } else if (isFsDescOpen) {
+            populateDescriptionVerbatim();
           }
         }
 
@@ -2702,16 +2637,6 @@ function formatShortPublishDate(rawDateStr) {
         if (videoEl.networkState === 0) {
           try { videoEl.load(); } catch (_) {}
         }
-        videoEl.addEventListener('error', function(evt) {
-          if (evt && typeof evt.stopImmediatePropagation === 'function') evt.stopImmediatePropagation();
-          var err = videoEl.error;
-          var codeStr = 'VIDEO_ERR_CODE_' + ((err && err.code) || 0);
-          SyncLevel.error = codeStr;
-          try { player.removeClass('vjs-error'); } catch (_) {}
-          if (typeof window.Alabaster._showErrorUI === 'function') {
-            window.Alabaster._showErrorUI('An error occurred while loading the video stream (' + codeStr + ').', 'Video unavailable');
-          }
-        }, true);
         videoEl.addEventListener('click', function() {
           if (videoEl.paused) videoEl.play();
           else videoEl.pause();
@@ -3521,28 +3446,49 @@ function formatShortPublishDate(rawDateStr) {
         }
       }
 
-      function handleMediaError(sourceName, mediaEl, evt) {
-        if (evt) {
-          if (typeof evt.stopImmediatePropagation === 'function') evt.stopImmediatePropagation();
-          if (typeof evt.stopPropagation === 'function') evt.stopPropagation();
+      function clearErrorOverlayOnHealthyStream() {
+        if (window.Alabaster.testErrorActive) return;
+        if (!videoEl.error && !audioEl.error) {
+          state.errorCount = 0;
+          SyncLevel.error = null;
+          if (typeof window.Alabaster._hideErrorUI === 'function') {
+            window.Alabaster._hideErrorUI();
+          }
         }
-        try { player.removeClass('vjs-error'); } catch (_) {}
+      }
+
+      function handleMediaError(sourceName, mediaEl) {
         if (window.Alabaster.testErrorActive) return;
         var err = mediaEl && mediaEl.error;
+        if (!err) return;
         state.errorCount++;
-        var codeStr = sourceName + '_ERR_CODE_' + ((err && err.code) || 0);
+        var codeStr = sourceName + '_ERR_CODE_' + (err.code || 0);
         SyncLevel.error = codeStr;
+        freezeBothStreams();
+        if (state.errorCount <= 3) {
+          var resumeAt = state.savedMasterTime || 0;
+          setTimeout(function() {
+            if (!state.wantPlaying) return;
+            runInternal(function() {
+              try {
+                mediaEl.load();
+                if (resumeAt > 0.1) mediaEl.currentTime = resumeAt;
+              } catch (_) {}
+            });
+            syncPlaybackState();
+          }, 600 * state.errorCount);
+          return;
+        }
         state.wantPlaying = false;
         freezeBothStreams();
         setBufferSpinner(false);
-        markPlayerPausedUI(player);
         if (typeof window.Alabaster._showErrorUI === 'function') {
           window.Alabaster._showErrorUI('An error occurred while loading the ' + sourceName.toLowerCase() + ' stream (' + codeStr + ').', 'Video unavailable');
         }
       }
 
-      listen(videoEl, 'error', function(evt) { handleMediaError('VIDEO', videoEl, evt); }, true);
-      listen(audioEl, 'error', function(evt) { handleMediaError('AUDIO', audioEl, evt); }, true);
+      listen(videoEl, 'error', function() { handleMediaError('VIDEO', videoEl); }, false);
+      listen(audioEl, 'error', function() { handleMediaError('AUDIO', audioEl); }, false);
 
       function armNetworkWatchdog() {
         clearWatchdog();
@@ -3636,6 +3582,7 @@ function formatShortPublishDate(rawDateStr) {
                   }
                   state.hasStartedPlayback = true;
                   state.initialAutoplayAttempt = false;
+                  clearErrorOverlayOnHealthyStream();
                   updateMediaSessionMetadata();
                   updateMediaSessionPosition();
                   markPlayerStartedUI(player);
@@ -3653,6 +3600,7 @@ function formatShortPublishDate(rawDateStr) {
             } else if (!nativeGetAPaused()) {
               state.hasStartedPlayback = true;
               state.initialAutoplayAttempt = false;
+              clearErrorOverlayOnHealthyStream();
               markPlayerStartedUI(player);
               if (navigator.mediaSession) navigator.mediaSession.playbackState = 'playing';
             }
@@ -3686,6 +3634,7 @@ function formatShortPublishDate(rawDateStr) {
                   }
                   state.hasStartedPlayback = true;
                   state.initialAutoplayAttempt = false;
+                  clearErrorOverlayOnHealthyStream();
                   updateMediaSessionMetadata();
                   updateMediaSessionPosition();
                   markPlayerStartedUI(player);
@@ -3703,6 +3652,7 @@ function formatShortPublishDate(rawDateStr) {
             } else if (!nativeGetAPaused()) {
               state.hasStartedPlayback = true;
               state.initialAutoplayAttempt = false;
+              clearErrorOverlayOnHealthyStream();
               markPlayerStartedUI(player);
               if (navigator.mediaSession) navigator.mediaSession.playbackState = 'playing';
             }
@@ -3790,6 +3740,7 @@ function formatShortPublishDate(rawDateStr) {
           state.hasStartedPlayback = true;
           state.initialAutoplayAttempt = false;
           state.isFrozen = false;
+          clearErrorOverlayOnHealthyStream();
           setBufferSpinner(false);
           clearWatchdog();
           shield.activate();
@@ -3869,6 +3820,7 @@ function formatShortPublishDate(rawDateStr) {
                   if (!nativeGetVPaused() || !nativeGetAPaused()) {
                     state.hasStartedPlayback = true;
                     state.initialAutoplayAttempt = false;
+                    clearErrorOverlayOnHealthyStream();
                   }
 
                   if (!isVideoBypassed() && !state.hidden && (nativeGetVPaused() || nativeGetAPaused())) {
@@ -3911,6 +3863,7 @@ function formatShortPublishDate(rawDateStr) {
                   state.initialAutoplayAttempt = false;
                   state.awaitingGestureUnlock = false;
                   state.playGraceUntil = compat.now() + 950;
+                  clearErrorOverlayOnHealthyStream();
                   setBufferSpinner(false);
                   clearWatchdog();
                   state.lastCorrectionAt = 0;
@@ -3997,6 +3950,7 @@ function formatShortPublishDate(rawDateStr) {
                       }
                       state.hasStartedPlayback = true;
                       state.initialAutoplayAttempt = false;
+                      clearErrorOverlayOnHealthyStream();
                       updateMediaSessionMetadata();
                       updateMediaSessionPosition();
                       markPlayerStartedUI(player);
@@ -4015,6 +3969,7 @@ function formatShortPublishDate(rawDateStr) {
               } else if (!nativeGetAPaused()) {
                 state.hasStartedPlayback = true;
                 state.initialAutoplayAttempt = false;
+                clearErrorOverlayOnHealthyStream();
                 markPlayerStartedUI(player);
                 if (navigator.mediaSession) navigator.mediaSession.playbackState = 'playing';
               }
@@ -4390,6 +4345,7 @@ function formatShortPublishDate(rawDateStr) {
           state.savedMasterTime = aCur;
           state.hasStartedPlayback = true;
           state.initialAutoplayAttempt = false;
+          clearErrorOverlayOnHealthyStream();
         }
         getAuthoritativeDuration();
         updateMediaSessionPosition();
@@ -4432,6 +4388,9 @@ function formatShortPublishDate(rawDateStr) {
 
       var onDataBuffered = function() {
         getAuthoritativeDuration();
+        if (videoEl.readyState >= 2 && audioEl.readyState >= 2) {
+          clearErrorOverlayOnHealthyStream();
+        }
         if (!state.wantPlaying || isPlaybackCompleted()) return;
         if (state.userSeeking) return completeUserSeek();
         if (state.cancelSeekWait || state.launchingPlay) return;
@@ -4690,6 +4649,7 @@ function formatShortPublishDate(rawDateStr) {
           state.savedMasterTime = liveAudio;
           state.hasStartedPlayback = true;
           state.initialAutoplayAttempt = false;
+          clearErrorOverlayOnHealthyStream();
         }
 
         if (isTabWaking()) {
@@ -4787,6 +4747,7 @@ function formatShortPublishDate(rawDateStr) {
                   }
                   state.hasStartedPlayback = true;
                   state.initialAutoplayAttempt = false;
+                  clearErrorOverlayOnHealthyStream();
                   markPlayerStartedUI(player);
                   if (navigator.mediaSession) navigator.mediaSession.playbackState = 'playing';
                 }).catch(function(err) {
@@ -4991,7 +4952,6 @@ function formatShortPublishDate(rawDateStr) {
     initAlabasterPlayer();
   }
 })();
-
 
 (function () {
   'use strict';
