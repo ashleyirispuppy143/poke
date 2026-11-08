@@ -1,3 +1,22 @@
+ <!--
+
+    This Source Code Form is subject to the terms of the GNU General Public License:
+
+    Copyright (C) 2021-2026 Poke (https://codeberg.org/ashleyirispuppy/poke)
+    
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program. If not, see https://www.gnu.org/licenses/.
+--->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -31,7 +50,7 @@
       width: 340px;
     }
 
-        h1 {
+    h1 {
       font-family: "PokeTube Flex", sans-serif;
       font-stretch: ultra-expanded;
       margin: 0 0 16px 0;
@@ -40,6 +59,26 @@
       font-weight: 1000;
     }
 
+    .loader-wrapper {
+      width: 100%;
+      height: 4px;
+      background-color: #333;
+      border-radius: 4px;
+      overflow: hidden;
+      margin: 24px 0;
+    }
+
+    .loader-bar {
+      height: 100%;
+      width: 0%;
+      background-color: #3b82f6;
+      animation: loadProgress 0.4s ease-out forwards;
+    }
+
+    @keyframes loadProgress {
+      0% { width: 0%; }
+      100% { width: 100%; }
+    }
 
     .setting-row {
       display: flex;
@@ -112,7 +151,7 @@
   <noscript>
   <style>
   .container {
-  display:none;
+    display:none;
   }
   </style>
   </noscript>
@@ -123,39 +162,12 @@ settings require javascript to work :p
 </noscript>
 
   <div class="container">
-  <img src="/css/logo-poke.svg?v=5" style="width: 9em;margin-bottom: 10px;">
+    <img src="/css/logo-poke.svg?v=5" style="width: 9em;margin-bottom: 10px;">
     <h1>player settings</h1>
-
-    <div class="setting-row">
-      <div class="label-group">
-        <span class="setting-title">Use Description Button instead of title to open Description</span>
-      </div>
-      <label class="switch">
-        <input type="checkbox" id="toggle-alabaster">
-        <span class="slider"></span>
-      </label>
+    <div id="loader" class="loader-wrapper">
+      <div class="loader-bar"></div>
     </div>
-
-    <div class="setting-row">
-      <div class="label-group">
-        <span class="setting-title">Remove Discover in fullscreen</span>
-      </div>
-      <label class="switch">
-        <input type="checkbox" id="toggle-discover">
-        <span class="slider"></span>
-      </label>
-    </div>
-
-    
-    <div class="setting-row">
-      <div class="label-group">
-        <span class="setting-title">Show the dislike count instead of upload date on the fullscreen Description </span>
-      </div>
-      <label class="switch">
-        <input type="checkbox" id="toggle-fullscreen-dislikes">
-        <span class="slider"></span>
-      </label>
-    </div>
+    <div id="settings-list"></div>
   </div>
 
   <script>
@@ -163,33 +175,70 @@ settings require javascript to work :p
     const settings = [
       {
         key: 'DontUseAlabasterStyleDescriptionOpeningFS',
-        toggleId: 'toggle-alabaster'
+        toggleId: 'toggle-alabaster',
+        title: 'Use Description Button instead of title to open Description'
       },
       {
         key: 'CloseFullScreenDiscover',
-        toggleId: 'toggle-discover'
+        toggleId: 'toggle-discover',
+        title: 'Remove Discover in fullscreen'
       },
       {
         key: 'ShowDislikesOnFullScreenDesc',
-        toggleId: 'toggle-fullscreen-dislikes'
+        toggleId: 'toggle-fullscreen-dislikes',
+        title: 'Show the dislike count instead of upload date on the fullscreen Description'
       },
     ];
 
-    settings.forEach(({ key, toggleId }) => {
-      const toggle = document.getElementById(toggleId);
+    const loader = document.getElementById('loader');
+    const settingsList = document.getElementById('settings-list');
 
-      const currentValue = localStorage.getItem(key) === 'true';
-      if (localStorage.getItem(key) === null) {
-        localStorage.setItem(key, 'false');
-      }
+    setTimeout(() => {
+      loader.style.display = 'none';
 
-      toggle.checked = currentValue;
+      settings.forEach(({ key, toggleId, title }) => {
+        const row = document.createElement('div');
+        row.className = 'setting-row';
 
-      toggle.addEventListener('change', () => {
-        const isChecked = toggle.checked;
-        localStorage.setItem(key, String(isChecked));
+        const labelGroup = document.createElement('div');
+        labelGroup.className = 'label-group';
+
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'setting-title';
+        titleSpan.textContent = title;
+
+        labelGroup.appendChild(titleSpan);
+
+        const switchLabel = document.createElement('label');
+        switchLabel.className = 'switch';
+
+        const toggle = document.createElement('input');
+        toggle.type = 'checkbox';
+        toggle.id = toggleId;
+
+        const slider = document.createElement('span');
+        slider.className = 'slider';
+
+        switchLabel.appendChild(toggle);
+        switchLabel.appendChild(slider);
+
+        row.appendChild(labelGroup);
+        row.appendChild(switchLabel);
+        settingsList.appendChild(row);
+
+        const currentValue = localStorage.getItem(key) === 'true';
+        if (localStorage.getItem(key) === null) {
+          localStorage.setItem(key, 'false');
+        }
+
+        toggle.checked = currentValue;
+
+        toggle.addEventListener('change', () => {
+          const isChecked = toggle.checked;
+          localStorage.setItem(key, String(isChecked));
+        });
       });
-    });
+    }, 400);
     // @license-end
   </script>
 
