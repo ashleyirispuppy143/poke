@@ -146,6 +146,17 @@ settings require javascript to work :p
         <span class="slider"></span>
       </label>
     </div>
+
+    
+    <div class="setting-row">
+      <div class="label-group">
+        <span class="setting-title">Show the dislike count instead of upload date on the fullscreen Description </span>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="toggle-fullscreen-dislikes">
+        <span class="slider"></span>
+      </label>
+    </div>
   </div>
 
   <script>
@@ -158,7 +169,11 @@ settings require javascript to work :p
       {
         key: 'CloseFullScreenDiscover',
         toggleId: 'toggle-discover'
-      }
+      },
+      {
+        key: 'ShowDislikesOnFullScreenDesc',
+        toggleId: 'toggle-fullscreen-dislikes'
+      },
     ];
 
     settings.forEach(({ key, toggleId }) => {
