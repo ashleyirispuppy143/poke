@@ -66,28 +66,30 @@ window.SyncLevel = SyncLevel;
     }
   }
 
-  function formatShortPublishDate(rawDateStr) {
-    var str = String(rawDateStr || '').trim();
-    var parts = str.split(/\s+/);
-    var day = parts[0] || '';
-    var monthRaw = parts[1] || '';
-    var year = parts[2] || '';
-    var shortMonth = monthRaw.slice(0, 3).toLowerCase();
-    var dayMonth = (day + ' ' + shortMonth).trim();
-    var currentYear = String(new Date().getFullYear());
+function formatShortPublishDate(rawDateStr) {
+  var str = String(rawDateStr || '').trim();
+  var parts = str.split(/\s+/);
+  var day = parts[0] || '';
+  var monthRaw = parts[1] || '';
+  var year = parts[2] || '';
+  var shortMonth = monthRaw
+    ? monthRaw.charAt(0).toUpperCase() + monthRaw.slice(1, 3).toLowerCase()
+    : '';
+  var dayMonth = (day + ' ' + shortMonth).trim();
+  var currentYear = String(new Date().getFullYear());
 
-    if (year === currentYear) {
-      return {
-        top: dayMonth,
-        bottom: year
-      };
-    }
+  if (year === currentYear) {
     return {
-      top: year,
-      bottom: dayMonth
+      top: dayMonth,
+      bottom: year
     };
   }
-
+  return {
+    top: year,
+    bottom: dayMonth
+  };
+}
+  
   var config = {
     minPlayBuffer: 0.25,
     minResumeBuffer: 0.55,
