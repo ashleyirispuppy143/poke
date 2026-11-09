@@ -2,16 +2,17 @@
 <!-- Created with Inkscape (http://www.inkscape.org/) -->
 
 <svg
-   width="424.99179"
-   height="112.56479"
-   viewBox="0 0 1766.6709 443.35889"
+   width="1189.671"
+   height="443.35889"
+   viewBox="0 0 1189.671 443.35889"
    version="1.1"
    id="svg1"
    xml:space="preserve"
    inkscape:export-filename="poketube_logo_dark_gay_transparent.svg"
    inkscape:export-xdpi="96"
    inkscape:export-ydpi="96"
-   sodipodi:docname="poketube_logo_white_gay.svg"
+   sodipodi:docname="poke_logo_dark_gay_transparent.svg"
+   inkscape:version="1.4.4 (dcaf3e7d9e, 2026-05-05)"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns:xlink="http://www.w3.org/1999/xlink"
@@ -25,10 +26,19 @@
      inkscape:pageopacity="0"
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#505050"
-     inkscape:document-units="px"><inkscape:page
+     inkscape:document-units="px"
+     inkscape:zoom="0.48329966"
+     inkscape:cx="883.50983"
+     inkscape:cy="221.39474"
+     inkscape:window-width="2560"
+     inkscape:window-height="1366"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1"><inkscape:page
        x="0"
        y="0"
-       width="1766.6709"
+       width="1189.671"
        height="443.35889"
        id="page2"
        margin="0"
@@ -63,7 +73,7 @@
      inkscape:groupmode="layer"
      id="layer1"
      transform="translate(-34.320522,-2374.3206)"><path
-       style="font-size:304.653px;font-family:'IBM Plex Sans Var';-inkscape-font-specification:'IBM Plex Sans Var, @wght=442,wdth=89.9';font-variation-settings:'wdth' 89.9, 'wght' 442;fill:#f7f4ef;stroke-width:1.85946;fill-opacity:1"
+       style="font-size:304.653px;font-family:'IBM Plex Sans Var';-inkscape-font-specification:'IBM Plex Sans Var, @wght=442,wdth=89.9';font-variation-settings:'wdth' 89.9, 'wght' 442;fill:#f7f4ef;fill-opacity:1;stroke-width:1.85946"
        d="m 618.75652,2699.1011 h -25.77526 v -197.7047 h 76.75929 q 16.99468,0 28.6077,6.7979 11.61303,6.5146 17.27792,19.2606 5.94814,12.7461 5.94814,31.4402 0,18.4109 -5.94814,31.1569 -5.66489,12.746 -17.27792,19.5439 -11.61302,6.7978 -28.6077,6.7978 h -50.98403 z m 0,-175.0452 v 69.395 h 49.85105 q 8.49733,0 13.87898,-2.8324 5.6649,-2.8325 8.49734,-8.7806 3.1157,-5.9482 3.1157,-14.4456 v -16.9946 q 0,-9.0638 -3.1157,-14.7287 -2.83244,-5.6648 -8.49734,-8.4974 -5.38165,-3.1157 -13.87898,-3.1157 z M 801.11704,2702.5 q -18.12765,0 -32.28988,-8.214 -14.16223,-8.4974 -22.09308,-25.4921 -7.93085,-17.2779 -7.93085,-43.0531 0,-25.7753 7.93085,-42.7699 7.93085,-16.9947 22.09308,-25.2089 14.16223,-8.4972 32.28988,-8.4972 18.69414,0 32.57313,8.4972 14.16223,8.2142 22.09308,25.2089 7.93085,16.9946 7.93085,42.7699 0,25.7752 -7.93085,43.0531 -7.93085,16.9947 -22.09308,25.4921 -13.87899,8.214 -32.57313,8.214 z m 0,-21.5265 q 16.99467,0 26.34175,-10.1968 9.63032,-10.1968 9.63032,-30.5904 v -28.6078 q 0,-20.6768 -9.63032,-30.5904 -9.34708,-10.1968 -26.34175,-10.1968 -16.42818,0 -26.0585,10.1968 -9.63032,9.9136 -9.63032,30.5904 v 28.6078 q 0,20.3936 9.63032,30.5904 9.63032,10.1968 26.0585,10.1968 z m 95.73686,18.1276 v -209.6009 h 24.92553 v 105.0836 l -1.13299,28.3245 h 2.26597 l 20.3936,-26.6249 36.25531,-43.6197 h 29.45738 l -49.56774,57.7819 54.09974,88.6555 h -29.45746 l -42.48669,-73.3603 -19.82712,22.3763 v 50.984 z m 191.4956,3.3989 q -18.4108,0 -32.5731,-8.4973 -14.1622,-8.4973 -22.3764,-25.492 -7.9308,-16.9947 -7.9308,-42.7699 0,-25.7753 7.9308,-42.7699 7.9309,-16.9947 21.8099,-25.2089 14.1622,-8.4972 32.5731,-8.4972 18.6942,0 32.0067,8.4972 13.5957,8.2142 20.6769,24.9256 7.3642,16.7114 7.3642,41.637 v 7.6475 h -96.0198 v 8.2142 q 0,19.5438 9.9135,30.3071 9.9136,10.7634 27.4748,10.7634 14.1622,0 23.5093,-6.2315 9.347,-6.2314 15.0119,-18.1276 l 16.145,13.3125 q -7.3644,14.1622 -21.2434,23.226 -13.879,9.0638 -34.2726,9.0638 z m -0.5665,-133.1249 q -11.0465,0 -19.2606,4.8151 -7.9309,4.8152 -12.4627,14.1623 -4.2487,9.0639 -4.2487,22.0931 v 3.9654 h 69.6781 v -4.2487 q 0,-13.0292 -3.9654,-22.0931 -3.9654,-9.0638 -11.3298,-13.879 -7.3643,-4.8151 -18.4109,-4.8151 z"
        id="path258" /><path
        sodipodi:type="star"
