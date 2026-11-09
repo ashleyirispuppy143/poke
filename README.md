@@ -1,6 +1,6 @@
 <h1 align="center">
   <a href="https://poketube.fun/watch?v=QZfH7cFp3Ys">
-    <img src="https://poketube.fun/css/logo-poke.svg" width="400">
+    <img src="https://poketube.fun/css/logo-poke.svg?v=549454" width="400">
   </a>
   <a href="http://www.defectivebydesign.org/drm-free">
     <img src="https://static.fsf.org/dbd/label/DRM-free%20label%20120.en.png" 
