@@ -21,6 +21,7 @@
  * ///////////////////////////////////////////////////////////////////////////
  * "It takes a lot of hard work to make something simple." ~ Steve Jobs 
  */
+
 const SyncLevel = {
   driftSeconds: 0,
   driftMs: 0,
@@ -55,6 +56,7 @@ window.SyncLevel = SyncLevel;
   const LEGACY_DESC_BTN_KEY = 'DontUseAlabasterStyleDescriptionOpeningFS';
   const DISABLE_FS_DISCOVER_KEY = 'CloseFullScreenDiscover';
   const SHOW_DISLIKES_FS_DESC_KEY = 'ShowDislikesOnFullScreenDesc';
+  const HIDE_VERIFY_BADGE_FS_DESC_KEY = 'DontShowVerifiedBadgeOnPopUpDescription';
 
   function isStorageFlagEnabled(key) {
     try {
@@ -673,6 +675,29 @@ window.SyncLevel = SyncLevel;
       '  overflow: hidden;',
       '  text-overflow: ellipsis;',
       '}',
+      '.alabaster-fs-desc-verify-badge {',
+      '  position: relative;',
+      '  display: none;',
+      '  align-items: center;',
+      '  justify-content: center;',
+      '  width: 15px;',
+      '  height: 15px;',
+      '  margin-left: -4px;',
+      '  border-radius: 50%;',
+      '  background-color: #ffffff;',
+      '  flex-shrink: 0;',
+      '  vertical-align: middle;',
+      '}',
+      '.alabaster-fs-desc-verify-badge::after {',
+      '  content: "";',
+      '  display: block;',
+      '  width: 3.5px;',
+      '  height: 6.5px;',
+      '  border-right: 2px solid #0f0f0f;',
+      '  border-bottom: 2px solid #0f0f0f;',
+      '  transform: translateY(-0.8px) rotate(45deg);',
+      '  box-sizing: content-box;',
+      '}',
       '.alabaster-fs-desc-close {',
       '  width: 32px;',
       '  height: 32px;',
@@ -1224,8 +1249,14 @@ window.SyncLevel = SyncLevel;
         var fsDescChannelName = document.createElement('span');
         fsDescChannelName.className = 'alabaster-fs-desc-channel-name';
 
+        var fsDescVerifyBadge = document.createElement('span');
+        fsDescVerifyBadge.className = 'alabaster-fs-desc-verify-badge';
+        fsDescVerifyBadge.setAttribute('aria-label', 'Verified');
+        fsDescVerifyBadge.setAttribute('title', 'Verified');
+
         fsDescChannelRow.appendChild(fsDescAvatar);
         fsDescChannelRow.appendChild(fsDescChannelName);
+        fsDescChannelRow.appendChild(fsDescVerifyBadge);
 
         fsDescHeaderInfo.appendChild(fsDescHeading);
         fsDescHeaderInfo.appendChild(fsDescChannelRow);
@@ -1265,6 +1296,8 @@ window.SyncLevel = SyncLevel;
 
           var chName = (typeof window.authorchannelname === 'string' && window.authorchannelname.trim()) ? window.authorchannelname.trim() : freshMeta.author;
           var avUrl = (typeof window.avatarurl === 'string' && window.avatarurl.trim()) ? window.avatarurl.trim() : freshMeta.avatarUrl;
+          var hideVerifyBadge = isStorageFlagEnabled(HIDE_VERIFY_BADGE_FS_DESC_KEY);
+          var isVerifiedChannel = !hideVerifyBadge && Boolean(document.getElementById('channel-pill-verify-badge'));
 
           if (avUrl) {
             fsDescAvatar.src = avUrl;
@@ -1279,6 +1312,12 @@ window.SyncLevel = SyncLevel;
           } else {
             fsDescChannelName.textContent = '';
             fsDescChannelName.style.display = 'none';
+          }
+
+          if (isVerifiedChannel && chName) {
+            fsDescVerifyBadge.style.display = 'inline-flex';
+          } else {
+            fsDescVerifyBadge.style.display = 'none';
           }
 
           if (avUrl || chName) {
@@ -4952,6 +4991,8 @@ window.SyncLevel = SyncLevel;
     initAlabasterPlayer();
   }
 })();
+
+
 
 (function () {
   'use strict';
