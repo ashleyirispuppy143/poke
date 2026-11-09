@@ -1643,6 +1643,93 @@
             padding: 2px 6px;
             border-radius: 4px;
         }
+
+        .pt-cfg-error-<%- v %> {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background: radial-gradient(circle at 78% 55%, rgba(65, 16, 82, 0.52) 0%, rgba(30, 8, 40, 0.25) 32%, rgba(15, 15, 15, 0) 65%), #0f0f0f;
+            display: flex;
+            align-items: center;
+            padding-left: 12vw;
+            box-sizing: border-box;
+            color: #ffffff;
+            font-family: "PokeTube Flex", Roboto, Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        .pt-cfg-content-<%- v %> {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            max-width: 600px;
+            z-index: 2;
+        }
+
+        .pt-cfg-logo-<%- v %> {
+            height: 38px;
+            width: auto;
+            margin-bottom: 18px;
+            display: block;
+        }
+
+        .pt-cfg-title-<%- v %> {
+            font-size: 24px;
+            font-weight: 700;
+            color: #ffffff;
+            margin: 0 0 14px 0;
+            letter-spacing: -0.2px;
+            line-height: 1.3;
+        }
+
+        .pt-cfg-sub-<%- v %> {
+            font-size: 14px;
+            font-weight: 400;
+            color: #aaaaaa;
+            margin: 0 0 22px 0;
+        }
+
+        .pt-cfg-btn-<%- v %> {
+            background-color: #ffffff;
+            color: #0f0f0f;
+            height: 36px;
+            padding: 0 16px;
+            border-radius: 18px;
+            font-size: 14px;
+            font-weight: 500;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s ease;
+        }
+
+        .pt-cfg-btn-<%- v %>:hover {
+            background-color: #e5e5e5;
+        }
+
+        .pt-cfg-badge-<%- v %> {
+            position: absolute;
+            bottom: 14px;
+            right: 14px;
+            background-color: rgba(255, 255, 255, 0.12);
+            color: #f1f1f1;
+            font-size: 12px;
+            font-weight: 500;
+            padding: 6px 12px;
+            border-radius: 16px;
+            pointer-events: none;
+        }
+
+        @media (max-width: 560px) {
+            .pt-cfg-error-<%- v %> {
+                padding-left: 24px;
+                padding-right: 24px;
+            }
+            .pt-cfg-title-<%- v %> {
+                font-size: 20px;
+            }
+        }
     </style></head><body class="<%= isShowHow ? 'mode-showhow' : (isAudioType ? 'mode-audio' : 'mode-video') %>" data-forcequality="<%= typeof forcequality !== 'undefined' ? forcequality : '' %>">
     
     <% if (!isShowHow && (typeof VideoError === 'undefined' || !VideoError)) { %>
@@ -1659,25 +1746,19 @@
         const _isDir = window.self === window.top;
         
         if (_isDir || _failsBotCheck) {
-            document.write('<style>body { background-color: #212121; } .video-wrapper-<%- v %>, .audio-wrapper-<%- v %> { display: none !important; }</style>');
+            document.write('<style>body { background-color: #0f0f0f; } .video-wrapper-<%- v %>, .audio-wrapper-<%- v %> { display: none !important; }</style>');
             if (_isDir) {
                 document.write(`
-                    <div class="video-error-container-<%- v %>">
-                        <svg class="error-icon-<%- v %>" viewBox="0 0 24 24" style="color: #aaaaaa;">
-                            <path fill="currentColor" d="M12,2C6.48,2,2,6.48,2,12c0,5.52,4.48,10,10,10s10-4.48,10-10C22,6.48,17.52,2,12,2z M13,17h-2v-2h2V17z M13,13h-2V7h2V13z"/>
-                        </svg>
-                        <div class="error-text-<%- v %>">
-                            <div class="error-title-<%- v %>" style="margin-bottom: 12px;">Player Configuration Error</div>
-                            <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
-                                <a href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer" style="color: #ffabcc; text-decoration: none; font-size: 16px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; font-family: 'PokeTube Flex', Arial, sans-serif;">
-                                    Watch on Poke
-                                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
-                                </a>
-                            </div>
+                    <div class="pt-cfg-error-<%- v %>">
+                        <div class="pt-cfg-content-<%- v %>">
+                            <a href="/" target="_blank" rel="noopener noreferrer" style="text-decoration: none; display: inline-block;">
+                                <img src="/css/logo-poke.svg?v=10112026" alt="Poke" class="pt-cfg-logo-<%- v %>">
+                            </a>
+                            <div class="pt-cfg-title-<%- v %>">Video player configuration error</div>
+                            <div class="pt-cfg-sub-<%- v %>">Error 153</div>
+                            <a href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer" class="pt-cfg-btn-<%- v %>">Watch video on Poke</a>
                         </div>
-                        <a href="/" target="_blank" rel="noopener noreferrer" class="logo-link-<%- v %>">
-                            <img src="/css/logo-poke.svg?v=10112026" alt="Poke Logo" class="logo-img-<%- v %>">
-                        </a>
+                        <div class="pt-cfg-badge-<%- v %>">Error 153</div>
                     </div>
                 `);
             }
