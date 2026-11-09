@@ -51,9 +51,10 @@
   const desc = `Watch this ${turntomins(VideoData?.lengthSeconds) || "LIVE"} long video from ${VideoData?.author.replace("- Topic", "")} On Poke! 
 👍 ${convertLegacy(engagement?.likes)} | 👎 ${convertLegacy(engagement?.dislikes)} | 📈 ${convertLegacy(engagement?.viewCount)} Views 🗓️ ${date.replace("Premiered", " ")} 💬 ${!isNaN(inv.commentCount) ? inv.commentCount.toLocaleString() : 0}`;
 
-  const image = `https://i.ytimg.com/vi/${VideoData.videoId}/maxresdefault.jpg`;
-  const url   = `https://${hostname}/watch?v=${VideoData?.videoId}`;
-  const title = `${VideoData?.title} | Poke`;
+  const image    = `https://i.ytimg.com/vi/${VideoData.videoId}/maxresdefault.jpg`;
+  const url      = `https://${hostname}/watch?v=${VideoData?.videoId}`;
+  const embedUrl = `https://${hostname}/embed/${VideoData?.videoId}`;
+  const title    = `${VideoData?.title} | Poke`;
 
   const twitterTags = [
     { name: "twitter:author", content: VideoData?.author },
@@ -74,6 +75,11 @@
     { property: "og:url", content: url },
     { property: "og:description", content: desc },
     { property: "og:image", content: image },
+    { property: "og:video:url", content: embedUrl },
+    { property: "og:video:secure_url", content: embedUrl },
+    { property: "og:video:type", content: "text/html" },
+    { property: "og:video:width", content: "560" },
+    { property: "og:video:height", content: "315" },
   ];
 %>
 <% twitterTags.forEach(tag => { -%>
