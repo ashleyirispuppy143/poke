@@ -147,7 +147,7 @@
         .audio-extra-btn-<%- v %> { background: transparent; border: none; color: #fff; cursor: pointer; width: 22px; height: 22px; padding: 0; opacity: 0.7; transition: opacity 0.2s, color 0.2s; flex-shrink: 0; display: flex; align-items: center; justify-content: center; position: relative; }
         .audio-extra-btn-<%- v %>:hover { opacity: 1; }
         .audio-extra-btn-<%- v %> svg { width: 18px; height: 18px; fill: currentColor; }
-        .audio-logo-<%- v %> { height: 20px; flex-shrink: 0; display: block; margin-left: 8px; }
+        .audio-logo-<%- v %> { height: 26px; flex-shrink: 0; display: block; margin-left: 8px; }
 
         /* --- Normal Video Mode Styles --- */
         .video-wrapper-<%- v %> {
@@ -226,7 +226,7 @@
         }
 
         .logo-img-<%- v %> {
-            height: clamp(20px, 5vmin, 40px);
+            height: clamp(28px, 6.5vmin, 52px);
             width: auto;
             display: block;
             filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5));
@@ -241,7 +241,7 @@
         }
 
         .logo-link-<%- v %>.in-player-<%- v %> .logo-img-<%- v %> {
-            height: 28px;
+            height: 34px;
         }
 
         .engagement-stats-<%- v %> {
@@ -741,7 +741,7 @@
         }
 
         .bottom-right-controls-<%- v %> .logo-img-<%- v %> {
-            height: 20px;
+            height: 26px;
         }
 
         .settings-panel-<%- v %> {
@@ -1660,6 +1660,27 @@
         
         if (_isDir || _failsBotCheck) {
             document.write('<style>body { background-color: #212121; } .video-wrapper-<%- v %>, .audio-wrapper-<%- v %> { display: none !important; }</style>');
+            if (_isDir) {
+                document.write(`
+                    <div class="video-error-container-<%- v %>">
+                        <svg class="error-icon-<%- v %>" viewBox="0 0 24 24" style="color: #aaaaaa;">
+                            <path fill="currentColor" d="M12,2C6.48,2,2,6.48,2,12c0,5.52,4.48,10,10,10s10-4.48,10-10C22,6.48,17.52,2,12,2z M13,17h-2v-2h2V17z M13,13h-2V7h2V13z"/>
+                        </svg>
+                        <div class="error-text-<%- v %>">
+                            <div class="error-title-<%- v %>" style="margin-bottom: 12px;">Player Configuration Error</div>
+                            <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+                                <a href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer" style="color: #ffabcc; text-decoration: none; font-size: 16px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; font-family: 'PokeTube Flex', Arial, sans-serif;">
+                                    Watch on Poke
+                                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+                                </a>
+                            </div>
+                        </div>
+                        <a href="/" target="_blank" rel="noopener noreferrer" class="logo-link-<%- v %>">
+                            <img src="/css/logo-poke.svg?v=10112026" alt="Poke Logo" class="logo-img-<%- v %>">
+                        </a>
+                    </div>
+                `);
+            }
         }
     </script>
     <% } %>
@@ -3246,6 +3267,125 @@
                                 wrapper.requestFullscreen().catch(() => {});
                             } else {
                                 document.exitFullscreen().catch(() => {});
+                            }
+                        });
+
+                        const SEEK_STEP = 10;
+                        const SEEK_STEP_BIG = 30;
+                        const VOLUME_STEP = 0.05;
+                        const SPEED_STEP = 0.25;
+                        let rememberedVolume = 1;
+
+                        function toggleFullscreen() {
+                            closeAllPanels();
+                            if (!document.fullscreenElement) {
+                                wrapper.requestFullscreen().catch(() => {});
+                            } else {
+                                document.exitFullscreen().catch(() => {});
+                            }
+                        }
+
+                        function toggleMute() {
+                            closeAllPanels();
+                            const pm = getPrimaryMedia();
+                            if (pm.muted || lastVolume === 0) {
+                                setMediaVolume(rememberedVolume > 0 ? rememberedVolume : 1);
+                            } else {
+                                rememberedVolume = lastVolume;
+                                setMediaVolume(0);
+                            }
+                            showControls();
+                        }
+
+                        function seekBy(offset) {
+                            const dur = getDuration();
+                            if (!dur) return;
+                            setCurrentTime(Math.max(0, Math.min(dur, getCurrentTime() + offset)));
+                            updateTime();
+                            showControls();
+                        }
+
+                        function seekToPercent(pct) {
+                            const dur = getDuration();
+                            if (!dur) return;
+                            setCurrentTime((pct / 100) * dur);
+                            updateTime();
+                            showControls();
+                        }
+
+                        function adjustVolume(delta) {
+                            const currentVol = getPrimaryMedia().muted ? 0 : lastVolume;
+                            const nextVol = Math.max(0, Math.min(1, currentVol + delta));
+                            if (nextVol > 0) rememberedVolume = nextVol;
+                            setMediaVolume(nextVol);
+                            showToast(`Volume: ${Math.round(nextVol * 100)}%`, 1500);
+                            showControls();
+                        }
+
+                        function adjustSpeed(delta) {
+                            const nextSpeed = Math.max(0.25, Math.min(2, Math.round((video.playbackRate + delta) * 100) / 100));
+                            updateSpeedState(nextSpeed);
+                            showToast(`Speed: ${nextSpeed}x`, 1500);
+                            showControls();
+                        }
+
+                        const keyHandlers = {
+                            'k':          (p) => { togglePlay(p); return true; },
+                            ' ':          (p) => { 
+                               if (document.activeElement) document.activeElement.blur(); 
+                              togglePlay(p); 
+                              return true; 
+                            },
+
+                            'f':          (p) => { toggleFullscreen(p); return true; },
+
+                            'm':          (p) => { toggleMute(p); return true; },
+
+                            'arrowright':  (p) => { seekBy( SEEK_STEP); return true; },
+                            'arrowleft':   (p) => { seekBy(-SEEK_STEP); return true; },
+                            'l':           (p) => { seekBy( SEEK_STEP); return true; },
+                            'j':           (p) => { seekBy(-SEEK_STEP); return true; },
+                            'L':           (p) => { seekBy( SEEK_STEP_BIG); return true; },
+                            'J':           (p) => { seekBy(-SEEK_STEP_BIG); return true; },
+
+                            'arrowup':     (p) => { adjustVolume( VOLUME_STEP); return true; },
+                            'arrowdown':   (p) => { adjustVolume(-VOLUME_STEP); return true; },
+
+                            '>':           (p) => { adjustSpeed( SPEED_STEP); return true; },
+                            '<':           (p) => { adjustSpeed(-SPEED_STEP); return true; },
+
+                            '0': (p) => { seekToPercent( 0); return true; },
+                            '1': (p) => { seekToPercent(10); return true; },
+                            '2': (p) => { seekToPercent(20); return true; },
+                            '3': (p) => { seekToPercent(30); return true; },
+                            '4': (p) => { seekToPercent(40); return true; },
+                            '5': (p) => { seekToPercent(50); return true; },
+                            '6': (p) => { seekToPercent(60); return true; },
+                            '7': (p) => { seekToPercent(70); return true; },
+                            '8': (p) => { seekToPercent(80); return true; },
+                            '9': (p) => { seekToPercent(90); return true; },
+
+                            'home': (p) => { seekToPercent(  0); return true; },
+                            'end':  (p) => { seekToPercent(100); return true; },
+                        };
+
+                        document.addEventListener('keydown', (e) => {
+                            if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT' || e.target.isContentEditable)) return;
+                            if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+                            const rawKey = e.key;
+                            const lowerKey = rawKey.toLowerCase();
+
+                            if (e.shiftKey && (lowerKey === 'arrowright' || lowerKey === 'arrowleft')) {
+                                e.preventDefault();
+                                seekBy(lowerKey === 'arrowright' ? SEEK_STEP_BIG : -SEEK_STEP_BIG);
+                                return;
+                            }
+
+                            const handler = keyHandlers[rawKey] || keyHandlers[lowerKey];
+                            if (handler) {
+                                e.preventDefault();
+                                handler();
                             }
                         });
 
