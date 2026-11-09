@@ -193,6 +193,18 @@ settings require javascript to work :p
     const loader = document.getElementById('loader');
     const settingsList = document.getElementById('settings-list');
 
+    function syncSettings() {
+      settings.forEach(({ key, toggleId }) => {
+        const toggle = document.getElementById(toggleId);
+        if (toggle) {
+          const isChecked = localStorage.getItem(key) === 'true';
+          if (toggle.checked !== isChecked) {
+            toggle.checked = isChecked;
+          }
+        }
+      });
+    }
+
     setTimeout(() => {
       loader.style.display = 'none';
 
@@ -226,18 +238,23 @@ settings require javascript to work :p
         row.appendChild(switchLabel);
         settingsList.appendChild(row);
 
-        const currentValue = localStorage.getItem(key) === 'true';
         if (localStorage.getItem(key) === null) {
           localStorage.setItem(key, 'false');
         }
 
-        toggle.checked = currentValue;
+        toggle.checked = localStorage.getItem(key) === 'true';
 
         toggle.addEventListener('change', () => {
-          const isChecked = toggle.checked;
-          localStorage.setItem(key, String(isChecked));
+          localStorage.setItem(key, String(toggle.checked));
         });
       });
+
+      window.addEventListener('storage', syncSettings);
+      window.addEventListener('focus', syncSettings);
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) syncSettings();
+      });
+      setInterval(syncSettings, 2000);
     }, 400);
     // @license-end
   </script>
