@@ -1674,7 +1674,7 @@
             </div>
             
             <a href="/" target="_blank" rel="noopener noreferrer" class="logo-link-<%- v %>">
-                <img src="/css/logo-poke.svg" alt="Poke Logo" class="logo-img-<%- v %>">
+                <img src="/css/logo-poke.svg?v=10112026" alt="Poke Logo" class="logo-img-<%- v %>">
             </a>
         </div>
     <% } else if (isShowHow) { %>
@@ -1770,7 +1770,7 @@
                     <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8,5 8,19 19,12" /></svg>
                 </div>
                 <span style="font-weight: 500; font-size: 14px;">Click to play audio</span>
-                <img src="/css/logo-poke.svg" class="audio-logo-<%- v %>" style="margin-left: auto;">
+                <img src="/css/logo-poke.svg?v=10112026" class="audio-logo-<%- v %>" style="margin-left: auto;">
             </a>
         </div>
 
@@ -1837,7 +1837,7 @@
 
                         <button class="audio-extra-btn-<%- v %> audio-loop-btn" type="button" title="Loop"><svg viewBox="0 0 24 24" fill="currentColor"><path d="${loopIcon}"/></svg></button>
                         <button class="audio-extra-btn-<%- v %> audio-speed-btn" type="button" title="Speed"><svg viewBox="0 0 24 24" fill="currentColor"><path d="${speedIcon}"/></svg></button>
-                        <a href="/" target="_blank" rel="noopener noreferrer"><img src="/css/logo-poke.svg" class="audio-logo-<%- v %>"></a>
+                        <a href="/" target="_blank" rel="noopener noreferrer"><img src="/css/logo-poke.svg?v=10112026" class="audio-logo-<%- v %>"></a>
                     `;
 
                     const audio = document.createElement('audio');
@@ -2032,7 +2032,7 @@
             </a>
 
             <a href="/" target="_blank" rel="noopener noreferrer" class="logo-link-<%- v %>">
-                <img src="/css/logo-poke.svg" alt="Poke Logo" class="logo-img-<%- v %>">
+                <img src="/css/logo-poke.svg?v=10112026" alt="Poke Logo" class="logo-img-<%- v %>">
             </a>
         </div>
 
@@ -2101,6 +2101,7 @@
                         if(e) e.preventDefault();
 
                         playerLink.style.display = 'none';
+                        if (logoLink) logoLink.style.display = 'none';
 
                         const video = document.createElement('video');
                         video.className = 'custom-video-player-<%- v %>';
@@ -2337,7 +2338,7 @@
                                             </div>
                                         </button>
                                         <a href="/" target="_blank" rel="noopener noreferrer" class="logo-link-<%- v %>">
-                                            <img src="/css/logo-poke.svg" alt="Poke Logo" class="logo-img-<%- v %>">
+                                            <img src="/css/logo-poke.svg?v=10112026" alt="Poke Logo" class="logo-img-<%- v %>">
                                         </a>
                                     </div>
                                 </div>
@@ -2726,6 +2727,7 @@
                             audio.style.display = 'none';
                             controls.style.display = 'none';
                             playerLink.style.display = 'none';
+                            if (logoLink) logoLink.style.display = '';
                             wrapper.style.backgroundColor = '#212121';
 
                             let errContainer = wrapper.querySelector('.video-runtime-error-<%- v %>');
@@ -2765,6 +2767,7 @@
                                     video.style.display = 'block';
                                     controls.style.display = '';
                                     playerLink.style.display = 'none';
+                                    if (logoLink) logoLink.style.display = 'none';
                                     if (posterSrc) video.poster = posterSrc;
                                     
                                     loadQuality(activeQuality, getCurrentTime(), Date.now());
