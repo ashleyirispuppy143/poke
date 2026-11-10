@@ -2042,7 +2042,7 @@
                         }
                     });
                     audio.addEventListener('error', () => {
-                        if (retryCount < 3) {
+                        if (retryCount < 5) {
                             retryCount++;
                             loadAudio(true);
                         } else {
@@ -2456,6 +2456,7 @@
                         let activeQuality = '360p'; 
                         let isAutoQuality = true;
                         let is720pAvailable = true;
+                        let has720pPlayed = false;
                         let isDualPlaying = false;
                         let isIntendedToPlay = true; 
                         let lastVolume = 1;
@@ -2463,6 +2464,7 @@
 
                         let pendingSeekTime = 0;
                         let isSeekingPending = false;
+                        let lastKnownTime = 0;
 
                         let lastPlayToggle = 0;
                         let qualityChangeTimestamps = [];
@@ -2474,12 +2476,19 @@
                             return isDualPlaying ? audio : video;
                         }
                         function getDuration() {
-                            return getPrimaryMedia().duration || 0;
+                            return getPrimaryMedia().duration || video.duration || 0;
                         }
                         function getCurrentTime() {
-                            return getPrimaryMedia().currentTime || 0;
+                            const pm = getPrimaryMedia();
+                            const t = pm.currentTime || 0;
+                            if (t > 0) {
+                                lastKnownTime = t;
+                                return t;
+                            }
+                            return lastKnownTime;
                         }
                         function setCurrentTime(t) {
+                            lastKnownTime = t;
                             video.currentTime = t;
                             if (isDualPlaying) audio.currentTime = t;
                         }
@@ -2612,6 +2621,8 @@
                             }
                             
                             qualityChangeTimestamps.push(now);
+                            retryCount = 0;
+                            clearTimeout(retryTimer);
                             loadQuality(requestedQuality, getCurrentTime(), null, silent);
                         }
 
@@ -2620,12 +2631,13 @@
                             isDualPlaying = (quality === '720p');
                             
                             pendingSeekTime = timeToSeek;
+                            lastKnownTime = timeToSeek;
                             isSeekingPending = true;
 
+                            setBuffering(true);
                             if (!silent) {
                                 isSwitchingQuality = true;
                                 showToast(`Switching to ${quality}...`, 0); 
-                                setBuffering(true);
                             }
                             
                             updateQualityUI();
@@ -2661,6 +2673,7 @@
                             dummy.src = getVideoUrl(247);
                             dummy.onloadedmetadata = () => {
                                 is720pAvailable = true;
+                                has720pPlayed = true;
                                 if (isAutoQuality && activeQuality !== '720p' && forcedQuality !== '360p') {
                                     loadQuality('720p', getCurrentTime(), null, true);
                                 }
@@ -2668,6 +2681,11 @@
                                 dummy.load();
                             };
                             dummy.onerror = () => {
+                                if (has720pPlayed) {
+                                    dummy.removeAttribute('src');
+                                    dummy.load();
+                                    return;
+                                }
                                 is720pAvailable = false;
                                 const qBtn = controls.querySelector('.quality-list-item-<%- v %>[data-quality="720p"]');
                                 if(qBtn) {
@@ -2739,7 +2757,8 @@
                         let showRemainingTime = false;
                         let retryCount = 0;
                         let retryTimer = null;
-                        const maxRetries = 3;
+                        const maxRetries = 5;
+                        let isRetrying = false;
                         let lastWidth = '';
                         let lastText = '';
                         let isRafPending = false;
@@ -2821,6 +2840,7 @@
 
                         function showRuntimeError() {
                             clearTimeout(retryTimer);
+                            isRetrying = false;
                             closeAllPanels();
                             setBuffering(false);
                             pauseMedia();
@@ -2864,6 +2884,7 @@
                                 retryButton.addEventListener('click', (event) => {
                                     event.stopPropagation();
                                     retryCount = 0;
+                                    isRetrying = false;
                                     errContainer.style.display = 'none';
                                     wrapper.style.backgroundColor = '#000';
                                     video.style.display = 'block';
@@ -2872,7 +2893,14 @@
                                     if (logoLink) logoLink.style.display = 'none';
                                     if (posterSrc) video.poster = posterSrc;
                                     
-                                    loadQuality(activeQuality, getCurrentTime(), Date.now());
+                                    const targetQuality = (has720pPlayed && (isAutoQuality || activeQuality === '720p') && forcedQuality !== '360p') ? '720p' : activeQuality;
+                                    if (targetQuality === '720p') {
+                                        is720pAvailable = true;
+                                        const qBtn = controls.querySelector('.quality-list-item-<%- v %>[data-quality="720p"]');
+                                        if (qBtn) qBtn.style.display = '';
+                                    }
+                                    playMedia();
+                                    loadQuality(targetQuality, getCurrentTime(), Date.now(), true);
                                 });
                             } else {
                                 errContainer.style.display = 'flex';
@@ -2880,22 +2908,33 @@
                         }
 
                         function queueRetry() {
+                            if (isRetrying) return;
+                            setBuffering(true);
+
+                            // If 720p already existed/played and we are in Auto or 720p mode, we retry 720p first!
+                            const targetQuality = (has720pPlayed && (activeQuality === '720p' || (isAutoQuality && forcedQuality !== '360p'))) ? '720p' : activeQuality;
+
                             if (retryCount >= maxRetries) {
-                                if (activeQuality === '720p') {
-                                    showToast("720p stream failed, falling back to 360p", 3000);
+                                if (targetQuality === '720p') {
                                     retryCount = 0;
+                                    isRetrying = false;
                                     is720pAvailable = false;
+                                    has720pPlayed = false;
                                     const qBtn = controls.querySelector('.quality-list-item-<%- v %>[data-quality="720p"]');
                                     if(qBtn) qBtn.style.display = 'none';
-                                    loadQuality('360p', getCurrentTime(), null, true);
+                                    loadQuality('360p', getCurrentTime(), Date.now(), true);
                                     return;
                                 }
                                 showRuntimeError();
                                 return;
                             }
+
+                            isRetrying = true;
                             retryCount++;
+                            clearTimeout(retryTimer);
                             retryTimer = setTimeout(() => {
-                                loadQuality(activeQuality, getCurrentTime(), Date.now() + '-' + retryCount);
+                                isRetrying = false;
+                                loadQuality(targetQuality, getCurrentTime(), Date.now() + '-' + retryCount, true);
                             }, 900);
                         }
 
@@ -2905,7 +2944,10 @@
                             requestAnimationFrame(() => {
                                 const pm = getPrimaryMedia();
                                 const duration = Number.isFinite(pm.duration) ? pm.duration : 0;
-                                const current = Number.isFinite(pm.currentTime) ? pm.currentTime : 0;
+                                const current = Number.isFinite(pm.currentTime) && pm.currentTime > 0 ? pm.currentTime : lastKnownTime;
+                                if (Number.isFinite(pm.currentTime) && pm.currentTime > 0) {
+                                    lastKnownTime = pm.currentTime;
+                                }
                                 const p = duration ? Math.max(0, Math.min(100, (current / duration) * 100)) : 0;
                                 const newWidth = p + '%';
 
@@ -3048,7 +3090,11 @@
                             audio.addEventListener(evt, (e) => { if(isDualPlaying && e.target === audio) handler(e, audio); });
                         };
 
-                        bindMediaEvent('loadedmetadata', () => {
+                        video.addEventListener('loadedmetadata', () => {
+                            if (isDualPlaying) {
+                                has720pPlayed = true;
+                                is720pAvailable = true;
+                            }
                             if (isSeekingPending) {
                                 video.currentTime = pendingSeekTime;
                                 if (isDualPlaying) audio.currentTime = pendingSeekTime;
@@ -3056,20 +3102,42 @@
                             }
                             updateTime();
                         });
+
+                        audio.addEventListener('loadedmetadata', () => {
+                            if (isDualPlaying && isSeekingPending) {
+                                audio.currentTime = pendingSeekTime;
+                            }
+                            if (isDualPlaying) updateTime();
+                        });
                         
-                        bindMediaEvent('timeupdate', updateTime);
+                        bindMediaEvent('timeupdate', () => {
+                            const pm = getPrimaryMedia();
+                            if (pm.currentTime > 0 && !isRetrying) {
+                                if (isDualPlaying && video.readyState >= 3 && audio.readyState >= 3) {
+                                    has720pPlayed = true;
+                                    if (Math.abs(pm.currentTime - pendingSeekTime) > 1.5) {
+                                        retryCount = 0;
+                                    }
+                                } else if (!isDualPlaying && video.readyState >= 3) {
+                                    if (Math.abs(pm.currentTime - pendingSeekTime) > 1.5) {
+                                        retryCount = 0;
+                                    }
+                                }
+                            }
+                            updateTime();
+                        });
                         bindMediaEvent('durationchange', updateTime);
 
                         video.addEventListener('seeked', () => {
                             video.style.opacity = '1';
-                            setBuffering(false);
+                            if (!isRetrying) setBuffering(false);
                         });
 
-                        video.addEventListener('error', () => { setBuffering(false); queueRetry(); });
-                        audio.addEventListener('error', () => { if(isDualPlaying){ setBuffering(false); queueRetry(); } });
+                        video.addEventListener('error', () => { queueRetry(); });
+                        audio.addEventListener('error', () => { if(isDualPlaying){ queueRetry(); } });
 
                         function onEndedHandler() {
-                            if (hasTriggeredEnd || !isIntendedToPlay) return;
+                            if (hasTriggeredEnd || !isIntendedToPlay || isRetrying) return;
                             
                             if (isDualPlaying) {
                                 const diff = getDuration() - getCurrentTime();
@@ -3091,7 +3159,7 @@
 
                         // The Central Synchronization Loop
                         setInterval(() => {
-                            if (!isIntendedToPlay) return; 
+                            if (!isIntendedToPlay || isRetrying) return; 
 
                             const pm = getPrimaryMedia();
                             if (!pm.src) return; 
@@ -3121,6 +3189,7 @@
                                     if (!video.paused) video.pause();
                                 } else {
                                     setBuffering(false);
+                                    has720pPlayed = true;
                                     if (isSwitchingQuality) {
                                         isSwitchingQuality = false;
                                         showToast(`Switched to ${activeQuality}`, 2000);
@@ -3166,7 +3235,7 @@
                         }, 250);
 
                         document.addEventListener('visibilitychange', () => {
-                            if (!document.hidden && isDualPlaying && isIntendedToPlay) {
+                            if (!document.hidden && isDualPlaying && isIntendedToPlay && !isRetrying) {
                                 // When returning to the tab, prevent massive stutters by utilizing soft sync over hard seek.
                                 const diff = Math.abs(video.currentTime - audio.currentTime);
                                 if (diff > 1.5) {
