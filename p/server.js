@@ -5,6 +5,182 @@ const zlib = require("zlib");
 const fs = require("fs");
 const path = require("path");
 
+/**
+ * Formats an Error (including undici's nested `err.cause` and AggregateError)
+ * into a detailed, human-readable string showing error codes, syscalls, IPs, etc.
+ * @param {any} err
+ * @returns {string}
+ */
+const formatError = (err) => {
+  if (!err) return "Unknown error";
+  const parts = [err.stack || `${err.name}: ${err.message}`];
+
+  let cause = err.cause;
+  let depth = 0;
+  while (cause && depth < 5) {
+    depth++;
+    const details = [];
+    if (cause.code) details.push(`code=${cause.code}`);
+    if (cause.errno) details.push(`errno=${cause.errno}`);
+    if (cause.syscall) details.push(`syscall=${cause.syscall}`);
+    if (cause.hostname) details.push(`host=${cause.hostname}`);
+    if (cause.address) details.push(`addr=${cause.address}`);
+    if (cause.port) details.push(`port=${cause.port}`);
+
+    const detailStr = details.length ? ` (${details.join(", ")})` : "";
+    parts.push(`  [Cause #${depth}] ${cause.name || "Error"}: ${cause.message}${detailStr}`);
+
+    // Handle AggregateError (e.g., Happy Eyeballs IPv4 + IPv6 connection failures)
+    if (Array.isArray(cause.errors)) {
+      cause.errors.forEach((subErr, idx) => {
+        const subDetails = [];
+        if (subErr.code) subDetails.push(`code=${subErr.code}`);
+        if (subErr.syscall) subDetails.push(`syscall=${subErr.syscall}`);
+        if (subErr.address) subDetails.push(`addr=${subErr.address}`);
+        if (subErr.port) subDetails.push(`port=${subErr.port}`);
+        const subStr = subDetails.length ? ` (${subDetails.join(", ")})` : "";
+        parts.push(`    -> [SubError #${idx + 1}] ${subErr.message || subErr}${subStr}`);
+      });
+    }
+
+    cause = cause.cause;
+  }
+
+  return parts.join("\n");
+};
+
+/**
+ * Extract a concise one-line summary of the root cause of a fetch error.
+ * @param {any} err
+ * @returns {string}
+ */
+const getErrorSummary = (err) => {
+  if (!err) return "Unknown error";
+  const cause = err.cause;
+  if (cause) {
+    if (Array.isArray(cause.errors) && cause.errors.length > 0) {
+      const codes = cause.errors.map((e) => e.code || e.message).join(", ");
+      return `${cause.code || cause.name || "AggregateError"} (${codes})`;
+    }
+    const code = cause.code ? ` [${cause.code}]` : "";
+    const host = cause.hostname ? ` (${cause.hostname})` : "";
+    return `${cause.message || cause.name || err.message}${code}${host}`;
+  }
+  return err.message || String(err);
+};
+
+/**
+ * Escapes HTML special characters to prevent XSS in error pages.
+ * @param {string} str
+ * @returns {string}
+ */
+const escapeHtml = (str) =>
+  String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+
+const sendErrorPage = (res, status, statusText, messageHtml, detailText = "") => {
+  const detailBlock = detailText
+    ? `<div class="err-detail"><code>${escapeHtml(detailText)}</code></div>`
+    : "";
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="initial-scale=1, minimum-scale=1, width=device-width">
+  <title>Error ${status} (${escapeHtml(statusText)})!!1</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, code { font: 15px/22px arial, sans-serif; }
+    html {
+      background: #0f0f12;
+      color: #e4e4e7;
+      padding: 15px;
+      color-scheme: dark;
+    }
+    body {
+      margin: 7% auto 0;
+      max-width: 440px;
+      min-height: 180px;
+      padding: 30px 0 15px;
+    }
+    * > body {
+      background: url(//www.google.com/images/errors/robot.png) 100% 5px no-repeat;
+      padding-right: 205px;
+    }
+    p {
+      margin: 11px 0 22px;
+      overflow-wrap: break-word;
+      word-break: break-word;
+    }
+    ins {
+      color: #9ca3af;
+      text-decoration: none;
+    }
+    code {
+      background: #1a1a22;
+      color: #f472b6;
+      padding: 2px 5px;
+      border-radius: 4px;
+      border: 1px solid #272732;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+    }
+    .err-detail {
+      margin: -10px 0 18px;
+    }
+    .err-detail code {
+      display: inline-block;
+      color: #a1a1aa;
+      background: #14141b;
+      border-color: #262630;
+      font-size: 12px;
+      line-height: 18px;
+      padding: 4px 8px;
+    }
+    a { color: #60a5fa; text-decoration: none; }
+    a img { border: 0; }
+    #logo {
+      display: inline-block;
+      height: 54px;
+      width: 165px;
+      background: url(https://poketube.fun/css/logo-poke.svg?v=78) no-repeat 0% 50% / contain;
+      margin-left: -2px;
+      margin-bottom: 4px;
+    }
+    @media screen and (max-width: 772px) {
+      body {
+        background: none;
+        margin-top: 0;
+        max-width: none;
+        padding-right: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <a href="https://poketube.fun/"><span id="logo" aria-label="PokeTube"></span></a>
+  <p><b>${status}.</b> <ins>That’s an error.</ins></p>
+  <p>${messageHtml} <ins>That’s all we know.</ins></p>
+  ${detailBlock}
+</body>
+</html>`;
+
+  res.status(status);
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store");
+  res.send(html);
+};
+
+// ---------------------------------------------------------------------------
+// Font Awesome local cache setup
+// ---------------------------------------------------------------------------
+
 const FONTS_DIR = path.join(__dirname, "fonts");
 if (!fs.existsSync(FONTS_DIR)) {
   fs.mkdirSync(FONTS_DIR, { recursive: true });
@@ -29,7 +205,6 @@ const FA_WEBFONTS = [
   "fa-v4compatibility.ttf",
 ];
 
-// MIME types for font extensions
 const FONT_MIME = {
   ".woff2": "font/woff2",
   ".ttf":   "font/ttf",
@@ -44,6 +219,9 @@ let FA_CSS_CACHE = null;
 // In-memory cache for CDX timestamps keyed by original URL
 const cdxTimestampCache = {};
 
+// ---------------------------------------------------------------------------
+// Wayback Machine CDX snapshot discovery + download
+// ---------------------------------------------------------------------------
 
 /**
  * Query the Wayback Machine CDX API to find the most recent valid snapshot
@@ -81,7 +259,7 @@ const findArchiveTimestamp = async (assetUrl) => {
     cdxTimestampCache[assetUrl] = ts;
     return ts;
   } catch (err) {
-    console.error(`[fonts] CDX lookup failed for ${assetUrl}: ${err.message}`);
+    console.error(`[fonts] CDX lookup failed for ${assetUrl}:\n${formatError(err)}`);
     return null;
   }
 };
@@ -159,7 +337,7 @@ const downloadFont = async (filename) => {
     console.log(`[fonts] Saved ${filename} (${buf.length} bytes)`);
     return true;
   } catch (err) {
-    console.error(`[fonts] Error downloading ${filename}: ${err.message}`);
+    console.error(`[fonts] Error downloading ${filename}:\n${formatError(err)}`);
     return false;
   }
 };
@@ -219,56 +397,56 @@ const loadCss = () => {
   if (cssLoadPromise) return cssLoadPromise;
 
   cssLoadPromise = (async () => {
-    const cssOriginalUrl = "https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css";
-
-    let cssTimestamp = await findArchiveTimestamp(cssOriginalUrl);
-    if (!cssTimestamp) {
-      cssTimestamp = "20260310233449";
-    }
-
-    const archiveUrl = `https://web.archive.org/web/${cssTimestamp}if_/${cssOriginalUrl}`;
-    console.log(`[css] Fetching FA CSS from ${archiveUrl}`);
-
-    const { fetch } = await import("undici");
-    const f = await fetch(archiveUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "text/css,*/*;q=0.1",
-        "Accept-Encoding": "identity",
-        "Referer": "https://web.archive.org/",
-      },
-      redirect: "follow",
-    });
-
-    if (!f.ok) throw new Error(`Upstream CSS ${f.status}`);
-
-    const rawBody = Buffer.from(await f.arrayBuffer());
-    const encoding = f.headers.get("content-encoding");
-    let cssText;
-    try { cssText = (await decompress(rawBody, encoding)).toString("utf8"); }
-    catch (_) { cssText = rawBody.toString("utf8"); }
-
-    cssText = rewriteCssFontUrls(cssText);
-
-    // Persist to disk so future server restarts skip the network entirely
     try {
-      fs.writeFileSync(FA_CSS_DISK_PATH, cssText, "utf8");
-      console.log(`[css] FA CSS saved to disk (${Buffer.byteLength(cssText, "utf8")} bytes)`);
-    } catch (e) {
-      console.warn(`[css] Could not write CSS to disk: ${e.message}`);
-    }
+      const cssOriginalUrl = "https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css";
 
-    FA_CSS_CACHE = cssText;
-    cssLoadPromise = null;
-    return cssText;
+      let cssTimestamp = await findArchiveTimestamp(cssOriginalUrl);
+      if (!cssTimestamp) {
+        cssTimestamp = "20260310233449";
+      }
+
+      const archiveUrl = `https://web.archive.org/web/${cssTimestamp}if_/${cssOriginalUrl}`;
+      console.log(`[css] Fetching FA CSS from ${archiveUrl}`);
+
+      const { fetch } = await import("undici");
+      const f = await fetch(archiveUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          "Accept": "text/css,*/*;q=0.1",
+          "Accept-Encoding": "identity",
+          "Referer": "https://web.archive.org/",
+        },
+        redirect: "follow",
+      });
+
+      if (!f.ok) throw new Error(`Upstream CSS ${f.status}`);
+
+      const rawBody = Buffer.from(await f.arrayBuffer());
+      const encoding = f.headers.get("content-encoding");
+      let cssText;
+      try { cssText = (await decompress(rawBody, encoding)).toString("utf8"); }
+      catch (_) { cssText = rawBody.toString("utf8"); }
+
+      cssText = rewriteCssFontUrls(cssText);
+
+      // Persist to disk so future server restarts skip the network entirely
+      try {
+        fs.writeFileSync(FA_CSS_DISK_PATH, cssText, "utf8");
+        console.log(`[css] FA CSS saved to disk (${Buffer.byteLength(cssText, "utf8")} bytes)`);
+      } catch (e) {
+        console.warn(`[css] Could not write CSS to disk: ${e.message}`);
+      }
+
+      FA_CSS_CACHE = cssText;
+      return cssText;
+    } finally {
+      cssLoadPromise = null;
+    }
   })();
 
   return cssLoadPromise;
 };
 
-/**
- * Download all missing font files at startup. Non-blocking.
- */
 const ensureFontsDownloaded = async () => {
   for (const filename of FA_WEBFONTS) {
     const destPath = path.join(FONTS_DIR, filename);
@@ -291,12 +469,8 @@ const ensureFontsDownloaded = async () => {
 Promise.all([
   ensureFontsDownloaded(),
   loadCss(),
-]).catch((err) => console.error("[startup] Background init error:", err));
-
-// ---------------------------------------------------------------------------
-// URL whitelist 
-// ---------------------------------------------------------------------------
-
+]).catch((err) => console.error(`[startup] Background init error:\n${formatError(err)}`));
+ 
 const URL_WHITELIST = [
   "i.ytimg.com",
   "yt3.googleusercontent.com",
@@ -411,17 +585,29 @@ const decompress = (buf, encoding) => {
   });
 };
 
-const fetchAndForward = async (targetUrl, method, res) => {
+const fetchAndForward = async (targetUrl, originalUrl, method, res) => {
   const { fetch } = await import("undici");
   const url = new URL(targetUrl);
   const headers = getSpoofedHeaders(url.host);
 
   console.log(`==> Fetching ${targetUrl}`);
-  const f = await fetch(targetUrl, { method, headers, redirect: "follow" });
+  let f;
+  try {
+    f = await fetch(targetUrl, { method, headers, redirect: "follow" });
+  } catch (err) {
+    console.error(`==> Fetch failed for ${targetUrl}:\n${formatError(err)}`);
+    throw err;
+  }
 
   if (!f.ok) {
     console.log(`==> Upstream returned ${f.status} for ${url.host}`);
-    return res.status(f.status).send(`Upstream error: ${f.status} ${f.statusText}`);
+    return sendErrorPage(
+      res,
+      f.status,
+      f.statusText || "Upstream Error",
+      `The requested URL <code>${escapeHtml(originalUrl)}</code> returned an error from the upstream server (<code>${escapeHtml(url.host)}</code>).`,
+      `Upstream HTTP ${f.status} ${f.statusText || ""}`.trim()
+    );
   }
 
   const rawBody = Buffer.from(await f.arrayBuffer());
@@ -467,17 +653,25 @@ app.get("/fonts/:filename", (req, res) => {
   const { filename } = req.params;
 
   if (!FA_WEBFONTS.includes(filename)) {
-    return res.status(404).send("Font not found");
+    return sendErrorPage(
+      res,
+      404,
+      "Not Found",
+      `The requested URL <code>${escapeHtml(req.originalUrl)}</code> was not found on this server.`
+    );
   }
 
   const filePath = path.join(FONTS_DIR, filename);
 
   if (!fs.existsSync(filePath) || fs.statSync(filePath).size < 100) {
     downloadFont(filename).catch(() => {});
-    return res
-      .status(503)
-      .setHeader("Retry-After", "5")
-      .send("Font is being downloaded, please retry in a moment");
+    res.setHeader("Retry-After", "5");
+    return sendErrorPage(
+      res,
+      503,
+      "Service Unavailable",
+      `The requested font <code>${escapeHtml(filename)}</code> is currently being downloaded. Please retry in a moment.`
+    );
   }
 
   const ext = path.extname(filename).toLowerCase();
@@ -501,8 +695,14 @@ const FA_CSS_HANDLER = async (req, res) => {
     res.setHeader("content-length", buf.length);
     res.send(cssText);
   } catch (e) {
-    console.error(`==> FA CSS handler error: ${e}`);
-    res.status(500).send("Internal server error");
+    console.error(`==> FA CSS handler error:\n${formatError(e)}`);
+    return sendErrorPage(
+      res,
+      500,
+      "Internal Server Error",
+      `The server encountered an error while loading <code>${escapeHtml(req.originalUrl)}</code>.`,
+      getErrorSummary(e)
+    );
   }
 };
 
@@ -523,7 +723,12 @@ app.get(
   (req, res) => {
     const filename = req.params[0];
     if (!FA_WEBFONTS.includes(filename)) {
-      return res.status(404).send("Font not found");
+      return sendErrorPage(
+        res,
+        404,
+        "Not Found",
+        `The requested URL <code>${escapeHtml(req.originalUrl)}</code> was not found on this server.`
+      );
     }
     res.redirect(301, `/fonts/${filename}`);
   }
@@ -568,13 +773,13 @@ app.get("/api", async (req, res) => {
         apiCache[cacheKey] = { data: engagement, timestamp: Date.now() };
         return res.json(engagement);
       } catch (err) {
-        console.log(`Error fetching from ${apiUrl}: ${err.message}`);
-        errors.push(err.message);
+        console.error(`Error fetching from ${apiUrl}:\n${formatError(err)}`);
+        errors.push(`${apiUrl}: ${err.cause ? `${err.cause.code || err.cause.message}` : err.message}`);
       }
     }
     res.status(500).json({ error: "All API endpoints failed", errors });
   } catch (err) {
-    console.log(err);
+    console.error(`==> /api error:\n${formatError(err)}`);
   }
 });
 
@@ -601,22 +806,38 @@ const proxy = async (req, res) => {
       url = new URL(rawUrl);
     } catch (e) {
       console.log("==> Cannot parse URL: " + e);
-      return res.status(400).send("Malformed URL");
+      return sendErrorPage(
+        res,
+        400,
+        "Bad Request",
+        `Your client has issued a malformed or illegal request for URL <code>${escapeHtml(req.originalUrl)}</code>.`
+      );
     }
 
     if (!URL_WHITELIST.includes(url.host)) {
       console.log(`==> Refusing to proxy host ${url.host}`);
-      return res.status(401).send(`Hostname '${url.host}' is not permitted`);
+      return sendErrorPage(
+        res,
+        403,
+        "Forbidden",
+        `The requested hostname <code>${escapeHtml(url.host)}</code> is not permitted on this proxy server.`
+      );
     }
 
     if (url.host !== "web.archive.org") {
       url.searchParams.set("cachefixer", Buffer.from(String(Date.now())).toString("base64"));
     }
 
-    await fetchAndForward(url.toString(), req.method, res);
+    await fetchAndForward(url.toString(), req.originalUrl, req.method, res);
   } catch (e) {
-    console.log(`==> Error: ${e}`);
-    res.status(500).send("Internal server error");
+    console.error(`==> Proxy Error for ${req.originalUrl}:\n${formatError(e)}`);
+    return sendErrorPage(
+      res,
+      502,
+      "Bad Gateway",
+      `The proxy server could not fetch the requested URL <code>${escapeHtml(req.originalUrl)}</code>.`,
+      getErrorSummary(e)
+    );
   }
 };
 
