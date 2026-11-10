@@ -5,10 +5,6 @@ const zlib = require("zlib");
 const fs = require("fs");
 const path = require("path");
 
-// ---------------------------------------------------------------------------
-// Font Awesome local cache setup
-// ---------------------------------------------------------------------------
-
 const FONTS_DIR = path.join(__dirname, "fonts");
 if (!fs.existsSync(FONTS_DIR)) {
   fs.mkdirSync(FONTS_DIR, { recursive: true });
@@ -48,9 +44,6 @@ let FA_CSS_CACHE = null;
 // In-memory cache for CDX timestamps keyed by original URL
 const cdxTimestampCache = {};
 
-// ---------------------------------------------------------------------------
-// Wayback Machine CDX snapshot discovery + download
-// ---------------------------------------------------------------------------
 
 /**
  * Query the Wayback Machine CDX API to find the most recent valid snapshot
@@ -301,7 +294,7 @@ Promise.all([
 ]).catch((err) => console.error("[startup] Background init error:", err));
 
 // ---------------------------------------------------------------------------
-// URL whitelist (Glitch CDNs removed)
+// URL whitelist 
 // ---------------------------------------------------------------------------
 
 const URL_WHITELIST = [
@@ -341,6 +334,36 @@ const URL_WHITELIST = [
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Dynamically extracts and normalizes a target URL from Express's req.originalUrl
+ * without relying on hardcoded character slice indices.
+ *
+ * Handles:
+ *   - /https://fonts.bunny.net/...
+ *   - /http://fonts.bunny.net/...
+ *   - /https:/fonts.bunny.net/... (when a reverse proxy collapses double slashes)
+ *   - /fonts.bunny.net/...        (when protocol is omitted)
+ *   - //fonts.bunny.net/...
+ *
+ * @param {string} originalUrl
+ * @returns {string}
+ */
+const extractTargetUrl = (originalUrl) => {
+  // 1. Strip any leading slashes
+  let cleaned = originalUrl.replace(/^\/+/, "");
+
+  // 2. If it starts with http://, https://, http:/, or https:/ (collapsed slash),
+  //    normalize the scheme to always have exactly "://"
+  if (/^https?:\/+/i.test(cleaned)) {
+    cleaned = cleaned.replace(/^(https?):\/+/i, "$1://");
+  } else {
+    // 3. Otherwise, default to https://
+    cleaned = "https://" + cleaned;
+  }
+
+  return cleaned;
+};
 
 const getSpoofedHeaders = (host) => {
   if (host === "web.archive.org") {
@@ -484,11 +507,11 @@ const FA_CSS_HANDLER = async (req, res) => {
 };
 
 app.get(
-  /^\/https:\/\/site-assets\.fontawesome\.com\/releases\/v6\.1\.1\/css\/all\.css/,
+  /^\/https?:\/+site-assets\.fontawesome\.com\/releases\/v6\.1\.1\/css\/all\.css/,
   FA_CSS_HANDLER
 );
 app.get(
-  /^\/web\/\d{14}[a-z_]*\/https:\/\/site-assets\.fontawesome\.com\/releases\/v6\.1\.1\/css\/all\.css/,
+  /^\/web\/\d{14}[a-z_]*\/https?:\/+site-assets\.fontawesome\.com\/releases\/v6\.1\.1\/css\/all\.css/,
   FA_CSS_HANDLER
 );
 
@@ -496,7 +519,7 @@ app.get(
 // Route: catch Wayback Machine /web/... font paths and redirect to /fonts/
 // ---------------------------------------------------------------------------
 app.get(
-  /^\/web\/\d{14}[a-z_]*\/https:\/\/site-assets\.fontawesome\.com\/releases\/v6\.1\.1\/webfonts\/(.+)$/,
+  /^\/web\/\d{14}[a-z_]*\/https?:\/+site-assets\.fontawesome\.com\/releases\/v6\.1\.1\/webfonts\/(.+)$/,
   (req, res) => {
     const filename = req.params[0];
     if (!FA_WEBFONTS.includes(filename)) {
@@ -571,11 +594,12 @@ app.get("/bangs", async (req, res) => {
 const proxy = async (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=864000");
   try {
-    let rawUrl = "https://" + req.originalUrl.slice(8);
+    const rawUrl = extractTargetUrl(req.originalUrl);
 
     let url;
-    try { url = new URL(rawUrl); }
-    catch (e) {
+    try {
+      url = new URL(rawUrl);
+    } catch (e) {
       console.log("==> Cannot parse URL: " + e);
       return res.status(400).send("Malformed URL");
     }
@@ -585,12 +609,11 @@ const proxy = async (req, res) => {
       return res.status(401).send(`Hostname '${url.host}' is not permitted`);
     }
 
-    const fetchUrl =
-      url.host === "web.archive.org"
-        ? rawUrl
-        : rawUrl + `?cachefixer=${btoa(Date.now())}`;
+    if (url.host !== "web.archive.org") {
+      url.searchParams.set("cachefixer", Buffer.from(String(Date.now())).toString("base64"));
+    }
 
-    await fetchAndForward(fetchUrl, req.method, res);
+    await fetchAndForward(url.toString(), req.method, res);
   } catch (e) {
     console.log(`==> Error: ${e}`);
     res.status(500).send("Internal server error");
