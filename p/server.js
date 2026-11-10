@@ -30,7 +30,6 @@ const formatError = (err) => {
     const detailStr = details.length ? ` (${details.join(", ")})` : "";
     parts.push(`  [Cause #${depth}] ${cause.name || "Error"}: ${cause.message}${detailStr}`);
 
-    // Handle AggregateError (e.g., Happy Eyeballs IPv4 + IPv6 connection failures)
     if (Array.isArray(cause.errors)) {
       cause.errors.forEach((subErr, idx) => {
         const subDetails = [];
@@ -50,23 +49,34 @@ const formatError = (err) => {
 };
 
 /**
- * Extract a concise one-line summary of the root cause of a fetch error.
+ * Extract a concise, clean summary of the root cause formatted nicely for the error page.
  * @param {any} err
  * @returns {string}
  */
 const getErrorSummary = (err) => {
   if (!err) return "Unknown error";
-  const cause = err.cause;
-  if (cause) {
-    if (Array.isArray(cause.errors) && cause.errors.length > 0) {
-      const codes = cause.errors.map((e) => e.code || e.message).join(", ");
-      return `${cause.code || cause.name || "AggregateError"} (${codes})`;
-    }
-    const code = cause.code ? ` [${cause.code}]` : "";
-    const host = cause.hostname ? ` (${cause.hostname})` : "";
-    return `${cause.message || cause.name || err.message}${code}${host}`;
+  let cause = err.cause || err;
+
+  if (cause.errors && cause.errors.length > 0) {
+    cause = cause.errors[0];
   }
-  return err.message || String(err);
+
+  const code = cause.code || err.code;
+  const message = cause.message || err.message;
+  const hostname = cause.hostname || cause.address;
+  const port = cause.port;
+
+   if (code === "UND_ERR_CONNECT_TIMEOUT" || message.includes("Connect Timeout")) {
+    const addr = hostname && port ? `${hostname}:${port}` : (hostname || "unknown");
+    return `Connect Timeout Error (attempted address: ${addr}) [${code || "UND_ERR_CONNECT_TIMEOUT"}]`;
+  }
+
+  if (code) {
+    const addrPart = hostname ? ` (address: ${hostname}${port ? `:${port}` : ""})` : "";
+    return `${message}${addrPart} [${code}]`;
+  }
+
+  return message;
 };
 
 /**
@@ -82,7 +92,7 @@ const escapeHtml = (str) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
-
+ 
 const sendErrorPage = (res, status, statusText, messageHtml, detailText = "") => {
   const detailBlock = detailText
     ? `<div class="err-detail"><code>${escapeHtml(detailText)}</code></div>`
@@ -110,8 +120,8 @@ const sendErrorPage = (res, status, statusText, messageHtml, detailText = "") =>
       padding: 30px 0 15px;
     }
     * > body {
-      background: url(https://poketube.fun/static/poke-mascot-new.webp?v=2) 100% 5px no-repeat;
-      padding-right: 205px;
+      background: url(https://poketube.fun/static/poke-mascot-new.webp?v=2) 0 5px no-repeat;
+      padding-left: 205px;
     }
     p {
       margin: 11px 0 22px;
@@ -124,7 +134,7 @@ const sendErrorPage = (res, status, statusText, messageHtml, detailText = "") =>
     }
     code {
       background: #1a1a22;
-      color: #f472b6;
+      color: #ffabcc;
       padding: 2px 5px;
       border-radius: 4px;
       border: 1px solid #272732;
@@ -158,6 +168,7 @@ const sendErrorPage = (res, status, statusText, messageHtml, detailText = "") =>
         background: none;
         margin-top: 0;
         max-width: none;
+        padding-left: 0;
         padding-right: 0;
       }
     }
@@ -205,6 +216,7 @@ const FA_WEBFONTS = [
   "fa-v4compatibility.ttf",
 ];
 
+// MIME types for font extensions
 const FONT_MIME = {
   ".woff2": "font/woff2",
   ".ttf":   "font/ttf",
@@ -447,6 +459,9 @@ const loadCss = () => {
   return cssLoadPromise;
 };
 
+/**
+ * Download all missing font files at startup. Non-blocking.
+ */
 const ensureFontsDownloaded = async () => {
   for (const filename of FA_WEBFONTS) {
     const destPath = path.join(FONTS_DIR, filename);
@@ -470,7 +485,11 @@ Promise.all([
   ensureFontsDownloaded(),
   loadCss(),
 ]).catch((err) => console.error(`[startup] Background init error:\n${formatError(err)}`));
- 
+
+// ---------------------------------------------------------------------------
+// URL whitelist (Glitch CDNs removed)
+// ---------------------------------------------------------------------------
+
 const URL_WHITELIST = [
   "i.ytimg.com",
   "yt3.googleusercontent.com",
