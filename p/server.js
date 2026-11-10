@@ -110,7 +110,7 @@ const sendErrorPage = (res, status, statusText, messageHtml, detailText = "") =>
       padding: 30px 0 15px;
     }
     * > body {
-      background: url(//www.google.com/images/errors/robot.png) 100% 5px no-repeat;
+      background: url(https://poketube.fun/static/poke-mascot-new.webp?v=2) 100% 5px no-repeat;
       padding-right: 205px;
     }
     p {
