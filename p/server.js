@@ -30,6 +30,7 @@ const formatError = (err) => {
     const detailStr = details.length ? ` (${details.join(", ")})` : "";
     parts.push(`  [Cause #${depth}] ${cause.name || "Error"}: ${cause.message}${detailStr}`);
 
+    // Handle AggregateError (e.g., Happy Eyeballs IPv4 + IPv6 connection failures)
     if (Array.isArray(cause.errors)) {
       cause.errors.forEach((subErr, idx) => {
         const subDetails = [];
@@ -49,34 +50,21 @@ const formatError = (err) => {
 };
 
 /**
- * Extract a concise, clean summary of the root cause formatted nicely for the error page.
+ * Extract just the error code (e.g., UND_ERR_CONNECT_TIMEOUT) for a concise detail block.
  * @param {any} err
  * @returns {string}
  */
 const getErrorSummary = (err) => {
-  if (!err) return "Unknown error";
-  let cause = err.cause || err;
-
-  if (cause.errors && cause.errors.length > 0) {
-    cause = cause.errors[0];
+  if (!err) return "UNKNOWN_ERROR";
+  const cause = err.cause || err;
+  
+  if (Array.isArray(cause.errors) && cause.errors.length > 0) {
+    // Handle AggregateError by pulling just the codes
+    const codes = cause.errors.map((e) => e.code || e.name || "ERROR").join(", ");
+    return cause.code ? `${cause.code} (${codes})` : codes;
   }
-
-  const code = cause.code || err.code;
-  const message = cause.message || err.message;
-  const hostname = cause.hostname || cause.address;
-  const port = cause.port;
-
-   if (code === "UND_ERR_CONNECT_TIMEOUT" || message.includes("Connect Timeout")) {
-    const addr = hostname && port ? `${hostname}:${port}` : (hostname || "unknown");
-    return `Connect Timeout Error (attempted address: ${addr}) [${code || "UND_ERR_CONNECT_TIMEOUT"}]`;
-  }
-
-  if (code) {
-    const addrPart = hostname ? ` (address: ${hostname}${port ? `:${port}` : ""})` : "";
-    return `${message}${addrPart} [${code}]`;
-  }
-
-  return message;
+  
+  return cause.code || cause.name || "UNKNOWN_ERROR";
 };
 
 /**
@@ -92,7 +80,6 @@ const escapeHtml = (str) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
- 
 const sendErrorPage = (res, status, statusText, messageHtml, detailText = "") => {
   const detailBlock = detailText
     ? `<div class="err-detail"><code>${escapeHtml(detailText)}</code></div>`
@@ -107,22 +94,40 @@ const sendErrorPage = (res, status, statusText, messageHtml, detailText = "") =>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, code { font: 15px/22px arial, sans-serif; }
+    
     html {
       background: #0f0f12;
       color: #e4e4e7;
-      padding: 15px;
       color-scheme: dark;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
     }
+    
     body {
-      margin: 7% auto 0;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: center;
+      gap: 50px;
+      padding: 30px;
+      width: 100%;
+      max-width: 750px;
+    }
+    
+    .error-container {
+      flex: 1;
       max-width: 440px;
-      min-height: 180px;
-      padding: 30px 0 15px;
     }
-    * > body {
-      background: url(https://poketube.fun/static/poke-mascot-new.webp?v=2) 0 5px no-repeat;
-      padding-left: 205px;
+    
+    .mascot-container {
+      flex-shrink: 0;
+      width: 160px;
+      height: 160px;
+      background: url('https://poketube.fun/static/poke-mascot-new.webp?v=78') no-repeat center center / contain;
     }
+
     p {
       margin: 11px 0 22px;
       overflow-wrap: break-word;
@@ -134,7 +139,7 @@ const sendErrorPage = (res, status, statusText, messageHtml, detailText = "") =>
     }
     code {
       background: #1a1a22;
-      color: #ffabcc;
+      color: #f472b6;
       padding: 2px 5px;
       border-radius: 4px;
       border: 1px solid #272732;
@@ -152,33 +157,45 @@ const sendErrorPage = (res, status, statusText, messageHtml, detailText = "") =>
       font-size: 12px;
       line-height: 18px;
       padding: 4px 8px;
+      word-break: break-all;
     }
     a { color: #60a5fa; text-decoration: none; }
     a img { border: 0; }
+    
     #logo {
       display: inline-block;
       height: 54px;
       width: 165px;
-      background: url(https://poketube.fun/css/logo-poke.svg?v=78) no-repeat 0% 50% / contain;
+      background: url('https://poketube.fun/css/logo-poke.svg?v=78') no-repeat 0% 50% / contain;
       margin-left: -2px;
       margin-bottom: 4px;
     }
+    
     @media screen and (max-width: 772px) {
       body {
-        background: none;
-        margin-top: 0;
-        max-width: none;
-        padding-left: 0;
-        padding-right: 0;
+        flex-direction: column-reverse;
+        text-align: center;
+        gap: 20px;
+      }
+      #logo {
+        background-position: center;
+        margin-left: 0;
+      }
+      .mascot-container {
+        margin-bottom: 10px;
       }
     }
   </style>
 </head>
 <body>
-  <a href="https://poketube.fun/"><span id="logo" aria-label="PokeTube"></span></a>
-  <p><b>${status}.</b> <ins>That’s an error.</ins></p>
-  <p>${messageHtml} <ins>That’s all we know.</ins></p>
-  ${detailBlock}
+  <div class="error-container">
+    <a href="https://poketube.fun/"><span id="logo" aria-label="PokeTube"></span></a>
+    <p><b>${status}.</b> <ins>That’s an error.</ins></p>
+    <p>${messageHtml} <ins>That’s all we know.</ins></p>
+    ${detailBlock}
+  </div>
+  
+  <div class="mascot-container" aria-hidden="true"></div>
 </body>
 </html>`;
 
