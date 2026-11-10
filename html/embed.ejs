@@ -7,7 +7,57 @@
         return new Intl.NumberFormat('en-US', { notation: 'compact', compactDisplay: 'short' }).format(num);
     }
 
+    function formatLength(s) {
+        if (!s || isNaN(s)) return '';
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const sec = Math.floor(s % 60);
+        if (h > 0) return h + ':' + String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+        return m + ':' + String(sec).padStart(2, '0');
+    }
+
     const actualHost = typeof hostname !== 'undefined' && hostname ? hostname : 'poketube.fun';
+    const proxyBase = typeof media_proxy !== 'undefined' && media_proxy ? media_proxy : '';
+
+     const hasInvvid = typeof invvid !== 'undefined' && invvid !== null;
+    const videoTitle = hasInvvid && invvid.title ? invvid.title : '';
+    const channelName = hasInvvid && invvid.author ? invvid.author : '';
+    const channelUrl = hasInvvid && invvid.authorId ? '/channel?id=' + invvid.authorId : (hasInvvid && invvid.authorUrl ? invvid.authorUrl : '#');
+
+    let rawAvatarUrl = '';
+    if (hasInvvid && Array.isArray(invvid.authorThumbnails) && invvid.authorThumbnails.length > 0) {
+        const pickedAvatar = invvid.authorThumbnails[invvid.authorThumbnails.length - 1] || invvid.authorThumbnails[0];
+        rawAvatarUrl = pickedAvatar.url || '';
+    }
+    const proxiedAvatarUrl = rawAvatarUrl ? `${proxyBase}/proxy?url=${encodeURIComponent(rawAvatarUrl)}` : '';
+
+    const recVideos = (hasInvvid && Array.isArray(invvid.recommendedVideos)) ? invvid.recommendedVideos : [];
+
+    function getRecThumbUrl(rec) {
+        if (!rec) return '';
+        if (rec.videoId) {
+            return `${proxyBase}/proxy?url=https://i.ytimg.com/vi/${rec.videoId}/mqdefault.jpg`;
+        }
+        if (Array.isArray(rec.videoThumbnails) && rec.videoThumbnails.length > 0) {
+            const t = rec.videoThumbnails.find(x => x.quality === 'medium' || x.quality === 'high') || rec.videoThumbnails[0];
+            if (t && t.url) {
+                const fullUrl = t.url.startsWith('http') ? t.url : `https://i.ytimg.com/vi/${rec.videoId}/mqdefault.jpg`;
+                return `${proxyBase}/proxy?url=${encodeURIComponent(fullUrl)}`;
+            }
+        }
+        return '';
+    }
+
+    const firstRecThumb = recVideos.length > 0 ? getRecThumbUrl(recVideos[0]) : '';
+
+    const clientRecs = recVideos.slice(0, 20).map(r => ({
+        videoId: r.videoId || '',
+        title: r.title || '',
+        author: r.author || '',
+        publishedText: r.publishedText || '',
+        lengthText: formatLength(r.lengthSeconds),
+        thumb: getRecThumbUrl(r)
+    }));
 
     let encodedVidUrl = '';
     if (typeof vidurl !== 'undefined' && vidurl) {
@@ -29,7 +79,7 @@
 %><!DOCTYPE html><html lang="en"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><%- v %><%= isShowHow ? ' - Embed Guide' : '' %></title>
+    <title><%= videoTitle ? videoTitle : v %><%= isShowHow ? ' - Embed Guide' : '' %></title>
     
     <style>
         @font-face {
@@ -181,6 +231,80 @@
             display: block;
         }
 
+         .top-video-info-<%- v %> {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 16px 116px 28px 18px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.45) 60%, rgba(0,0,0,0) 100%);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 22;
+            pointer-events: none;
+            box-sizing: border-box;
+        }
+
+        .top-channel-avatar-link-<%- v %> {
+            pointer-events: auto;
+            flex-shrink: 0;
+            display: block;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            overflow: hidden;
+            background: #222;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+        }
+
+        .top-channel-avatar-<%- v %> {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .top-video-meta-<%- v %> {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            gap: 2px;
+            pointer-events: auto;
+        }
+
+        .top-video-title-<%- v %> {
+            color: #ffffff;
+            font-size: clamp(14px, 2.2vmin, 18px);
+            font-weight: 700;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            text-decoration: none;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.75);
+            line-height: 1.25;
+        }
+
+        .top-video-title-<%- v %>:hover {
+            text-decoration: underline;
+        }
+
+        .top-channel-name-<%- v %> {
+            color: rgba(255, 255, 255, 0.85);
+            font-size: clamp(11px, 1.8vmin, 13px);
+            font-weight: 400;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            text-decoration: none;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.75);
+            line-height: 1.2;
+        }
+
+        .top-channel-name-<%- v %>:hover {
+            color: #fff;
+        }
+
         .play-button-<%- v %> {
             position: absolute;
             top: 50%;
@@ -246,9 +370,9 @@
 
         .engagement-stats-<%- v %> {
             position: absolute;
-            top: max(10px, 2vmin);
+            bottom: max(10px, 2vmin);
             left: max(10px, 2vmin);
-            z-index: 10;
+            z-index: 15;
             display: flex;
             gap: 12px;
             background-color: rgba(0, 0, 0, 0.4);
@@ -483,7 +607,7 @@
 
         .toast-indicator-<%- v %> {
             position: absolute;
-            top: 24px;
+            top: 72px;
             left: 24px;
             background: rgba(28, 28, 28, 0.9);
             color: #fff;
@@ -543,7 +667,104 @@
             display: flex;
             flex-direction: column;
             gap: 12px;
-            z-index: 20;
+            z-index: 25;
+        }
+
+         .more-videos-drawer-<%- v %> {
+            display: none;
+            width: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
+            gap: 12px;
+            padding: 8px 0 4px 0;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.45) transparent;
+        }
+
+        .more-videos-drawer-<%- v %>.is-open-<%- v %> {
+            display: flex;
+        }
+
+        .more-videos-drawer-<%- v %>::-webkit-scrollbar {
+            height: 4px;
+        }
+
+        .more-videos-drawer-<%- v %>::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.12);
+            border-radius: 999px;
+        }
+
+        .more-videos-drawer-<%- v %>::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.55);
+            border-radius: 999px;
+        }
+
+        .rec-card-<%- v %> {
+            flex: 0 0 210px;
+            width: 210px;
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            text-decoration: none;
+            color: #fff;
+            cursor: pointer;
+            transition: transform 0.15s ease;
+        }
+
+        .rec-card-<%- v %>:hover {
+            transform: translateY(-2px);
+        }
+
+        .rec-thumb-wrap-<%- v %> {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #1a1a1a;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        }
+
+        .rec-thumb-img-<%- v %> {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .rec-duration-<%- v %> {
+            position: absolute;
+            bottom: 6px;
+            right: 6px;
+            background: rgba(0, 0, 0, 0.82);
+            color: #fff;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 5px;
+            border-radius: 4px;
+            line-height: 1.2;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .rec-title-<%- v %> {
+            font-size: 13px;
+            font-weight: 600;
+            color: #fff;
+            line-height: 1.3;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+        }
+
+        .rec-meta-<%- v %> {
+            font-size: 11.5px;
+            color: rgba(255, 255, 255, 0.68);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .controls-row-top-<%- v %> {
@@ -1267,34 +1488,6 @@
             text-overflow: ellipsis;
         }
 
-        /* --- Retry Overlay UI --- */
-        .retry-overlay-<%- v %> {
-            position: absolute;
-            inset: 0;
-            z-index: 35;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            background: #000;
-            pointer-events: none;
-        }
-
-        .retry-overlay-<%- v %>.is-visible-<%- v %> {
-            display: flex;
-        }
-
-        .retry-overlay-img-<%- v %> {
-            position: absolute;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            opacity: 0.58;
-            filter: blur(1px);
-            transform: scale(1.01);
-        }
-
         /* --- End Overlay UI --- */
         .end-overlay-<%- v %> {
             position: absolute;
@@ -1370,6 +1563,21 @@
                 top: 10px;
                 right: 10px;
                 gap: 8px;
+            }
+
+            .top-video-info-<%- v %> {
+                padding: 12px 104px 20px 12px;
+                gap: 10px;
+            }
+
+            .top-channel-avatar-link-<%- v %> {
+                width: 34px;
+                height: 34px;
+            }
+
+            .rec-card-<%- v %> {
+                flex: 0 0 165px;
+                width: 165px;
             }
 
             .settings-panel-<%- v %>, .quality-panel-<%- v %>, .speed-panel-<%- v %> {
@@ -1707,19 +1915,6 @@
 
         .pt-cfg-btn-<%- v %>:hover {
             background-color: #e5e5e5;
-        }
-
-        .pt-cfg-badge-<%- v %> {
-            position: absolute;
-            bottom: 14px;
-            right: 14px;
-            background-color: rgba(255, 255, 255, 0.12);
-            color: #f1f1f1;
-            font-size: 12px;
-            font-weight: 500;
-            padding: 6px 12px;
-            border-radius: 16px;
-            pointer-events: none;
         }
 
         @media (max-width: 560px) {
@@ -2096,7 +2291,6 @@
                     loadAudio();
                 });
                 
-                // Auto click since it's an audio player, but we require a click to play for browsers.
                 playerLink.click();
             })();
         </script>
@@ -2107,6 +2301,24 @@
             <a href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer" class="player-link-<%- v %>">
                 <img src="<%- media_proxy %>/proxy?url=https://i.ytimg.com/vi/<%- v %>/maxresdefault.jpg" alt="Play Video" class="player-image-<%- v %>" onerror="this.src='<%- media_proxy %>/proxy?url=https://i.ytimg.com/vi/<%- v %>/hqdefault.jpg';">
                 
+                <% if (videoTitle || channelName || proxiedAvatarUrl) { %>
+                <div class="top-video-info-<%- v %>">
+                    <% if (proxiedAvatarUrl) { %>
+                    <span class="top-channel-avatar-link-<%- v %>">
+                        <img src="<%- proxiedAvatarUrl %>" alt="<%= channelName %>" class="top-channel-avatar-<%- v %>">
+                    </span>
+                    <% } %>
+                    <div class="top-video-meta-<%- v %>">
+                        <% if (videoTitle) { %>
+                        <span class="top-video-title-<%- v %>"><%= videoTitle %></span>
+                        <% } %>
+                        <% if (channelName) { %>
+                        <span class="top-channel-name-<%- v %>"><%= channelName %></span>
+                        <% } %>
+                    </div>
+                </div>
+                <% } %>
+
                 <% if (typeof engagement !== 'undefined' && engagement !== null) { %>
                 <div class="engagement-stats-<%- v %>">
                     <% if (engagement.viewCount !== undefined && engagement.viewCount !== null) { %>
@@ -2145,6 +2357,24 @@
                 const playerLink = document.querySelector('.player-link-<%- v %>');
                 const wrapper = document.querySelector('.video-wrapper-<%- v %>');
                 const logoLink = wrapper ? wrapper.querySelector('.logo-link-<%- v %>') : null;
+
+                const invMeta = {
+                    title: <%- JSON.stringify(videoTitle) %>,
+                    author: <%- JSON.stringify(channelName) %>,
+                    authorUrl: <%- JSON.stringify(channelUrl) %>,
+                    avatar: <%- JSON.stringify(proxiedAvatarUrl) %>,
+                    firstRecThumb: <%- JSON.stringify(firstRecThumb) %>,
+                    recommendations: <%- JSON.stringify(clientRecs) %>
+                };
+
+                function escapeHtml(str) {
+                    return String(str || '')
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#39;');
+                }
 
                 const playIcon = 'M8 5v14l11-7z';
                 const pauseIcon = 'M6 19h4V5H6v14zm8-14v14h4V5h-4z';
@@ -2249,9 +2479,40 @@
                             <div class="stats-content-<%- v %>"></div>
                         `;
 
+                        const topInfoHtml = (invMeta.title || invMeta.author || invMeta.avatar) ? `
+                            <div class="top-video-info-<%- v %>">
+                                ${invMeta.avatar ? `
+                                <a href="${escapeHtml(invMeta.authorUrl)}" target="_blank" rel="noopener noreferrer" class="top-channel-avatar-link-<%- v %>">
+                                    <img src="${escapeHtml(invMeta.avatar)}" alt="${escapeHtml(invMeta.author)}" class="top-channel-avatar-<%- v %>">
+                                </a>` : ''}
+                                <div class="top-video-meta-<%- v %>">
+                                    ${invMeta.title ? `<a href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer" class="top-video-title-<%- v %>" title="${escapeHtml(invMeta.title)}">${escapeHtml(invMeta.title)}</a>` : ''}
+                                    ${invMeta.author ? `<a href="${escapeHtml(invMeta.authorUrl)}" target="_blank" rel="noopener noreferrer" class="top-channel-name-<%- v %>">${escapeHtml(invMeta.author)}</a>` : ''}
+                                </div>
+                            </div>
+                        ` : '';
+
+                        const recsDrawerHtml = invMeta.recommendations && invMeta.recommendations.length > 0 ? `
+                            <div class="more-videos-drawer-<%- v %>">
+                                ${invMeta.recommendations.map(rec => `
+                                    <a href="/watch?v=${encodeURIComponent(rec.videoId)}" target="_blank" rel="noopener noreferrer" class="rec-card-<%- v %>">
+                                        <div class="rec-thumb-wrap-<%- v %>">
+                                            <img src="${escapeHtml(rec.thumb)}" alt="${escapeHtml(rec.title)}" class="rec-thumb-img-<%- v %>" loading="lazy">
+                                            ${rec.lengthText ? `<span class="rec-duration-<%- v %>">${escapeHtml(rec.lengthText)}</span>` : ''}
+                                        </div>
+                                        <div class="rec-title-<%- v %>" title="${escapeHtml(rec.title)}">${escapeHtml(rec.title)}</div>
+                                        <div class="rec-meta-<%- v %>">${escapeHtml(rec.publishedText || rec.author)}</div>
+                                    </a>
+                                `).join('')}
+                            </div>
+                        ` : '';
+
+                        const moreVideosBtnThumb = invMeta.firstRecThumb || posterSrc;
+
                         const controls = document.createElement('div');
                         controls.className = 'custom-controls-<%- v %>';
                         controls.innerHTML = `
+                            ${topInfoHtml}
                             <div class="toast-indicator-<%- v %>"></div>
                             <div class="top-right-group-<%- v %>">
                                 <div class="vol-group-<%- v %>">
@@ -2407,6 +2668,7 @@
                             </div>
 
                             <div class="bottom-area-<%- v %>">
+                                ${recsDrawerHtml}
                                 <div class="controls-row-top-<%- v %>">
                                     <div class="time-chapter-group-<%- v %>" style="display: flex; align-items: center; gap: 12px;">
                                         <div class="time-display-pill-<%- v %> time-display-<%- v %>" title="Toggle time remaining">0:00 / 0:00</div>
@@ -2436,7 +2698,7 @@
                                         <button class="more-videos-pill-<%- v %>" type="button" title="More videos">
                                             <span>More videos</span>
                                             <div class="more-videos-icon-wrapper-<%- v %>">
-                                                ${posterSrc ? `<img src="${posterSrc.replace(/"/g, '&quot;')}" style="width: 100%; height: 100%; object-fit: cover;" alt="">` : `<svg viewBox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8 12.5v-9l6 4.5-6 4.5z"/></svg>`}
+                                                ${moreVideosBtnThumb ? `<img src="${escapeHtml(moreVideosBtnThumb)}" style="width: 100%; height: 100%; object-fit: cover;" alt="">` : `<svg viewBox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8 12.5v-9l6 4.5-6 4.5z"/></svg>`}
                                             </div>
                                         </button>
                                         <a href="/" target="_blank" rel="noopener noreferrer" class="logo-link-<%- v %>">
@@ -2715,6 +2977,7 @@
                         const progressThumb = controls.querySelector('.progress-thumb-<%- v %>');
                         const timeDisplay = controls.querySelector('.time-display-<%- v %>');
                         const bufferingWrapper = controls.querySelector('.buffering-wrapper-<%- v %>');
+                        const moreVideosDrawer = controls.querySelector('.more-videos-drawer-<%- v %>');
                         
                         const settingsBtn = controls.querySelector('.settings-btn-<%- v %>');
                         const settingsPanel = controls.querySelector('.settings-panel-<%- v %>');
@@ -2819,6 +3082,7 @@
                         function closeAllPanels() {
                             setSettingsOpen(false);
                             setVolumeOpen(false);
+                            if (moreVideosDrawer) moreVideosDrawer.classList.remove('is-open-<%- v %>');
                             [speedPanel, qualityPanel, embedPanel, settingsPanel].forEach(p => {
                                 if(p) {
                                     p.classList.remove('is-open-<%- v %>');
@@ -2911,7 +3175,6 @@
                             if (isRetrying) return;
                             setBuffering(true);
 
-                            // If 720p already existed/played and we are in Auto or 720p mode, we retry 720p first!
                             const targetQuality = (has720pPlayed && (activeQuality === '720p' || (isAutoQuality && forcedQuality !== '360p'))) ? '720p' : activeQuality;
 
                             if (retryCount >= maxRetries) {
@@ -2984,7 +3247,8 @@
                             wrapper.style.cursor = 'default';
                             clearTimeout(hideTimeout);
                             hideTimeout = setTimeout(() => {
-                                if (!getPrimaryMedia().paused && !settingsPanel.classList.contains('is-open-<%- v %>') && !speedPanel.classList.contains('is-open-<%- v %>') && !qualityPanel.classList.contains('is-open-<%- v %>') && !embedPanel.classList.contains('is-open-<%- v %>') && !volGroup.classList.contains('is-volume-open-<%- v %>')) {
+                                const isMoreOpen = moreVideosDrawer && moreVideosDrawer.classList.contains('is-open-<%- v %>');
+                                if (!getPrimaryMedia().paused && !isMoreOpen && !settingsPanel.classList.contains('is-open-<%- v %>') && !speedPanel.classList.contains('is-open-<%- v %>') && !qualityPanel.classList.contains('is-open-<%- v %>') && !embedPanel.classList.contains('is-open-<%- v %>') && !volGroup.classList.contains('is-volume-open-<%- v %>')) {
                                     controls.style.opacity = '0';
                                     wrapper.style.cursor = 'none';
                                 }
@@ -3044,10 +3308,7 @@
                             const cH = wrapper.clientHeight || 0;
                             const vd = '<%- v %>';
                             const vol = Math.round(lastVolume * 100);
-                            const pbRate = video.playbackRate;
                             const pm = getPrimaryMedia();
-                            const ct = pm.currentTime.toFixed(3);
-                            const dur = (pm.duration || 0).toFixed(3);
                             
                             let dropped = 0;
                             let total = 0;
@@ -3141,7 +3402,7 @@
                             
                             if (isDualPlaying) {
                                 const diff = getDuration() - getCurrentTime();
-                                if (diff > 1.0) return; // Prevent false trigger if only one track ended
+                                if (diff > 1.0) return;
                             }
                             
                             if (isNaturalEnd && !hasSeekedNearEnd && (getDuration() >= 120) && !video.loop) {
@@ -3164,7 +3425,6 @@
                             const pm = getPrimaryMedia();
                             if (!pm.src) return; 
 
-                            // Failsafe manual end check
                             if (getDuration() > 0 && getCurrentTime() >= getDuration() - 0.25) {
                                 if (!hasTriggeredEnd && !video.loop) onEndedHandler();
                             }
@@ -3177,7 +3437,6 @@
                                 
                                 let isBuffering = false;
                                 if (document.hidden) {
-                                    // In background, only pause if audio stalls to prevent chromium dropping playstate
                                     isBuffering = !aReady;
                                 } else {
                                     isBuffering = !vReady || !aReady;
@@ -3196,17 +3455,15 @@
                                         video.style.opacity = '1';
                                     }
                                     
-                                    // Soft-sync drift correction. Audio leads. Video catches up silently.
                                     let diff = audio.currentTime - video.currentTime;
                                     if (!document.hidden && Math.abs(diff) > 0.3) {
                                         if (Math.abs(diff) > 2.0) {
-                                            video.currentTime = audio.currentTime; // Hard sync if massively out of sync
+                                            video.currentTime = audio.currentTime;
                                         } else {
-                                            // Soft sync video to catch up or wait
                                             video.playbackRate = audio.playbackRate * (diff > 0 ? 1.25 : 0.75);
                                         }
                                     } else if (Math.abs(diff) <= 0.3 && video.playbackRate !== audio.playbackRate) {
-                                        video.playbackRate = audio.playbackRate; // Restore original sync rate
+                                        video.playbackRate = audio.playbackRate;
                                     }
                                     
                                     const atAudioEnd = audio.duration > 0 && audio.currentTime >= audio.duration - 0.05;
@@ -3236,10 +3493,9 @@
 
                         document.addEventListener('visibilitychange', () => {
                             if (!document.hidden && isDualPlaying && isIntendedToPlay && !isRetrying) {
-                                // When returning to the tab, prevent massive stutters by utilizing soft sync over hard seek.
                                 const diff = Math.abs(video.currentTime - audio.currentTime);
                                 if (diff > 1.5) {
-                                    video.currentTime = audio.currentTime; // Only explicit jump if extremely out of sync
+                                    video.currentTime = audio.currentTime;
                                 }
                                 if (video.paused) video.play().catch(()=>{});
                                 if (audio.paused) audio.play().catch(()=>{});
@@ -3655,18 +3911,27 @@
                         if (moreVideosBtn) {
                             moreVideosBtn.addEventListener('click', (event) => {
                                 event.stopPropagation();
-                                window.open('/home', '_blank');
+                                if (moreVideosDrawer && invMeta.recommendations && invMeta.recommendations.length > 0) {
+                                    const willOpen = !moreVideosDrawer.classList.contains('is-open-<%- v %>');
+                                    setSettingsOpen(false);
+                                    setVolumeOpen(false);
+                                    moreVideosDrawer.classList.toggle('is-open-<%- v %>', willOpen);
+                                    showControls();
+                                } else {
+                                    window.open('/home', '_blank');
+                                }
                             });
                         }
 
                         video.addEventListener('click', () => {
-                            if (Date.now() - lastDragEndTime < 200) return; // Prevent pause right after drag-to-close
+                            if (Date.now() - lastDragEndTime < 200) return;
                             
                             const anyPanelOpen = settingsPanel.classList.contains('is-open-<%- v %>') || 
                                                  speedPanel.classList.contains('is-open-<%- v %>') || 
                                                  qualityPanel.classList.contains('is-open-<%- v %>') ||
                                                  embedPanel.classList.contains('is-open-<%- v %>') ||
-                                                 volGroup.classList.contains('is-volume-open-<%- v %>');
+                                                 volGroup.classList.contains('is-volume-open-<%- v %>') ||
+                                                 (moreVideosDrawer && moreVideosDrawer.classList.contains('is-open-<%- v %>'));
                             closeAllPanels();
                             if (anyPanelOpen) return;
                             togglePlay();
@@ -3690,7 +3955,8 @@
                             }
                         });
                         wrapper.addEventListener('mouseleave', () => {
-                            if (!getPrimaryMedia().paused && !settingsPanel.classList.contains('is-open-<%- v %>') && !speedPanel.classList.contains('is-open-<%- v %>') && !qualityPanel.classList.contains('is-open-<%- v %>') && !embedPanel.classList.contains('is-open-<%- v %>') && !volGroup.classList.contains('is-volume-open-<%- v %>')) {
+                            const isMoreOpen = moreVideosDrawer && moreVideosDrawer.classList.contains('is-open-<%- v %>');
+                            if (!getPrimaryMedia().paused && !isMoreOpen && !settingsPanel.classList.contains('is-open-<%- v %>') && !speedPanel.classList.contains('is-open-<%- v %>') && !qualityPanel.classList.contains('is-open-<%- v %>') && !embedPanel.classList.contains('is-open-<%- v %>') && !volGroup.classList.contains('is-volume-open-<%- v %>')) {
                                 controls.style.opacity = '0';
                             }
                         });
