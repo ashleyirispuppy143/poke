@@ -2354,6 +2354,7 @@
             (function() {
                 if (window._failsBotCheck || (window.self === window.top)) return;
 
+                const ClientProductName = "WEB_EMBEDDED_PLAYER"
                 const playerLink = document.querySelector('.player-link-<%- v %>');
                 const wrapper = document.querySelector('.video-wrapper-<%- v %>');
                 const logoLink = wrapper ? wrapper.querySelector('.logo-link-<%- v %>') : null;
@@ -3339,6 +3340,7 @@
                                 <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Volume / Normalized</span><span class="stats-value-<%- v %>">${vol}% / ${vol}% (content loudness 0.0dB)</span></div>
                                 <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Codecs</span><span class="stats-value-<%- v %>">${codecStr}</span></div>
                                 <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Color</span><span class="stats-value-<%- v %>">bt709 / bt709</span></div>
+                                <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Client</span><span class="stats-value-<%- v %>">WEB_EMBEDDED_PLAYER</span></div>
                                 <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Buffer Health</span><span class="stats-value-<%- v %>">${bufferHealth.toFixed(2)} s</span></div>
                                 <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Network Activity</span><span class="stats-value-<%- v %>">${pm.networkState === 2 ? 'Downloading' : 'Idle'}</span></div>
                                 <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Mystery Text</span><span class="stats-value-<%- v %>">vd:y, q:${activeQuality}, r:${retryCount}</span></div>
