@@ -16,21 +16,29 @@
   font-style: normal;
   font-weight: 900;
   font-display: swap;
-  src: url(https://p.poketube.fun/https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuBWYMZg.ttf?v=16683434286881) format('truetype');
+  src: url(https://p.poketube.fun/https://fonts.bunny.net/inter/files/inter-latin-900-normal.woff2) format('woff2'),
+       url(https://p.poketube.fun/https://fonts.bunny.net/inter/files/inter-latin-900-normal.woff) format('woff'),
+       url(https://p.poketube.fun/https://fonts.bunny.net/inter/files/inter-latin-900-normal.ttf) format('truetype');
 }
+
 @font-face {
   font-family: 'Sigmar One';
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url(https://p.poketube.fun/https://fonts.gstatic.com/s/sigmarone/v16/co3DmWZ8kjZuErj9Ta3dk6M.ttf?v=16683434286881) format('truetype');
+  src: url(https://p.poketube.fun/https://fonts.bunny.net/sigmar-one/files/sigmar-one-latin-400-normal.woff2) format('woff2'),
+       url(https://p.poketube.fun/https://fonts.bunny.net/sigmar-one/files/sigmar-one-latin-400-normal.woff) format('woff'),
+       url(https://p.poketube.fun/https://fonts.bunny.net/sigmar-one/files/sigmar-one-latin-400-normal.ttf) format('truetype');
 }
+
 @font-face {
   font-family: 'Roboto';
   font-style: normal;
   font-weight: 500;
   font-display: swap;
-  src: url(https://p.poketube.fun/https://fonts.gstatic.com/s/roboto/v30/KFOlCnqEu92Fr1MmEU9vAw.ttf?v=16683434286881) format('truetype');
+  src: url(https://p.poketube.fun/https://fonts.bunny.net/roboto/files/roboto-latin-500-normal.woff2) format('woff2'),
+       url(https://p.poketube.fun/https://fonts.bunny.net/roboto/files/roboto-latin-500-normal.woff) format('woff'),
+       url(https://p.poketube.fun/https://fonts.bunny.net/roboto/files/roboto-latin-500-normal.ttf) format('truetype');
 }
 
 :root {
