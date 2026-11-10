@@ -204,6 +204,36 @@ module.exports = function (app, config, renderTemplate) {
     });
   });
   
+ const fs = require("fs");
+const path = require("path");
+
+const invvidCache = new Map();
+const CACHE_TTL = 60 * 60 * 1000;  
+const serverGeneration = Date.now().toString(36);
+
+function toBase64(val) {
+  return Buffer.from(String(val)).toString("base64");
+}
+
+function getBlockedReason(videoId) {
+  try {
+    const filePath = path.join(process.cwd(), "blockedreasons.txt");
+    if (!fs.existsSync(filePath)) return null;
+
+    const lines = fs.readFileSync(filePath, "utf-8").split(/\r?\n/);
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const [id, reason] = line.split("|");
+      if (id && id.trim() === videoId) {
+        return reason ? reason.trim() : "BLOCKED";
+      }
+    }
+  } catch (err) {
+    console.error("Error reading blockedreasons.txt:", err);
+  }
+  return null;
+}
+
 app.get("/embed/:v", async function (req, res) {
   const v = req.params.v;
   const hostname = req.hostname;
@@ -211,6 +241,7 @@ app.get("/embed/:v", async function (req, res) {
   const type = req.query.type;
 
   let engagement = null;
+  let invvid = null;
   let VideoError = null;
   var vidurl = config.videourl;
   var media_proxy = config.media_proxy;
@@ -225,12 +256,33 @@ app.get("/embed/:v", async function (req, res) {
       v,
       hostname,
       engagement,
+      invvid,
       type,
       showHow,
       VideoError,
       media_proxy,
       vidurl,
-     });
+    });
+  }
+
+  const blockedReason = getBlockedReason(v);
+  if (blockedReason) {
+    VideoError = {
+      status: 403,
+      message: blockedReason,
+    };
+
+    return renderTemplate(res.status(403), req, "embed.ejs", {
+      v,
+      hostname,
+      engagement,
+      invvid,
+      type,
+      showHow,
+      VideoError,
+      media_proxy,
+      vidurl,
+    });
   }
 
   try {
@@ -248,6 +300,7 @@ app.get("/embed/:v", async function (req, res) {
         v,
         hostname,
         engagement,
+        invvid,
         showHow,
         VideoError,
         media_proxy,
@@ -263,10 +316,39 @@ app.get("/embed/:v", async function (req, res) {
     engagement = null;
   }
 
+  const now = Date.now();
+  const cachedData = invvidCache.get(v);
+
+  if (cachedData && now - cachedData.timestamp < CACHE_TTL) {
+    invvid = cachedData.data;
+  } else {
+    try {
+      const urlParams = `h=${toBase64(now)}&g=${serverGeneration}`;
+      const videoUrl = `${config.invapi}/videos/${v}?${urlParams}`;
+
+      const invResponse = await fetch(videoUrl, {
+        headers: {
+           "User-Agent": config.useragent
+        },
+      });
+
+      if (invResponse.ok) {
+        invvid = await invResponse.json();
+        invvidCache.set(v, {
+          data: invvid,
+          timestamp: now,
+        });
+      }
+    } catch (error) {
+      invvid = null;
+    }
+  }
+
   renderTemplate(res, req, "embed.ejs", {
     v,
     hostname,
     engagement,
+    invvid,
     showHow,
     VideoError,
     media_proxy,
@@ -274,6 +356,8 @@ app.get("/embed/:v", async function (req, res) {
     type,
   });
 });
+
+  
 
   const watchRateLimitCache = new Map();
   const WATCH_LIMIT_WINDOW = 60000;
