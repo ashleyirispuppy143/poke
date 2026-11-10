@@ -124,7 +124,7 @@ const sendErrorPage = (res, status, statusText, messageHtml, detailText = "") =>
     .mascot-container {
       flex-shrink: 0;
       width: 160px;
-      height: 160px;
+      height: 30em;
       background: url('https://poketube.fun/static/poke-mascot-new.webp?v=78') no-repeat center center / contain;
     }
 
