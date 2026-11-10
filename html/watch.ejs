@@ -3404,7 +3404,18 @@ document.addEventListener("fullscreenchange", handleFullscreen);
 
 </style>
                  <% } %>
-  <!-- BUNDLE --><script src="/static/app.bundle.js?version=2026&bundledate=10052026v24" > </script><!-- BUNDLE --><script src="/static/stats.js?e=341082025_0143ab5845544493_videojs815456gw3605"></script><!-- BASE_ES6 --><script id="baseScript" src="/static/base-player.js?ver=202g60442h25&videoID=<%=VideoData.videoId%>&version=9nov2026v1"> </script> 
+                 
+  <!-- BUNDLE --><script src="/static/app.bundle.js?version=2026&bundledate=10052026v24" > </script><!-- BUNDLE -->
+ <script>
+  fetch('/api/innertube.json')
+    .then(response => response.json())
+    .then(config => {
+      window.innertubeConfig = config;
+      console.log(config);
+    })
+    .catch(err => console.error('Failed to load pokeInnerTube config:', err));
+</script> <script src="/static/stats.js?e=341082025_0143ab5845544493_videojs815456gw3605"></script><!-- BASE_ES6 -->  <link rel="innertube-base-config-api-clientConfigure" href="/api/innertube.json">
+  <script id="baseScript" src="/static/base-player.js?ver=202g60442h25&videoID=<%=VideoData.videoId%>&version=9nov2026v1"> </script> 
   <script>
 (function(){
   var script = document.getElementById("baseScript");
