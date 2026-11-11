@@ -18,6 +18,14 @@ const fs = require("fs");
 
 const fetchPromise = import("undici").then(m => m.fetch).catch(() => globalThis.fetch);
 
+const UNRECOVERABLE_REASONS = new Set([
+  "COPYRIGHT_BLOCKED",
+  "UPLOADER_REMOVED",
+  "VIDEO_UNAVAILABLE",
+  "INAPPROPRIATE",
+  "MEMBERS_ONLY"
+]);
+
 class InnerTubePokeVidious {
   constructor(config) {
     this.config = config;
@@ -36,7 +44,7 @@ class InnerTubePokeVidious {
     this.sqp =
       "-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw";
     
-     this.blockedFile = "blockedfilterlist.txt";
+    this.blockedFile = "blockedfilterlist.txt";
     
     // Map<videoId, { reason: string, lastChecked: number, strikes: number }>
     this.blockedVideos = new Map();
@@ -61,10 +69,10 @@ class InnerTubePokeVidious {
   }
 
   /**
-   * Checks if the error text is actually an YouTube backend block
+   * Checks if the error text is actually a YouTube backend block
    * rather than the video itself being unavailable.
    */
-isBackendBlockedError(textOrMsg) {
+  isBackendBlockedError(textOrMsg) {
     if (!textOrMsg) return false;
     const str = String(textOrMsg).toLowerCase();
     return (
@@ -152,7 +160,7 @@ isBackendBlockedError(textOrMsg) {
   }
 
   /**
-   * Hard blocks (copyright, uploader removed, inappropriate) are blocked forever.
+   * Hard blocks (copyright, uploader removed, inappropriate, members only) are blocked forever.
    */
   shouldBlockRequest(videoId) {
     const entry = this.blockedVideos.get(videoId);
@@ -166,7 +174,7 @@ isBackendBlockedError(textOrMsg) {
       return true;
     }
 
-     if (Date.now() - entry.lastChecked < this.UNAVAILABLE_BURST_COOLDOWN_MS) {
+    if (Date.now() - entry.lastChecked < this.UNAVAILABLE_BURST_COOLDOWN_MS) {
       return true;
     }
 
@@ -202,7 +210,8 @@ isBackendBlockedError(textOrMsg) {
       "COPYRIGHT_BLOCKED": "This video contains content from a copyright holder who has blocked it.",
       "UPLOADER_REMOVED": "This video has been removed by the uploader.",
       "VIDEO_UNAVAILABLE": "Video unavailable.",
-      "INAPPROPRIATE": "This video may be inappropriate for some users."
+      "INAPPROPRIATE": "This video may be inappropriate for some users.",
+      "MEMBERS_ONLY": "This video is available to this channel's members."
     };
 
     if (this.shouldBlockRequest(v)) {
@@ -276,12 +285,12 @@ isBackendBlockedError(textOrMsg) {
       };
 
       const checkUnrecoverableErrors = async (resp) => {
-        if (resp.status === 500 || resp.status === 404) {
+        if (resp.status === 500 || resp.status === 404 || resp.status === 403) {
           try {
             const clone = resp.clone();
             const text = await clone.text();
 
-             if (this.isBackendBlockedError(text)) {
+            if (this.isBackendBlockedError(text)) {
               return;
             }
             
@@ -297,12 +306,20 @@ isBackendBlockedError(textOrMsg) {
               this.addBlockedVideo(v, "INAPPROPRIATE");
               throw new Error("INAPPROPRIATE");
             }
+            if (
+              text.includes("This video is available to this channel's members on level") ||
+              text.includes("This video is available to this channel's members") ||
+              text.includes("members-only content")
+            ) {
+              this.addBlockedVideo(v, "MEMBERS_ONLY");
+              throw new Error("MEMBERS_ONLY");
+            }
             if (resp.status === 404 && text.includes("Video unavailable")) {
               this.addBlockedVideo(v, "VIDEO_UNAVAILABLE");
               throw new Error("VIDEO_UNAVAILABLE");
             }
           } catch (err) {
-            if (["COPYRIGHT_BLOCKED", "UPLOADER_REMOVED", "VIDEO_UNAVAILABLE", "INAPPROPRIATE"].includes(err.message)) {
+            if (UNRECOVERABLE_REASONS.has(err.message)) {
               throw err;
             }
           }
@@ -382,7 +399,7 @@ isBackendBlockedError(textOrMsg) {
         } catch (err) {
           if (err.message === "REQUEST_DROPPED") throw err;
           if (callerSignal && callerSignal.aborted) throw err;
-          if (["COPYRIGHT_BLOCKED", "UPLOADER_REMOVED", "VIDEO_UNAVAILABLE", "INAPPROPRIATE"].includes(err.message)) throw err;
+          if (UNRECOVERABLE_REASONS.has(err.message)) throw err;
           
           lastError = err;
           const remaining2 = maxRetryTime - (Date.now() - retryStart);
@@ -430,15 +447,25 @@ isBackendBlockedError(textOrMsg) {
               if (this.isBackendBlockedError(parsed.error)) {
                 throw new Error("BACKEND_BLOCKED");
               }
+              if (
+                parsed.error.includes("This video is available to this channel's members on level") ||
+                parsed.error.includes("This video is available to this channel's members") ||
+                parsed.error.includes("members-only content")
+              ) {
+                this.addBlockedVideo(v, "MEMBERS_ONLY");
+                throw new Error("MEMBERS_ONLY");
+              }
               return parsed;
             }
             return null;
           } catch (parseErr) {
-            if (parseErr.message === "BACKEND_BLOCKED") throw parseErr;
+            if (parseErr.message === "BACKEND_BLOCKED" || UNRECOVERABLE_REASONS.has(parseErr.message)) {
+              throw parseErr;
+            }
           }
         } catch (err) {
           if (err.message === "REQUEST_DROPPED") throw err;
-          if (["COPYRIGHT_BLOCKED", "UPLOADER_REMOVED", "VIDEO_UNAVAILABLE", "INAPPROPRIATE"].includes(err.message)) throw err;
+          if (UNRECOVERABLE_REASONS.has(err.message)) throw err;
           fetchError = err;
         }
       }
@@ -475,7 +502,7 @@ isBackendBlockedError(textOrMsg) {
               .catch(() => ({ color: "#0ea5e9", color2: "#111827" }))
           ]);
         } else {
-           const wasBackendBlock =
+          const wasBackendBlock =
             vidObj?.isBackendBlocked ||
             this.isBackendBlockedError(vidObj?.error) ||
             this.isBackendBlockedError(vidObj?.reason);
@@ -491,7 +518,7 @@ isBackendBlockedError(textOrMsg) {
           };
         }
       } else {
-         [invComments, vidObj, dislikesData, colorData] = await Promise.all([
+        [invComments, vidObj, dislikesData, colorData] = await Promise.all([
           fetchWithRetry(
             `${config.invapi}/comments/${v}?${urlParams}`
           ).then((res) => res?.text()),
