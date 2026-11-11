@@ -36,7 +36,16 @@ class InnerTubePokeVidious {
     this.sqp =
       "-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw";
     this.blockedFile = "blockedreasons.txt";
+    
+    // Map<videoId, { reason: string, timestamp: number, strikes: number }>
     this.blockedVideos = new Map();
+
+     this.UNAVAILABLE_BACKOFF_SCHEDULE = [
+      15 * 60 * 1000,       
+      60 * 60 * 1000,      
+      6 * 60 * 60 * 1000,    
+      24 * 60 * 60 * 1000   
+    ];                     
     
     this.serverGeneration = Date.now().toString(36);
     this.currentEpoch = Date.now();
@@ -51,7 +60,7 @@ class InnerTubePokeVidious {
   }
 
   getRandomNumber() {
-      return 4
+    return 4;
   }
   
   loadBlockedVideos() {
@@ -61,8 +70,19 @@ class InnerTubePokeVidious {
         content.split("\n").forEach((line) => {
           const trimmed = line.trim();
           if (trimmed && trimmed.includes("|")) {
-            const [videoId, reason] = trimmed.split("|");
-            this.blockedVideos.set(videoId, reason);
+            const parts = trimmed.split("|");
+            const videoId = parts[0];
+            const reason = parts[1];
+            const timestamp = parts[2] ? Number(parts[2]) : Date.now();
+            const strikes = parts[3] ? Number(parts[3]) : 1;
+
+            if (videoId && reason) {
+              this.blockedVideos.set(videoId, {
+                reason,
+                timestamp: Number.isFinite(timestamp) ? timestamp : Date.now(),
+                strikes: Number.isFinite(strikes) ? strikes : 1,
+              });
+            }
           }
         });
       }
@@ -71,15 +91,79 @@ class InnerTubePokeVidious {
     }
   }
 
+  saveBlockedVideosToDisk() {
+    try {
+      const lines = [];
+      for (const [id, data] of this.blockedVideos.entries()) {
+        lines.push(`${id}|${data.reason}|${data.timestamp}|${data.strikes}`);
+      }
+      fs.writeFileSync(
+        this.blockedFile,
+        lines.join("\n") + (lines.length ? "\n" : ""),
+        "utf8"
+      );
+    } catch (e) {
+      console.error("[LIBPT ERROR] Could not sync blockedreasons.txt", e);
+    }
+  }
+
   addBlockedVideo(videoId, reason) {
-    if (!this.blockedVideos.has(videoId)) {
-      this.blockedVideos.set(videoId, reason);
+    const existing = this.blockedVideos.get(videoId);
+    const now = Date.now();
+
+    if (!existing) {
+      const entry = { reason, timestamp: now, strikes: 1 };
+      this.blockedVideos.set(videoId, entry);
       try {
-        fs.appendFileSync(this.blockedFile, videoId + "|" + reason + "\n");
+        fs.appendFileSync(
+          this.blockedFile,
+          `${videoId}|${reason}|${now}|1\n`
+        );
       } catch (e) {
         console.error("[LIBPT ERROR] Could not write to blockedreasons.txt", e);
       }
+    } else {
+       existing.reason = reason;
+      existing.timestamp = now;
+      existing.strikes = (existing.strikes || 1) + 1;
+      this.blockedVideos.set(videoId, existing);
+      this.saveBlockedVideosToDisk();
     }
+  }
+
+  unblockVideo(videoId) {
+    if (this.blockedVideos.has(videoId)) {
+      this.blockedVideos.delete(videoId);
+      this.saveBlockedVideosToDisk();
+      console.log(`[LIBPT RECOVERY] Video ${videoId} is working again and was removed from blocked list.`);
+    }
+  }
+
+  /**
+   * Determines whether a blocked video should still be blocked right now,
+   * or if its cooldown has expired so we can try probing it once.
+   */
+  shouldBlockRequest(videoId) {
+    const entry = this.blockedVideos.get(videoId);
+    if (!entry) return false;
+
+     if (entry.reason !== "VIDEO_UNAVAILABLE") {
+      return true;
+    }
+
+     const scheduleIndex = entry.strikes - 1;
+    if (scheduleIndex >= this.UNAVAILABLE_BACKOFF_SCHEDULE.length) {
+      return true;
+    }
+
+    const cooldownMs = this.UNAVAILABLE_BACKOFF_SCHEDULE[scheduleIndex];
+    const elapsed = Date.now() - entry.timestamp;
+
+     if (elapsed < cooldownMs) {
+      return true;
+    }
+
+     return false;
   }
 
   getJson(str) {
@@ -114,12 +198,12 @@ class InnerTubePokeVidious {
       "INAPPROPRIATE": "This video may be inappropriate for some users."
     };
 
-    if (this.blockedVideos.has(v)) {
-      const reasonKey = this.blockedVideos.get(v);
+     if (this.shouldBlockRequest(v)) {
+      const entry = this.blockedVideos.get(v);
       return { 
         error: true, 
-        message: knownErrors[reasonKey] || "This video is blocked, removed, or unavailable.",
-        reason: reasonKey
+        message: knownErrors[entry.reason] || "This video is blocked, removed, or unavailable.",
+        reason: entry.reason
       };
     }
 
@@ -131,7 +215,17 @@ class InnerTubePokeVidious {
       return this.activeRequests.get(v);
     }
 
-    const fetchPromiseTask = this._processYouTubePlayerInfo(f, v, contentlang, contentregion, knownErrors, requestEpoch);
+    const isProbingUnavailable = this.blockedVideos.has(v);
+
+    const fetchPromiseTask = this._processYouTubePlayerInfo(
+      f,
+      v,
+      contentlang,
+      contentregion,
+      knownErrors,
+      requestEpoch,
+      isProbingUnavailable
+    );
     this.activeRequests.set(v, fetchPromiseTask);
 
     try {
@@ -147,7 +241,7 @@ class InnerTubePokeVidious {
     }
   }
 
-  async _processYouTubePlayerInfo(f, v, contentlang, contentregion, knownErrors, requestEpoch) {
+  async _processYouTubePlayerInfo(f, v, contentlang, contentregion, knownErrors, requestEpoch, isProbingUnavailable = false) {
     const fetch = await fetchPromise;
     const headers = {
       "User-Agent": this.useragent,
@@ -215,7 +309,9 @@ class InnerTubePokeVidious {
       if (res.ok) return res;
       
       await checkUnrecoverableErrors(res);
-      if (!isTrigger(res.status)) return res;
+      
+      // If we are just probing a previously unavailable video, don't hammer the server with retries
+      if (isProbingUnavailable || !isTrigger(res.status)) return res;
       
       const retryStart = Date.now();
       let delayMs = BASE_DELAY_MS;
@@ -307,7 +403,8 @@ class InnerTubePokeVidious {
         
         (async () => {
           let fetchError = null;
-          const MAX_ATTEMPTS = 3;
+          // Only do 1 attempt if we are probing a previously unavailable video to save requests
+          const MAX_ATTEMPTS = isProbingUnavailable ? 1 : 3;
           for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
             try {
               if (this.currentEpoch !== requestEpoch) throw new Error("REQUEST_DROPPED");
@@ -370,6 +467,12 @@ class InnerTubePokeVidious {
       if (!vid || vid.error || vid.isInternalError) {
         const errorMsg = vid?.error || vid?.reason || "This video is probably about to premiere.";
         this.initError("Video info fetch error", `${v} - ${errorMsg}`);
+
+        // If we were probing a VIDEO_UNAVAILABLE video and it still failed to return valid data,
+        // increment its strike count and reset its cooldown timer so it doesn't get spammed.
+        if (isProbingUnavailable) {
+          this.addBlockedVideo(v, "VIDEO_UNAVAILABLE");
+        }
         
         return {
           vid: { error: errorMsg },
@@ -395,8 +498,15 @@ class InnerTubePokeVidious {
       };
 
       if (this.checkUnexistingObject(vid)) {
+        // Video succeeded! If it was previously marked VIDEO_UNAVAILABLE, remove it from blocked list
+        if (this.blockedVideos.has(v)) {
+          this.unblockVideo(v);
+        }
         this.cache[v] = { result: finalResult, timestamp: Date.now() };
       } else {
+        if (isProbingUnavailable) {
+          this.addBlockedVideo(v, "VIDEO_UNAVAILABLE");
+        }
         this.initError(vid, `ID: ${v}`);
       }
 
@@ -408,6 +518,9 @@ class InnerTubePokeVidious {
       }
       if (knownErrors[error.message]) {
         return { error: true, message: knownErrors[error.message], reason: error.message };
+      }
+      if (isProbingUnavailable) {
+        this.addBlockedVideo(v, "VIDEO_UNAVAILABLE");
       }
       this.initError(`Error getting video ${v}`, error);
       return { error: true, message: error.message || "An unexpected error occurred qwq", reason: "UNKNOWN_ERROR" };
