@@ -36,12 +36,12 @@ class InnerTubePokeVidious {
     this.sqp =
       "-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw";
     
-    this.blockedFile = "blockedreasonswithtime.txt";
+     this.blockedFile = "blockedfilterlist.txt";
     
     // Map<videoId, { reason: string, lastChecked: number, strikes: number }>
     this.blockedVideos = new Map();
-
-     this.UNAVAILABLE_BURST_COOLDOWN_MS = 30 * 1000;
+ 
+    this.UNAVAILABLE_BURST_COOLDOWN_MS = 30 * 1000;
     this.UNAVAILABLE_MAX_STRIKES = 10;
     
     this.serverGeneration = Date.now().toString(36);
@@ -58,6 +58,23 @@ class InnerTubePokeVidious {
 
   getRandomNumber() {
     return 4;
+  }
+
+  /**
+   * Checks if the error text is actually an YouTube backend block
+   * rather than the video itself being unavailable.
+   */
+isBackendBlockedError(textOrMsg) {
+    if (!textOrMsg) return false;
+    const str = String(textOrMsg).toLowerCase();
+    return (
+      str.includes("this backend is blocked") ||
+      str.includes("confirm you’re not a bot") ||
+      str.includes("confirm you're not a bot") ||
+      str.includes("this protects our community") ||
+      str.includes("this helps protect our community") ||
+      str.includes("protect our community")
+    );
   }
   
   loadBlockedVideos() {
@@ -82,7 +99,7 @@ class InnerTubePokeVidious {
         });
       }
     } catch (e) {
-      console.error("[LIBPT ERROR] Could not load blockedreasonswithtime.txt", e);
+      console.error("[LIBPT ERROR] Could not load blockedfilterlist.txt", e);
     }
   }
 
@@ -98,7 +115,7 @@ class InnerTubePokeVidious {
         "utf8"
       );
     } catch (e) {
-      console.error("[LIBPT ERROR] Could not sync blockedreasonswithtime.txt", e);
+      console.error("[LIBPT ERROR] Could not sync blockedfilterlist.txt", e);
     }
   }
 
@@ -115,7 +132,7 @@ class InnerTubePokeVidious {
           `${videoId}|${reason}|${now}|1\n`
         );
       } catch (e) {
-        console.error("[LIBPT ERROR] Could not write to blockedreasonswithtime.txt", e);
+        console.error("[LIBPT ERROR] Could not write to blockedfilterlist.txt", e);
       }
     } else {
       existing.reason = reason;
@@ -149,8 +166,7 @@ class InnerTubePokeVidious {
       return true;
     }
 
-    // Prevent multiple requests from spamming YouTube
-    if (Date.now() - entry.lastChecked < this.UNAVAILABLE_BURST_COOLDOWN_MS) {
+     if (Date.now() - entry.lastChecked < this.UNAVAILABLE_BURST_COOLDOWN_MS) {
       return true;
     }
 
@@ -264,6 +280,10 @@ class InnerTubePokeVidious {
           try {
             const clone = resp.clone();
             const text = await clone.text();
+
+             if (this.isBackendBlockedError(text)) {
+              return;
+            }
             
             if (resp.status === 500 && text.includes("who has blocked it on copyright grounds")) {
               this.addBlockedVideo(v, "COPYRIGHT_BLOCKED");
@@ -391,15 +411,31 @@ class InnerTubePokeVidious {
         try {
           if (this.currentEpoch !== requestEpoch) throw new Error("REQUEST_DROPPED");
           const r = await fetchWithRetry(videoUrl, {}, 2000);
-          if (!r.ok) throw new Error(`HTTP Error ${r.status}`);
+          if (!r.ok) {
+            const errText = await r.text().catch(() => "");
+            if (this.isBackendBlockedError(errText)) {
+              throw new Error("BACKEND_BLOCKED");
+            }
+            throw new Error(`HTTP Error ${r.status}`);
+          }
           const text = await r.text();
+          if (this.isBackendBlockedError(text)) {
+            throw new Error("BACKEND_BLOCKED");
+          }
           try {
             const parsed = JSON.parse(text);
             if (parsed === null) return null;
             if (this.checkUnexistingObject(parsed)) return parsed;
-            if (parsed && parsed.error) return parsed;
+            if (parsed && parsed.error) {
+              if (this.isBackendBlockedError(parsed.error)) {
+                throw new Error("BACKEND_BLOCKED");
+              }
+              return parsed;
+            }
             return null;
-          } catch (parseErr) { }
+          } catch (parseErr) {
+            if (parseErr.message === "BACKEND_BLOCKED") throw parseErr;
+          }
         } catch (err) {
           if (err.message === "REQUEST_DROPPED") throw err;
           if (["COPYRIGHT_BLOCKED", "UPLOADER_REMOVED", "VIDEO_UNAVAILABLE", "INAPPROPRIATE"].includes(err.message)) throw err;
@@ -408,7 +444,11 @@ class InnerTubePokeVidious {
       }
       if (fetchError) {
         this.initError("All video info fetch attempts failed", fetchError);
-        return { isInternalError: true, reason: fetchError.message || fetchError.toString() };
+        return {
+          isInternalError: true,
+          isBackendBlocked: fetchError.message === "BACKEND_BLOCKED",
+          reason: fetchError.message || fetchError.toString()
+        };
       }
       return null;
     };
@@ -420,10 +460,10 @@ class InnerTubePokeVidious {
       let colorData;
 
       if (isProbingUnavailable) {
-         vidObj = await fetchVideoInfo();
+        vidObj = await fetchVideoInfo();
 
         if (this.checkUnexistingObject(vidObj)) {
-          // It works! Unblock immediately and fetch the rest of the page data
+          // It works! 
           this.unblockVideo(v);
           isProbingUnavailable = false;
 
@@ -435,8 +475,15 @@ class InnerTubePokeVidious {
               .catch(() => ({ color: "#0ea5e9", color2: "#111827" }))
           ]);
         } else {
-          // Still broken...
-          this.addBlockedVideo(v, "VIDEO_UNAVAILABLE");
+           const wasBackendBlock =
+            vidObj?.isBackendBlocked ||
+            this.isBackendBlockedError(vidObj?.error) ||
+            this.isBackendBlockedError(vidObj?.reason);
+
+          if (!wasBackendBlock) {
+            this.addBlockedVideo(v, "VIDEO_UNAVAILABLE");
+          }
+
           return {
             error: true,
             message: knownErrors["VIDEO_UNAVAILABLE"],
