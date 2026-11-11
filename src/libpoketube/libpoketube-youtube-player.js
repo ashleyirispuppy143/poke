@@ -35,12 +35,13 @@ class InnerTubePokeVidious {
     this.region = "region=US";
     this.sqp =
       "-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw";
-    this.blockedFile = "blockedreasons.txt";
+    
+    this.blockedFile = "blockedreasonswithtime.txt";
     
     // Map<videoId, { reason: string, lastChecked: number, strikes: number }>
     this.blockedVideos = new Map();
 
-    this.UNAVAILABLE_BURST_COOLDOWN_MS = 30 * 1000;
+     this.UNAVAILABLE_BURST_COOLDOWN_MS = 30 * 1000;
     this.UNAVAILABLE_MAX_STRIKES = 10;
     
     this.serverGeneration = Date.now().toString(36);
@@ -66,11 +67,9 @@ class InnerTubePokeVidious {
         content.split("\n").forEach((line) => {
           const trimmed = line.trim();
           if (trimmed && trimmed.includes("|")) {
-            const parts = trimmed.split("|");
-            const videoId = parts[0];
-            const reason = parts[1];
-            const lastChecked = parts[2] ? Number(parts[2]) : 0;
-            const strikes = parts[3] ? Number(parts[3]) : 1;
+            const [videoId, reason, lastCheckedRaw, strikesRaw] = trimmed.split("|");
+            const lastChecked = Number(lastCheckedRaw);
+            const strikes = Number(strikesRaw);
 
             if (videoId && reason) {
               this.blockedVideos.set(videoId, {
@@ -83,7 +82,7 @@ class InnerTubePokeVidious {
         });
       }
     } catch (e) {
-      console.error("[LIBPT ERROR] Could not load blockedreasons.txt", e);
+      console.error("[LIBPT ERROR] Could not load blockedreasonswithtime.txt", e);
     }
   }
 
@@ -99,7 +98,7 @@ class InnerTubePokeVidious {
         "utf8"
       );
     } catch (e) {
-      console.error("[LIBPT ERROR] Could not sync blockedreasons.txt", e);
+      console.error("[LIBPT ERROR] Could not sync blockedreasonswithtime.txt", e);
     }
   }
 
@@ -116,7 +115,7 @@ class InnerTubePokeVidious {
           `${videoId}|${reason}|${now}|1\n`
         );
       } catch (e) {
-        console.error("[LIBPT ERROR] Could not write to blockedreasons.txt", e);
+        console.error("[LIBPT ERROR] Could not write to blockedreasonswithtime.txt", e);
       }
     } else {
       existing.reason = reason;
@@ -421,7 +420,7 @@ class InnerTubePokeVidious {
       let colorData;
 
       if (isProbingUnavailable) {
-        vidObj = await fetchVideoInfo();
+         vidObj = await fetchVideoInfo();
 
         if (this.checkUnexistingObject(vidObj)) {
           // It works! Unblock immediately and fetch the rest of the page data
@@ -445,7 +444,7 @@ class InnerTubePokeVidious {
           };
         }
       } else {
-        [invComments, vidObj, dislikesData, colorData] = await Promise.all([
+         [invComments, vidObj, dislikesData, colorData] = await Promise.all([
           fetchWithRetry(
             `${config.invapi}/comments/${v}?${urlParams}`
           ).then((res) => res?.text()),
