@@ -37,15 +37,11 @@ class InnerTubePokeVidious {
       "-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw";
     this.blockedFile = "blockedreasons.txt";
     
-    // Map<videoId, { reason: string, timestamp: number, strikes: number }>
+    // Map<videoId, { reason: string, lastChecked: number, strikes: number }>
     this.blockedVideos = new Map();
 
-     this.UNAVAILABLE_BACKOFF_SCHEDULE = [
-      15 * 60 * 1000,       
-      60 * 60 * 1000,      
-      6 * 60 * 60 * 1000,    
-      24 * 60 * 60 * 1000   
-    ];                     
+    this.UNAVAILABLE_BURST_COOLDOWN_MS = 30 * 1000;
+    this.UNAVAILABLE_MAX_STRIKES = 10;
     
     this.serverGeneration = Date.now().toString(36);
     this.currentEpoch = Date.now();
@@ -73,13 +69,13 @@ class InnerTubePokeVidious {
             const parts = trimmed.split("|");
             const videoId = parts[0];
             const reason = parts[1];
-            const timestamp = parts[2] ? Number(parts[2]) : Date.now();
+            const lastChecked = parts[2] ? Number(parts[2]) : 0;
             const strikes = parts[3] ? Number(parts[3]) : 1;
 
             if (videoId && reason) {
               this.blockedVideos.set(videoId, {
                 reason,
-                timestamp: Number.isFinite(timestamp) ? timestamp : Date.now(),
+                lastChecked: Number.isFinite(lastChecked) ? lastChecked : 0,
                 strikes: Number.isFinite(strikes) ? strikes : 1,
               });
             }
@@ -95,7 +91,7 @@ class InnerTubePokeVidious {
     try {
       const lines = [];
       for (const [id, data] of this.blockedVideos.entries()) {
-        lines.push(`${id}|${data.reason}|${data.timestamp}|${data.strikes}`);
+        lines.push(`${id}|${data.reason}|${data.lastChecked}|${data.strikes}`);
       }
       fs.writeFileSync(
         this.blockedFile,
@@ -112,7 +108,7 @@ class InnerTubePokeVidious {
     const now = Date.now();
 
     if (!existing) {
-      const entry = { reason, timestamp: now, strikes: 1 };
+      const entry = { reason, lastChecked: now, strikes: 1 };
       this.blockedVideos.set(videoId, entry);
       try {
         fs.appendFileSync(
@@ -123,8 +119,8 @@ class InnerTubePokeVidious {
         console.error("[LIBPT ERROR] Could not write to blockedreasons.txt", e);
       }
     } else {
-       existing.reason = reason;
-      existing.timestamp = now;
+      existing.reason = reason;
+      existing.lastChecked = now;
       existing.strikes = (existing.strikes || 1) + 1;
       this.blockedVideos.set(videoId, existing);
       this.saveBlockedVideosToDisk();
@@ -135,35 +131,31 @@ class InnerTubePokeVidious {
     if (this.blockedVideos.has(videoId)) {
       this.blockedVideos.delete(videoId);
       this.saveBlockedVideosToDisk();
-      console.log(`[LIBPT RECOVERY] Video ${videoId} is working again and was removed from blocked list.`);
+      console.log(`[LIBPT RECOVERY] Video ${videoId} started working and was removed from VIDEO_UNAVAILABLE!`);
     }
   }
 
   /**
-   * Determines whether a blocked video should still be blocked right now,
-   * or if its cooldown has expired so we can try probing it once.
+   * Hard blocks (copyright, uploader removed, inappropriate) are blocked forever.
    */
   shouldBlockRequest(videoId) {
     const entry = this.blockedVideos.get(videoId);
     if (!entry) return false;
 
-     if (entry.reason !== "VIDEO_UNAVAILABLE") {
+    if (entry.reason !== "VIDEO_UNAVAILABLE") {
       return true;
     }
 
-     const scheduleIndex = entry.strikes - 1;
-    if (scheduleIndex >= this.UNAVAILABLE_BACKOFF_SCHEDULE.length) {
+    if (entry.strikes >= this.UNAVAILABLE_MAX_STRIKES) {
       return true;
     }
 
-    const cooldownMs = this.UNAVAILABLE_BACKOFF_SCHEDULE[scheduleIndex];
-    const elapsed = Date.now() - entry.timestamp;
-
-     if (elapsed < cooldownMs) {
+    // Prevent multiple requests from spamming YouTube
+    if (Date.now() - entry.lastChecked < this.UNAVAILABLE_BURST_COOLDOWN_MS) {
       return true;
     }
 
-     return false;
+    return false;
   }
 
   getJson(str) {
@@ -198,7 +190,7 @@ class InnerTubePokeVidious {
       "INAPPROPRIATE": "This video may be inappropriate for some users."
     };
 
-     if (this.shouldBlockRequest(v)) {
+    if (this.shouldBlockRequest(v)) {
       const entry = this.blockedVideos.get(v);
       return { 
         error: true, 
@@ -309,8 +301,6 @@ class InnerTubePokeVidious {
       if (res.ok) return res;
       
       await checkUnrecoverableErrors(res);
-      
-      // If we are just probing a previously unavailable video, don't hammer the server with retries
       if (isProbingUnavailable || !isTrigger(res.status)) return res;
       
       const retryStart = Date.now();
@@ -394,70 +384,102 @@ class InnerTubePokeVidious {
 
     const urlParams = `hl=${contentlang}&region=${contentregion}&h=${this.toBase64(Date.now())}&g=${this.serverGeneration}`;
     const videoUrl = `${this.config.invapi}/videos/${v}?${urlParams}`;
-    
+
+    const fetchVideoInfo = async () => {
+      let fetchError = null;
+      const MAX_ATTEMPTS = isProbingUnavailable ? 1 : 3;
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        try {
+          if (this.currentEpoch !== requestEpoch) throw new Error("REQUEST_DROPPED");
+          const r = await fetchWithRetry(videoUrl, {}, 2000);
+          if (!r.ok) throw new Error(`HTTP Error ${r.status}`);
+          const text = await r.text();
+          try {
+            const parsed = JSON.parse(text);
+            if (parsed === null) return null;
+            if (this.checkUnexistingObject(parsed)) return parsed;
+            if (parsed && parsed.error) return parsed;
+            return null;
+          } catch (parseErr) { }
+        } catch (err) {
+          if (err.message === "REQUEST_DROPPED") throw err;
+          if (["COPYRIGHT_BLOCKED", "UPLOADER_REMOVED", "VIDEO_UNAVAILABLE", "INAPPROPRIATE"].includes(err.message)) throw err;
+          fetchError = err;
+        }
+      }
+      if (fetchError) {
+        this.initError("All video info fetch attempts failed", fetchError);
+        return { isInternalError: true, reason: fetchError.message || fetchError.toString() };
+      }
+      return null;
+    };
+
     try {
-      const [invComments, vidObj, dislikesData, colorData] = await Promise.all([
-        fetchWithRetry(
-          `${config.invapi}/comments/${v}?${urlParams}`
-        ).then((res) => res?.text()),
-        
-        (async () => {
-          let fetchError = null;
-          // Only do 1 attempt if we are probing a previously unavailable video to save requests
-          const MAX_ATTEMPTS = isProbingUnavailable ? 1 : 3;
-          for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      let vidObj;
+      let invComments;
+      let dislikesData;
+      let colorData;
+
+      if (isProbingUnavailable) {
+        vidObj = await fetchVideoInfo();
+
+        if (this.checkUnexistingObject(vidObj)) {
+          // It works! Unblock immediately and fetch the rest of the page data
+          this.unblockVideo(v);
+          isProbingUnavailable = false;
+
+          [invComments, dislikesData, colorData] = await Promise.all([
+            fetchWithRetry(`${config.invapi}/comments/${v}?${urlParams}`).then((res) => res?.text()),
+            getdislikes(v).catch(() => ({ engagement: null })),
+            getColors(`https://i.ytimg.com/vi/${v}/default.jpg`)
+              .then((p) => (Array.isArray(p) && p[0] && p[1] ? { color: p[0].hex(), color2: p[1].hex() } : { color: "#0ea5e9", color2: "#111827" }))
+              .catch(() => ({ color: "#0ea5e9", color2: "#111827" }))
+          ]);
+        } else {
+          // Still broken...
+          this.addBlockedVideo(v, "VIDEO_UNAVAILABLE");
+          return {
+            error: true,
+            message: knownErrors["VIDEO_UNAVAILABLE"],
+            reason: "VIDEO_UNAVAILABLE"
+          };
+        }
+      } else {
+        [invComments, vidObj, dislikesData, colorData] = await Promise.all([
+          fetchWithRetry(
+            `${config.invapi}/comments/${v}?${urlParams}`
+          ).then((res) => res?.text()),
+          
+          fetchVideoInfo(),
+          
+          (async () => {
             try {
               if (this.currentEpoch !== requestEpoch) throw new Error("REQUEST_DROPPED");
-              const r = await fetchWithRetry(videoUrl, {}, 2000);
-              if (!r.ok) throw new Error(`HTTP Error ${r.status}`);
-              const text = await r.text();
-              try {
-                const parsed = JSON.parse(text);
-                if (parsed === null) return null;
-                if (this.checkUnexistingObject(parsed)) return parsed;
-                if (parsed && parsed.error) return parsed;
-                return null;
-              } catch (parseErr) { }
+              return await getdislikes(v);
             } catch (err) {
               if (err.message === "REQUEST_DROPPED") throw err;
-              if (["COPYRIGHT_BLOCKED", "UPLOADER_REMOVED", "VIDEO_UNAVAILABLE", "INAPPROPRIATE"].includes(err.message)) throw err;
-              fetchError = err;
+              this.initError("Dislike API error", err);
+              return { engagement: null };
             }
-          }
-          if (fetchError) {
-            this.initError("All video info fetch attempts failed", fetchError);
-            return { isInternalError: true, reason: fetchError.message || fetchError.toString() };
-          }
-          return null;
-        })(),
-        
-        (async () => {
-          try {
-            if (this.currentEpoch !== requestEpoch) throw new Error("REQUEST_DROPPED");
-            return await getdislikes(v);
-          } catch (err) {
-            if (err.message === "REQUEST_DROPPED") throw err;
-            this.initError("Dislike API error", err);
-            return { engagement: null };
-          }
-        })(),
-        
-        (async () => {
-          try {
-            if (this.currentEpoch !== requestEpoch) throw new Error("REQUEST_DROPPED");
-            const palette = await getColors(
-              `https://i.ytimg.com/vi/${v}/default.jpg`
-            );
-            if (Array.isArray(palette) && palette[0] && palette[1]) {
-              return { color: palette[0].hex(), color2: palette[1].hex() };
+          })(),
+          
+          (async () => {
+            try {
+              if (this.currentEpoch !== requestEpoch) throw new Error("REQUEST_DROPPED");
+              const palette = await getColors(
+                `https://i.ytimg.com/vi/${v}/default.jpg`
+              );
+              if (Array.isArray(palette) && palette[0] && palette[1]) {
+                return { color: palette[0].hex(), color2: palette[1].hex() };
+              }
+            } catch (err) {
+              if (err.message === "REQUEST_DROPPED") throw err;
+              this.initError("Thumbnail color extraction error", err);
             }
-          } catch (err) {
-            if (err.message === "REQUEST_DROPPED") throw err;
-            this.initError("Thumbnail color extraction error", err);
-          }
-          return { color: "#0ea5e9", color2: "#111827" };
-        })()
-      ]);
+            return { color: "#0ea5e9", color2: "#111827" };
+          })()
+        ]);
+      }
 
       if (this.currentEpoch !== requestEpoch) throw new Error("REQUEST_DROPPED");
 
@@ -467,22 +489,16 @@ class InnerTubePokeVidious {
       if (!vid || vid.error || vid.isInternalError) {
         const errorMsg = vid?.error || vid?.reason || "This video is probably about to premiere.";
         this.initError("Video info fetch error", `${v} - ${errorMsg}`);
-
-        // If we were probing a VIDEO_UNAVAILABLE video and it still failed to return valid data,
-        // increment its strike count and reset its cooldown timer so it doesn't get spammed.
-        if (isProbingUnavailable) {
-          this.addBlockedVideo(v, "VIDEO_UNAVAILABLE");
-        }
         
         return {
           vid: { error: errorMsg },
           comments,
           channel_uploads: " ",
-          engagement: dislikesData.engagement,
+          engagement: dislikesData?.engagement || null,
           wiki: "",
           desc: "",
-          color: colorData.color,
-          color2: colorData.color2,
+          color: colorData?.color || "#0ea5e9",
+          color2: colorData?.color2 || "#111827",
         };
       }
 
@@ -498,15 +514,11 @@ class InnerTubePokeVidious {
       };
 
       if (this.checkUnexistingObject(vid)) {
-        // Video succeeded! If it was previously marked VIDEO_UNAVAILABLE, remove it from blocked list
         if (this.blockedVideos.has(v)) {
           this.unblockVideo(v);
         }
         this.cache[v] = { result: finalResult, timestamp: Date.now() };
       } else {
-        if (isProbingUnavailable) {
-          this.addBlockedVideo(v, "VIDEO_UNAVAILABLE");
-        }
         this.initError(vid, `ID: ${v}`);
       }
 
@@ -518,9 +530,6 @@ class InnerTubePokeVidious {
       }
       if (knownErrors[error.message]) {
         return { error: true, message: knownErrors[error.message], reason: error.message };
-      }
-      if (isProbingUnavailable) {
-        this.addBlockedVideo(v, "VIDEO_UNAVAILABLE");
       }
       this.initError(`Error getting video ${v}`, error);
       return { error: true, message: error.message || "An unexpected error occurred qwq", reason: "UNKNOWN_ERROR" };
