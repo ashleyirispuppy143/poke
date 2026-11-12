@@ -608,9 +608,7 @@ function getSnapshotVideoName() {
 }
 
 video.addEventListener("contextmenu", function(event) {
-    if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement && !document.msFullscreenElement) {
         event.preventDefault();
-    }
 });
 
 window.addEventListener("click", function(event) {
