@@ -8,11 +8,16 @@
   <link rel="icon" href="/css/yt-ukraine.svg">
   
   <script>
-     const videoid = "<%= videoid %>";
+    const videoid = "<%= videoid %>";
     const watchUrl = "/watch?v=" + videoid;
+    const watchMediumUrl = "/watch?v=" + videoid + "&quality=medium";
+    
     const redirectKey = "poke_auto_redirect_lite";
+    const redirectMediumKey = "poke_auto_redirect_lite_medium";
 
-     if (localStorage.getItem(redirectKey) === "true") {
+    if (localStorage.getItem(redirectMediumKey) === "true") {
+      window.location.replace(watchMediumUrl);
+    } else if (localStorage.getItem(redirectKey) === "true") {
       window.location.replace(watchUrl);
     }
   </script>
@@ -25,6 +30,7 @@
       --link: #065fd4;
       --btn-bg: #065fd4;
       --btn-text: #fff;
+      --btn-outline: rgba(6, 95, 212, 0.3);
       --code-bg: #e2e2e2;
     }
 
@@ -36,6 +42,7 @@
         --link: #3ea6ff;
         --btn-bg: #3ea6ff;
         --btn-text: #0f0f0f;
+        --btn-outline: rgba(62, 166, 255, 0.3);
         --code-bg: #272727;
       }
     }
@@ -112,21 +119,23 @@
       margin-bottom: 20px;
     }
 
-    /* Action Buttons */
     .actions {
       display: flex;
-      gap: 15px;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
       margin-top: 25px;
     }
 
     .btn {
       text-decoration: none;
-      padding: 10px 24px;
+      padding: 10px 20px;
       border-radius: 2px;
       font-size: 14px;
       font-weight: 500;
       text-transform: uppercase;
-      transition: opacity 0.2s;
+      transition: opacity 0.2s, background-color 0.2s;
+      display: inline-block;
     }
 
     .btn-primary {
@@ -134,18 +143,29 @@
       color: var(--btn-text);
     }
 
+    .btn-outline {
+      border: 1px solid var(--btn-outline);
+      color: var(--link);
+    }
+
     .btn-secondary {
       color: var(--link);
-      padding-left: 0;
+      padding-left: 8px;
+      padding-right: 8px;
     }
 
     .btn:hover {
       opacity: 0.9;
     }
 
-    /* Auto-redirect Checkbox */
-    .auto-redirect-wrapper {
+    .auto-redirect-group {
       margin-top: 25px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .auto-redirect-wrapper {
       display: flex;
       align-items: center;
       gap: 8px;
@@ -166,7 +186,6 @@
       user-select: none;
     }
 
-    /* Code Snippet styling */
     code {
       font-family: monospace;
       background: var(--code-bg);
@@ -174,7 +193,6 @@
       border-radius: 3px;
     }
 
-    /* SVG Styling */
     .illustration {
       width: 100%;
       max-width: 180px;
@@ -182,7 +200,6 @@
       color: var(--text-muted);
     }
     
-    /* Dark mode adjustments */
     @media (prefers-color-scheme: dark) {
       header { border-bottom: 1px solid rgba(255,255,255,0.1); }
     }
@@ -207,21 +224,31 @@
         
         <p class="small">
           <b>Please update your bookmarks:</b><br>
-          Change <code>/lite?v=<%= videoid %></code> to <code>/watch?v=<%= videoid %></code>
+          Change <code>/lite?v=<%= videoid %></code> to <code>/watch?v=<%= videoid %></code><br>
+          For older browsers, use <code>/watch?v=<%= videoid %>&quality=medium</code>
         </p>
 
         <div class="actions">
           <a class="btn btn-primary" href="/watch?v=<%= videoid %>">
             Watch Video
           </a>
+          <a class="btn btn-outline" href="/watch?v=<%= videoid %>&quality=medium">
+            Redirect to Medium Quality
+          </a>
           <a class="btn btn-secondary" href="/">
             Return Home
           </a>
         </div>
 
-        <div class="auto-redirect-wrapper">
-          <input type="checkbox" id="auto-redirect-check">
-          <label for="auto-redirect-check">Always auto-redirect to main player</label>
+        <div class="auto-redirect-group">
+          <div class="auto-redirect-wrapper">
+            <input type="checkbox" id="auto-redirect-check">
+            <label for="auto-redirect-check">Always auto-redirect to main player</label>
+          </div>
+          <div class="auto-redirect-wrapper">
+            <input type="checkbox" id="auto-redirect-medium-check">
+            <label for="auto-redirect-medium-check">Always redirect to medium quality (for older browsers)</label>
+          </div>
         </div>
       </div>
 
@@ -239,15 +266,27 @@
   </main>
 
   <script>
-     document.addEventListener("DOMContentLoaded", () => {
+    document.addEventListener("DOMContentLoaded", () => {
       const checkbox = document.getElementById("auto-redirect-check");
+      const mediumCheckbox = document.getElementById("auto-redirect-medium-check");
       
       checkbox.addEventListener("change", (e) => {
         if (e.target.checked) {
-           localStorage.setItem(redirectKey, "true");
-           window.location.replace(watchUrl);
+          localStorage.setItem(redirectKey, "true");
+          localStorage.removeItem(redirectMediumKey);
+          window.location.replace(watchUrl);
         } else {
           localStorage.removeItem(redirectKey);
+        }
+      });
+
+      mediumCheckbox.addEventListener("change", (e) => {
+        if (e.target.checked) {
+          localStorage.setItem(redirectMediumKey, "true");
+          localStorage.removeItem(redirectKey);
+          window.location.replace(watchMediumUrl);
+        } else {
+          localStorage.removeItem(redirectMediumKey);
         }
       });
     });
