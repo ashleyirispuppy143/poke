@@ -481,7 +481,7 @@ window.SyncLevel = SyncLevel;
     };
   })();
 
-  function injectAlabasterFsDescriptionStyles() {
+   function injectAlabasterFsDescriptionStyles() {
     if (document.getElementById('alabaster-fs-desc-styles')) return;
     var styleEl = document.createElement('style');
     styleEl.id = 'alabaster-fs-desc-styles';
@@ -829,7 +829,8 @@ window.SyncLevel = SyncLevel;
       '  line-height: 1.48 !important;',
       '  color: #f1f1f1 !important;',
       '}',
-      '.video-js .vjs-alabaster-comments-btn, .vjs-alabaster-comments-btn {',
+      '.video-js .vjs-alabaster-comments-btn, .vjs-alabaster-comments-btn,',
+      '.video-js .vjs-alabaster-settings-btn, .vjs-alabaster-settings-btn {',
       '  width:var(--poke-custom-player-button-size)!important;',
       '  height:var(--poke-custom-player-button-size)!important;',
       '  min-width:var(--poke-custom-player-button-size)!important;',
@@ -845,6 +846,291 @@ window.SyncLevel = SyncLevel;
       '  justify-content:center!important;',
       '  color:#ffffff!important;',
       '  padding:0!important;',
+      '}',
+      '.alabaster-fs-settings-popup {',
+      '  position: absolute;',
+      '  right: 34px;',
+      '  bottom: 74px;',
+      '  width: 310px;',
+      '  max-width: calc(100vw - 48px);',
+      '  z-index: 46;',
+      '  display: none;',
+      '  flex-direction: column;',
+      '  background: rgba(24, 20, 18, 0.92);',
+      '  backdrop-filter: blur(28px);',
+      '  -webkit-backdrop-filter: blur(28px);',
+      '  border-radius: 14px;',
+      '  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.72);',
+      '  color: #f1f1f1;',
+      '  font-family: "poketube flex", "PokeTube Flex", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;',
+      '  user-select: none;',
+      '  pointer-events: auto;',
+      '  overflow: hidden;',
+      '  padding: 6px 0;',
+      '  opacity: 0;',
+      '  transform: translateY(8px) scale(0.98);',
+      '  transition: opacity 0.18s cubic-bezier(0.22, 1, 0.36, 1), transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);',
+      '}',
+      '.alabaster-fs-settings-popup.is-visible,',
+      '.vjs-user-inactive.vjs-playing .alabaster-fs-settings-popup.is-visible {',
+      '  opacity: 1 !important;',
+      '  visibility: visible !important;',
+      '  pointer-events: auto !important;',
+      '  transform: translateY(0) scale(1);',
+      '}',
+      '.alabaster-settings-panel {',
+      '  display: none;',
+      '  flex-direction: column;',
+      '  width: 100%;',
+      '}',
+      '.alabaster-settings-panel.is-active {',
+      '  display: flex;',
+      '}',
+      '.alabaster-settings-item {',
+      '  display: flex;',
+      '  align-items: center;',
+      '  justify-content: space-between;',
+      '  padding: 11px 18px;',
+      '  min-height: 44px;',
+      '  box-sizing: border-box;',
+      '  cursor: pointer;',
+      '  color: #f1f1f1;',
+      '  font-size: 14px;',
+      '  font-weight: 500;',
+      '  background: transparent;',
+      '  border: none;',
+      '  width: 100%;',
+      '  text-align: left;',
+      '  transition: background 0.14s ease;',
+      '}',
+      '.alabaster-settings-item:hover {',
+      '  background: rgba(255, 255, 255, 0.08);',
+      '}',
+      '.alabaster-settings-item-left {',
+      '  display: flex;',
+      '  align-items: center;',
+      '  gap: 16px;',
+      '  min-width: 0;',
+      '}',
+      '.alabaster-settings-icon {',
+      '  width: 24px;',
+      '  height: 24px;',
+      '  display: inline-flex;',
+      '  align-items: center;',
+      '  justify-content: center;',
+      '  color: #f1f1f1;',
+      '  flex-shrink: 0;',
+      '}',
+      '.alabaster-settings-label {',
+      '  font-size: 14px;',
+      '  font-weight: 500;',
+      '  color: #f1f1f1;',
+      '  white-space: nowrap;',
+      '}',
+      '.alabaster-settings-item-right {',
+      '  display: flex;',
+      '  align-items: center;',
+      '  gap: 6px;',
+      '  color: #aaaaaa;',
+      '  font-size: 13.5px;',
+      '  font-weight: 400;',
+      '  margin-left: 12px;',
+      '}',
+      '.alabaster-settings-switch {',
+      '  position: relative;',
+      '  width: 36px;',
+      '  height: 20px;',
+      '  border-radius: 999px;',
+      '  background: rgba(255, 255, 255, 0.25);',
+      '  transition: background 0.2s ease;',
+      '  flex-shrink: 0;',
+      '}',
+      '.alabaster-settings-switch::after {',
+      '  content: "";',
+      '  position: absolute;',
+      '  top: 2px;',
+      '  left: 2px;',
+      '  width: 16px;',
+      '  height: 16px;',
+      '  border-radius: 50%;',
+      '  background: #bbbbbb;',
+      '  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), background 0.2s ease;',
+      '}',
+      '.alabaster-settings-switch.is-on {',
+      '  background: rgba(255, 255, 255, 0.38);',
+      '}',
+      '.alabaster-settings-switch.is-on::after {',
+      '  transform: translateX(16px);',
+      '  background: #ffffff;',
+      '}',
+      '.alabaster-settings-subheader {',
+      '  display: flex;',
+      '  align-items: center;',
+      '  gap: 12px;',
+      '  padding: 10px 16px;',
+      '  border-bottom: 1px solid rgba(255, 255, 255, 0.1);',
+      '  margin-bottom: 4px;',
+      '}',
+      '.alabaster-settings-back-btn {',
+      '  width: 30px;',
+      '  height: 30px;',
+      '  border-radius: 50%;',
+      '  border: none;',
+      '  background: transparent;',
+      '  color: #f1f1f1;',
+      '  display: inline-flex;',
+      '  align-items: center;',
+      '  justify-content: center;',
+      '  cursor: pointer;',
+      '  padding: 0;',
+      '  transition: background 0.14s ease;',
+      '}',
+      '.alabaster-settings-back-btn:hover {',
+      '  background: rgba(255, 255, 255, 0.1);',
+      '}',
+      '.alabaster-settings-subtitle {',
+      '  font-size: 14.5px;',
+      '  font-weight: 600;',
+      '  color: #ffffff;',
+      '}',
+      '.alabaster-speed-panel-body {',
+      '  display: flex;',
+      '  flex-direction: column;',
+      '  align-items: center;',
+      '  padding: 16px 18px 14px 18px;',
+      '  gap: 16px;',
+      '}',
+      '.alabaster-speed-readout {',
+      '  font-size: 20px;',
+      '  font-weight: 700;',
+      '  color: #ffffff;',
+      '  letter-spacing: 0.2px;',
+      '}',
+      '.alabaster-speed-slider-row {',
+      '  display: flex;',
+      '  align-items: center;',
+      '  gap: 12px;',
+      '  width: 100%;',
+      '}',
+      '.alabaster-speed-step-btn {',
+      '  width: 34px;',
+      '  height: 34px;',
+      '  border-radius: 50%;',
+      '  border: none;',
+      '  background: rgba(255, 255, 255, 0.1);',
+      '  color: #ffffff;',
+      '  font-size: 20px;',
+      '  font-weight: 500;',
+      '  display: inline-flex;',
+      '  align-items: center;',
+      '  justify-content: center;',
+      '  cursor: pointer;',
+      '  flex-shrink: 0;',
+      '  padding: 0;',
+      '  transition: background 0.15s ease;',
+      '}',
+      '.alabaster-speed-step-btn:hover {',
+      '  background: rgba(255, 255, 255, 0.2);',
+      '}',
+      '.alabaster-speed-range {',
+      '  flex: 1 1 auto;',
+      '  -webkit-appearance: none;',
+      '  appearance: none;',
+      '  height: 4px;',
+      '  border-radius: 999px;',
+      '  background: rgba(255, 255, 255, 0.24);',
+      '  outline: none;',
+      '  cursor: pointer;',
+      '}',
+      '.alabaster-speed-range::-webkit-slider-thumb {',
+      '  -webkit-appearance: none;',
+      '  appearance: none;',
+      '  width: 16px;',
+      '  height: 16px;',
+      '  border-radius: 50%;',
+      '  background: #ffffff;',
+      '  cursor: pointer;',
+      '  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);',
+      '}',
+      '.alabaster-speed-range::-moz-range-thumb {',
+      '  width: 16px;',
+      '  height: 16px;',
+      '  border-radius: 50%;',
+      '  border: none;',
+      '  background: #ffffff;',
+      '  cursor: pointer;',
+      '  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);',
+      '}',
+      '.alabaster-speed-presets {',
+      '  display: grid;',
+      '  grid-template-columns: repeat(5, 1fr);',
+      '  gap: 6px;',
+      '  width: 100%;',
+      '  margin-top: 2px;',
+      '}',
+      '.alabaster-speed-preset-col {',
+      '  display: flex;',
+      '  flex-direction: column;',
+      '  align-items: center;',
+      '  gap: 4px;',
+      '}',
+      '.alabaster-speed-pill {',
+      '  width: 100%;',
+      '  padding: 7px 0;',
+      '  border-radius: 999px;',
+      '  border: 1px solid transparent;',
+      '  background: rgba(255, 255, 255, 0.09);',
+      '  color: #f1f1f1;',
+      '  font-size: 12.5px;',
+      '  font-weight: 600;',
+      '  cursor: pointer;',
+      '  text-align: center;',
+      '  transition: background 0.14s ease, border-color 0.14s ease;',
+      '}',
+      '.alabaster-speed-pill:hover {',
+      '  background: rgba(255, 255, 255, 0.16);',
+      '}',
+      '.alabaster-speed-pill.is-active {',
+      '  background: rgba(255, 255, 255, 0.22);',
+      '  border-color: rgba(255, 255, 255, 0.35);',
+      '  color: #ffffff;',
+      '}',
+      '.alabaster-speed-pill-sub {',
+      '  font-size: 10.5px;',
+      '  color: #aaaaaa;',
+      '  line-height: 1.1;',
+      '}',
+      '.alabaster-audio-option-item {',
+      '  display: flex;',
+      '  align-items: center;',
+      '  gap: 14px;',
+      '  padding: 11px 18px;',
+      '  width: 100%;',
+      '  box-sizing: border-box;',
+      '  background: transparent;',
+      '  border: none;',
+      '  color: #f1f1f1;',
+      '  font-size: 14px;',
+      '  font-weight: 500;',
+      '  cursor: pointer;',
+      '  text-align: left;',
+      '  transition: background 0.14s ease;',
+      '}',
+      '.alabaster-audio-option-item:hover {',
+      '  background: rgba(255, 255, 255, 0.08);',
+      '}',
+      '.alabaster-audio-check {',
+      '  width: 20px;',
+      '  height: 20px;',
+      '  display: inline-flex;',
+      '  align-items: center;',
+      '  justify-content: center;',
+      '  color: #9e9e9e;',
+      '  opacity: 0;',
+      '  flex-shrink: 0;',
+      '}',
+      '.alabaster-audio-option-item.is-selected .alabaster-audio-check {',
+      '  opacity: 1;',
       '}',
       '.alabaster-rec-open-btn {',
       '  position: absolute;',
@@ -1044,7 +1330,7 @@ window.SyncLevel = SyncLevel;
       '  display: inline-block;',
       '  font-size: 10px;',
       '  margin-right: 4px;',
-      '  color: #cccccc;',
+      '   color: #cccccc;',
       '  transform: translateY(-0.5px);',
       '}'
     ].join('\n');
@@ -1109,6 +1395,16 @@ window.SyncLevel = SyncLevel;
         );
       };
 
+      if (rootEl && !rootEl._alabasterContextMenuDisabled) {
+        rootEl._alabasterContextMenuDisabled = true;
+        rootEl.addEventListener('contextmenu', function(evt) {
+          if (checkIsPlayerFullscreen()) {
+            evt.preventDefault();
+            evt.stopPropagation();
+          }
+        }, true);
+      }
+
       var fsDescToggle = null;
       var fsDescDrawer = null;
       var fsDescBody = null;
@@ -1120,6 +1416,11 @@ window.SyncLevel = SyncLevel;
       var fsCommentsBody = null;
       var isFsCommentsOpen = false;
       var setCommentsDrawerState = null;
+
+      var fsSettingsBtn = null;
+      var fsSettingsPopup = null;
+      var isFsSettingsOpen = false;
+      var setSettingsPopupState = null;
 
       var getTitleElements = function() {
         if (!rootEl) return [];
@@ -1430,6 +1731,9 @@ window.SyncLevel = SyncLevel;
           if (isFsDescOpen && isFsCommentsOpen && typeof setCommentsDrawerState === 'function') {
             setCommentsDrawerState(false);
           }
+          if (isFsDescOpen && isFsSettingsOpen && typeof setSettingsPopupState === 'function') {
+            setSettingsPopupState(false);
+          }
           var isFsNow = checkIsPlayerFullscreen();
           updateTitleBarDescVisibility(isFsNow);
 
@@ -1497,25 +1801,38 @@ window.SyncLevel = SyncLevel;
         player.on('pause', syncDescToggleWithUserActivity);
       }
 
-      var positionCommentsBtn = function() {
+      var positionCustomButtons = function() {
         var barElNode = player.controlBar && player.controlBar.el && player.controlBar.el();
-        if (!barElNode || !fsCommentsBtn) return;
+        if (!barElNode) return;
         var pipEl = barElNode.querySelector('.vjs-picture-in-picture-control');
         var fsEl = barElNode.querySelector('.vjs-fullscreen-control');
-        if (pipEl && pipEl.parentNode) {
-          if (fsCommentsBtn.nextSibling !== pipEl) {
-            pipEl.parentNode.insertBefore(fsCommentsBtn, pipEl);
+        var anchorEl = (pipEl && pipEl.parentNode === barElNode) ? pipEl : ((fsEl && fsEl.parentNode === barElNode) ? fsEl : null);
+        var orderVal = '';
+        if (anchorEl && window.getComputedStyle) {
+          var computedOrder = window.getComputedStyle(anchorEl).order;
+          if (computedOrder && computedOrder !== '0' && computedOrder !== 'auto') {
+            orderVal = computedOrder;
           }
-          var pipOrder = window.getComputedStyle ? window.getComputedStyle(pipEl).order : '';
-          if (pipOrder && pipOrder !== '0' && pipOrder !== 'auto') {
-            fsCommentsBtn.style.order = pipOrder;
+        }
+        if (fsCommentsBtn) {
+          if (anchorEl && anchorEl.parentNode) {
+            if (fsCommentsBtn.nextSibling !== anchorEl && fsCommentsBtn.nextSibling !== fsSettingsBtn) {
+              anchorEl.parentNode.insertBefore(fsCommentsBtn, anchorEl);
+            }
+            if (orderVal) fsCommentsBtn.style.order = orderVal;
+          } else if (fsCommentsBtn.parentNode !== barElNode) {
+            barElNode.appendChild(fsCommentsBtn);
           }
-        } else if (fsEl && fsEl.parentNode) {
-          if (fsCommentsBtn.nextSibling !== fsEl) {
-            fsEl.parentNode.insertBefore(fsCommentsBtn, fsEl);
+        }
+        if (fsSettingsBtn) {
+          if (anchorEl && anchorEl.parentNode) {
+            if (fsSettingsBtn.nextSibling !== anchorEl) {
+              anchorEl.parentNode.insertBefore(fsSettingsBtn, anchorEl);
+            }
+            if (orderVal) fsSettingsBtn.style.order = orderVal;
+          } else if (fsSettingsBtn.parentNode !== barElNode) {
+            barElNode.appendChild(fsSettingsBtn);
           }
-        } else if (fsCommentsBtn.parentNode !== barElNode) {
-          barElNode.appendChild(fsCommentsBtn);
         }
       };
 
@@ -1636,6 +1953,9 @@ window.SyncLevel = SyncLevel;
           if (isFsCommentsOpen && isFsDescOpen && typeof setDrawerState === 'function') {
             setDrawerState(false);
           }
+          if (isFsCommentsOpen && isFsSettingsOpen && typeof setSettingsPopupState === 'function') {
+            setSettingsPopupState(false);
+          }
           var isFsNow = checkIsPlayerFullscreen();
           updateTitleBarDescVisibility(isFsNow);
 
@@ -1711,7 +2031,512 @@ window.SyncLevel = SyncLevel;
             setCommentsDrawerState(!isFsCommentsOpen);
           });
 
-          positionCommentsBtn();
+          positionCustomButtons();
+        }
+      }
+
+      if (rootEl && !rootEl.querySelector('.alabaster-fs-settings-popup')) {
+        fsSettingsPopup = document.createElement('div');
+        fsSettingsPopup.className = 'alabaster-fs-settings-popup';
+
+        var mainPanel = document.createElement('div');
+        mainPanel.className = 'alabaster-settings-panel is-active';
+
+        var speedPanel = document.createElement('div');
+        speedPanel.className = 'alabaster-settings-panel';
+
+        var audioPanel = document.createElement('div');
+        audioPanel.className = 'alabaster-settings-panel';
+
+        var showSettingsPanel = function(targetPanel) {
+          [mainPanel, speedPanel, audioPanel].forEach(function(p) {
+            if (p === targetPanel) p.classList.add('is-active');
+            else p.classList.remove('is-active');
+          });
+        };
+
+        var getActiveAudioState = function() {
+          try {
+            if (typeof audioState !== 'undefined' && audioState) return String(audioState);
+          } catch (_) {}
+          if (typeof window.audioState !== 'undefined' && window.audioState) return String(window.audioState);
+          return 'none';
+        };
+
+        var toggleAudioOptionMode = function(modeName) {
+          var current = getActiveAudioState();
+          var nextState = current === modeName ? 'none' : modeName;
+          try {
+            if (typeof audioState !== 'undefined') {
+              audioState = nextState;
+            } else {
+              window.audioState = nextState;
+            }
+          } catch (_) {
+            window.audioState = nextState;
+          }
+          try {
+            if (typeof applyAudioState === 'function') {
+              applyAudioState(true);
+            } else if (typeof window.applyAudioState === 'function') {
+              window.applyAudioState(true);
+            }
+          } catch (_) {}
+          refreshSettingsUI();
+        };
+
+        var formatAudioStateLabel = function(st) {
+          if (st === 'boost') return 'Boost';
+          if (st === 'whisper') return 'Whisper';
+          if (st === 'normalize') return 'Normalize';
+          return 'Off';
+        };
+
+        var loopMenuRow = document.createElement('button');
+        loopMenuRow.type = 'button';
+        loopMenuRow.className = 'alabaster-settings-item';
+        var loopSwitchEl = document.createElement('div');
+        loopSwitchEl.className = 'alabaster-settings-switch';
+        loopMenuRow.innerHTML = [
+          '<div class="alabaster-settings-item-left">',
+          '  <span class="alabaster-settings-icon">',
+          '    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
+          '      <polyline points="17 1 21 5 17 9"></polyline>',
+          '      <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>',
+          '      <polyline points="7 23 3 19 7 15"></polyline>',
+          '      <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>',
+          '    </svg>',
+          '  </span>',
+          '  <span class="alabaster-settings-label">Loop video</span>',
+          '</div>'
+        ].join('');
+        loopMenuRow.appendChild(loopSwitchEl);
+
+        var speedMenuRow = document.createElement('button');
+        speedMenuRow.type = 'button';
+        speedMenuRow.className = 'alabaster-settings-item';
+        var speedValueLabel = document.createElement('span');
+        speedValueLabel.textContent = 'Normal';
+        var speedRightWrap = document.createElement('div');
+        speedRightWrap.className = 'alabaster-settings-item-right';
+        speedRightWrap.appendChild(speedValueLabel);
+        speedRightWrap.insertAdjacentHTML('beforeend', '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>');
+        speedMenuRow.innerHTML = [
+          '<div class="alabaster-settings-item-left">',
+          '  <span class="alabaster-settings-icon">',
+          '    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
+          '      <path d="M12 2a10 10 0 1 0 10 10"></path>',
+          '      <polyline points="12 12 16 8"></polyline>',
+          '      <circle cx="12" cy="12" r="1.5"></circle>',
+          '    </svg>',
+          '  </span>',
+          '  <span class="alabaster-settings-label">Playback speed</span>',
+          '</div>'
+        ].join('');
+        speedMenuRow.appendChild(speedRightWrap);
+
+        var audioMenuRow = document.createElement('button');
+        audioMenuRow.type = 'button';
+        audioMenuRow.className = 'alabaster-settings-item';
+        var audioValueLabel = document.createElement('span');
+        audioValueLabel.textContent = 'Off';
+        var audioRightWrap = document.createElement('div');
+        audioRightWrap.className = 'alabaster-settings-item-right';
+        audioRightWrap.appendChild(audioValueLabel);
+        audioRightWrap.insertAdjacentHTML('beforeend', '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>');
+        audioMenuRow.innerHTML = [
+          '<div class="alabaster-settings-item-left">',
+          '  <span class="alabaster-settings-icon">',
+          '    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
+          '      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>',
+          '      <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>',
+          '      <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>',
+          '    </svg>',
+          '  </span>',
+          '  <span class="alabaster-settings-label">Audio options</span>',
+          '</div>'
+        ].join('');
+        audioMenuRow.appendChild(audioRightWrap);
+
+        var snapshotMenuRow = document.createElement('button');
+        snapshotMenuRow.type = 'button';
+        snapshotMenuRow.className = 'alabaster-settings-item';
+        snapshotMenuRow.innerHTML = [
+          '<div class="alabaster-settings-item-left">',
+          '  <span class="alabaster-settings-icon">',
+          '    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
+          '      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>',
+          '      <circle cx="12" cy="13" r="4"></circle>',
+          '    </svg>',
+          '  </span>',
+          '  <span class="alabaster-settings-label">Snapshot</span>',
+          '</div>'
+        ].join('');
+
+        mainPanel.appendChild(loopMenuRow);
+        mainPanel.appendChild(speedMenuRow);
+        mainPanel.appendChild(audioMenuRow);
+        mainPanel.appendChild(snapshotMenuRow);
+
+        var speedHeader = document.createElement('div');
+        speedHeader.className = 'alabaster-settings-subheader';
+        var speedBackBtn = document.createElement('button');
+        speedBackBtn.type = 'button';
+        speedBackBtn.className = 'alabaster-settings-back-btn';
+        speedBackBtn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>';
+        var speedSubTitle = document.createElement('span');
+        speedSubTitle.className = 'alabaster-settings-subtitle';
+        speedSubTitle.textContent = 'Playback speed';
+        speedHeader.appendChild(speedBackBtn);
+        speedHeader.appendChild(speedSubTitle);
+
+        var speedBody = document.createElement('div');
+        speedBody.className = 'alabaster-speed-panel-body';
+
+        var speedReadout = document.createElement('div');
+        speedReadout.className = 'alabaster-speed-readout';
+        speedReadout.textContent = '1.00x';
+
+        var speedSliderRow = document.createElement('div');
+        speedSliderRow.className = 'alabaster-speed-slider-row';
+
+        var speedMinusBtn = document.createElement('button');
+        speedMinusBtn.type = 'button';
+        speedMinusBtn.className = 'alabaster-speed-step-btn';
+        speedMinusBtn.textContent = '-';
+
+        var speedRange = document.createElement('input');
+        speedRange.type = 'range';
+        speedRange.className = 'alabaster-speed-range';
+        speedRange.min = '0.25';
+        speedRange.max = '2';
+        speedRange.step = '0.05';
+        speedRange.value = '1';
+
+        var speedPlusBtn = document.createElement('button');
+        speedPlusBtn.type = 'button';
+        speedPlusBtn.className = 'alabaster-speed-step-btn';
+        speedPlusBtn.textContent = '+';
+
+        speedSliderRow.appendChild(speedMinusBtn);
+        speedSliderRow.appendChild(speedRange);
+        speedSliderRow.appendChild(speedPlusBtn);
+
+        var speedPresetsWrap = document.createElement('div');
+        speedPresetsWrap.className = 'alabaster-speed-presets';
+        var presetValues = [
+          { val: 0.5, label: '0.5' },
+          { val: 1.0, label: '1.0', sub: 'Normal' },
+          { val: 1.25, label: '1.25' },
+          { val: 1.5, label: '1.5' },
+          { val: 2.0, label: '2.0' }
+        ];
+        var presetButtons = [];
+
+        for (var pIdx = 0; pIdx < presetValues.length; pIdx++) {
+          (function(preset) {
+            var col = document.createElement('div');
+            col.className = 'alabaster-speed-preset-col';
+            var pill = document.createElement('button');
+            pill.type = 'button';
+            pill.className = 'alabaster-speed-pill';
+            pill.textContent = preset.label;
+            pill.setAttribute('data-rate', String(preset.val));
+            pill.addEventListener('click', function(evt) {
+              evt.preventDefault();
+              evt.stopPropagation();
+              applyPlaybackRate(preset.val);
+            });
+            col.appendChild(pill);
+            if (preset.sub) {
+              var subLbl = document.createElement('span');
+              subLbl.className = 'alabaster-speed-pill-sub';
+              subLbl.textContent = preset.sub;
+              col.appendChild(subLbl);
+            }
+            speedPresetsWrap.appendChild(col);
+            presetButtons.push({ btn: pill, val: preset.val });
+          })(presetValues[pIdx]);
+        }
+
+        speedBody.appendChild(speedReadout);
+        speedBody.appendChild(speedSliderRow);
+        speedBody.appendChild(speedPresetsWrap);
+        speedPanel.appendChild(speedHeader);
+        speedPanel.appendChild(speedBody);
+
+        var audioHeader = document.createElement('div');
+        audioHeader.className = 'alabaster-settings-subheader';
+        var audioBackBtn = document.createElement('button');
+        audioBackBtn.type = 'button';
+        audioBackBtn.className = 'alabaster-settings-back-btn';
+        audioBackBtn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>';
+        var audioSubTitle = document.createElement('span');
+        audioSubTitle.className = 'alabaster-settings-subtitle';
+        audioSubTitle.textContent = 'Audio options';
+        audioHeader.appendChild(audioBackBtn);
+        audioHeader.appendChild(audioSubTitle);
+        audioPanel.appendChild(audioHeader);
+
+        var audioModes = [
+          { key: 'boost', label: 'Boost' },
+          { key: 'whisper', label: 'Whisper' },
+          { key: 'normalize', label: 'Normalize' }
+        ];
+        var audioModeButtons = [];
+
+        for (var aIdx = 0; aIdx < audioModes.length; aIdx++) {
+          (function(mItem) {
+            var optBtn = document.createElement('button');
+            optBtn.type = 'button';
+            optBtn.className = 'alabaster-audio-option-item';
+            optBtn.innerHTML = [
+              '<span class="alabaster-audio-check">',
+              '  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#9e9e9e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">',
+              '    <polyline points="20 6 9 17 4 12"></polyline>',
+              '  </svg>',
+              '</span>',
+              '<span>' + mItem.label + '</span>'
+            ].join('');
+            optBtn.addEventListener('click', function(evt) {
+              evt.preventDefault();
+              evt.stopPropagation();
+              toggleAudioOptionMode(mItem.key);
+            });
+            audioPanel.appendChild(optBtn);
+            audioModeButtons.push({ btn: optBtn, key: mItem.key });
+          })(audioModes[aIdx]);
+        }
+
+        fsSettingsPopup.appendChild(mainPanel);
+        fsSettingsPopup.appendChild(speedPanel);
+        fsSettingsPopup.appendChild(audioPanel);
+        rootEl.appendChild(fsSettingsPopup);
+
+        var getVideoElementNode = function() {
+          return (rootEl && rootEl.querySelector('video')) || document.querySelector('video.video-js, video');
+        };
+
+        var isLoopCurrentlyEnabled = function() {
+          var vNode = getVideoElementNode();
+          return Boolean((vNode && (vNode.loop || vNode.hasAttribute('loop'))) || (typeof player.loop === 'function' && player.loop()));
+        };
+
+        var applyPlaybackRate = function(rateVal) {
+          var clamped = Math.max(0.25, Math.min(2, Math.round(Number(rateVal) * 20) / 20));
+          if (typeof player.playbackRate === 'function') {
+            player.playbackRate(clamped);
+          }
+          var vNode = getVideoElementNode();
+          if (vNode) vNode.playbackRate = clamped;
+          var aNode = document.querySelector('audio');
+          if (aNode) aNode.playbackRate = clamped;
+          refreshSettingsUI();
+        };
+
+        var refreshSettingsUI = function() {
+          var loopOn = isLoopCurrentlyEnabled();
+          if (loopOn) loopSwitchEl.classList.add('is-on');
+          else loopSwitchEl.classList.remove('is-on');
+
+          var vNode = getVideoElementNode();
+          var curRate = (typeof player.playbackRate === 'function' ? player.playbackRate() : (vNode ? vNode.playbackRate : 1)) || 1;
+          speedReadout.textContent = curRate.toFixed(2) + 'x';
+          speedRange.value = String(curRate);
+
+          var pct = Math.max(0, Math.min(100, ((curRate - 0.25) / (2 - 0.25)) * 100));
+          speedRange.style.background = 'linear-gradient(to right, #ffffff 0%, #ffffff ' + pct + '%, rgba(255, 255, 255, 0.24) ' + pct + '%, rgba(255, 255, 255, 0.24) 100%)';
+
+          if (Math.abs(curRate - 1) < 0.01) {
+            speedValueLabel.textContent = 'Normal';
+          } else {
+            speedValueLabel.textContent = Number(curRate.toFixed(2)) + 'x';
+          }
+
+          for (var i = 0; i < presetButtons.length; i++) {
+            var pb = presetButtons[i];
+            if (Math.abs(curRate - pb.val) < 0.01) pb.btn.classList.add('is-active');
+            else pb.btn.classList.remove('is-active');
+          }
+
+          var curAudio = getActiveAudioState();
+          audioValueLabel.textContent = formatAudioStateLabel(curAudio);
+          for (var j = 0; j < audioModeButtons.length; j++) {
+            var ab = audioModeButtons[j];
+            if (ab.key === curAudio) ab.btn.classList.add('is-selected');
+            else ab.btn.classList.remove('is-selected');
+          }
+        };
+
+        loopMenuRow.addEventListener('click', function(evt) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          var vNode = getVideoElementNode();
+          var nextLoop = !isLoopCurrentlyEnabled();
+          if (vNode) {
+            vNode.loop = nextLoop;
+            if (nextLoop) vNode.setAttribute('loop', '');
+            else vNode.removeAttribute('loop');
+          }
+          if (typeof player.loop === 'function') {
+            player.loop(nextLoop);
+          }
+          refreshSettingsUI();
+        });
+
+        speedMenuRow.addEventListener('click', function(evt) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          refreshSettingsUI();
+          showSettingsPanel(speedPanel);
+        });
+
+        audioMenuRow.addEventListener('click', function(evt) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          refreshSettingsUI();
+          showSettingsPanel(audioPanel);
+        });
+
+        speedBackBtn.addEventListener('click', function(evt) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          showSettingsPanel(mainPanel);
+        });
+
+        audioBackBtn.addEventListener('click', function(evt) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          showSettingsPanel(mainPanel);
+        });
+
+        speedMinusBtn.addEventListener('click', function(evt) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          var cur = Number(speedRange.value) || 1;
+          applyPlaybackRate(cur - 0.05);
+        });
+
+        speedPlusBtn.addEventListener('click', function(evt) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          var cur = Number(speedRange.value) || 1;
+          applyPlaybackRate(cur + 0.05);
+        });
+
+        speedRange.addEventListener('input', function(evt) {
+          evt.stopPropagation();
+          applyPlaybackRate(Number(speedRange.value));
+        });
+
+        snapshotMenuRow.addEventListener('click', function(evt) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          var vNode = getVideoElementNode();
+          if (!vNode || !vNode.videoWidth || !vNode.videoHeight) return;
+          try {
+            var canvas = document.createElement('canvas');
+            canvas.width = vNode.videoWidth;
+            canvas.height = vNode.videoHeight;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(vNode, 0, 0, canvas.width, canvas.height);
+
+            var freshMeta = metadataParser.read();
+            var rawTitle = (freshMeta.title || info.title || document.title || 'Video').trim();
+            var cleanTitle = rawTitle.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim() || 'Video';
+
+            var curSec = Math.max(0, Math.floor(Number(player.currentTime ? player.currentTime() : vNode.currentTime) || 0));
+            var hrs = Math.floor(curSec / 3600);
+            var mins = Math.floor((curSec % 3600) / 60);
+            var secs = curSec % 60;
+            var timeStamp = hrs > 0
+              ? (hrs + 'h' + mins + 'm' + secs + 's')
+              : (mins + 'm' + secs + 's');
+
+            var fileName = cleanTitle + ' at ' + timeStamp + '.png';
+            var dataUrl = canvas.toDataURL('image/png');
+            var dlLink = document.createElement('a');
+            dlLink.href = dataUrl;
+            dlLink.download = fileName;
+            document.body.appendChild(dlLink);
+            dlLink.click();
+            document.body.removeChild(dlLink);
+          } catch (_) {}
+          setSettingsPopupState(false);
+        });
+
+        setSettingsPopupState = function(open) {
+          isFsSettingsOpen = Boolean(open);
+          if (isFsSettingsOpen && isFsDescOpen && typeof setDrawerState === 'function') {
+            setDrawerState(false);
+          }
+          if (isFsSettingsOpen && isFsCommentsOpen && typeof setCommentsDrawerState === 'function') {
+            setCommentsDrawerState(false);
+          }
+
+          if (!fsSettingsPopup) return;
+          if (isFsSettingsOpen) {
+            showSettingsPanel(mainPanel);
+            refreshSettingsUI();
+            if (fsSettingsBtn) {
+              fsSettingsBtn.classList.add('is-active');
+              fsSettingsBtn.setAttribute('aria-expanded', 'true');
+            }
+            fsSettingsPopup.style.display = 'flex';
+            compat.raf(function() {
+              fsSettingsPopup.classList.add('is-visible');
+            });
+          } else {
+            if (fsSettingsBtn) {
+              fsSettingsBtn.classList.remove('is-active');
+              fsSettingsBtn.setAttribute('aria-expanded', 'false');
+            }
+            fsSettingsPopup.classList.remove('is-visible');
+            setTimeout(function() {
+              if (!isFsSettingsOpen && fsSettingsPopup) {
+                fsSettingsPopup.style.display = 'none';
+              }
+            }, 190);
+          }
+        };
+
+        ['click', 'mousedown', 'pointerdown', 'touchstart', 'touchend', 'wheel'].forEach(function(evName) {
+          fsSettingsPopup.addEventListener(evName, function(evt) {
+            evt.stopPropagation();
+          }, false);
+        });
+
+        player.on('ratechange', refreshSettingsUI);
+
+        var cBarForSettings = player.controlBar && player.controlBar.el && player.controlBar.el();
+        if (cBarForSettings && !cBarForSettings.querySelector('.vjs-alabaster-settings-btn')) {
+          fsSettingsBtn = document.createElement('button');
+          fsSettingsBtn.type = 'button';
+          fsSettingsBtn.className = 'vjs-alabaster-settings-btn vjs-control vjs-button';
+          fsSettingsBtn.setAttribute('aria-label', 'Settings');
+          fsSettingsBtn.setAttribute('title', 'Settings');
+          fsSettingsBtn.setAttribute('aria-expanded', 'false');
+          fsSettingsBtn.innerHTML = [
+            '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none;">',
+            '  <circle cx="12" cy="12" r="3"></circle>',
+            '  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>',
+            '</svg>'
+          ].join('');
+
+          ['mousedown', 'pointerdown', 'touchstart', 'touchend'].forEach(function(evName) {
+            fsSettingsBtn.addEventListener(evName, function(evt) {
+              evt.stopPropagation();
+            }, false);
+          });
+
+          fsSettingsBtn.addEventListener('click', function(evt) {
+            evt.preventDefault();
+            evt.stopPropagation();
+            if (!checkIsPlayerFullscreen()) return;
+            setSettingsPopupState(!isFsSettingsOpen);
+          });
+
+          positionCustomButtons();
         }
       }
 
@@ -1927,6 +2752,7 @@ window.SyncLevel = SyncLevel;
                 cls.indexOf('vjs-fullscreen-control') !== -1 ||
                 cls.indexOf('vjs-picture-in-picture') !== -1 ||
                 cls.indexOf('vjs-alabaster-comments-btn') !== -1 ||
+                cls.indexOf('vjs-alabaster-settings-btn') !== -1 ||
                 cls.indexOf('vjs-menu') !== -1 ||
                 cls.indexOf('vjs-player-time-toggle') !== -1 ||
                 cls.indexOf('vjs-time-control') !== -1
@@ -1946,7 +2772,7 @@ window.SyncLevel = SyncLevel;
             if (tRect.width > 0) leftBoundary = Math.max(leftBoundary, tRect.right + 16);
           }
 
-          var rightButtons = bar.querySelectorAll('.vjs-alabaster-comments-btn, .vjs-picture-in-picture-control, .vjs-fullscreen-control, .vjs-subs-caps-button, .vjs-playback-rate, .vjs-quality-selector');
+          var rightButtons = bar.querySelectorAll('.vjs-alabaster-comments-btn, .vjs-alabaster-settings-btn, .vjs-picture-in-picture-control, .vjs-fullscreen-control, .vjs-subs-caps-button, .vjs-playback-rate, .vjs-quality-selector');
           for (var i = 0; i < rightButtons.length; i++) {
             var rbRect = rightButtons[i].getBoundingClientRect();
             if (rbRect.width > 0 && rbRect.left > barRect.left + barRect.width * 0.45) {
@@ -2165,7 +2991,14 @@ window.SyncLevel = SyncLevel;
             (!fsCommentsBtn || !fsCommentsBtn.contains(target))
           );
 
-          if (!clickedOutsideRec && !clickedOutsideDesc && !clickedOutsideComments) return;
+          var clickedOutsideSettings = Boolean(
+            isFsSettingsOpen &&
+            fsSettingsPopup &&
+            !fsSettingsPopup.contains(target) &&
+            (!fsSettingsBtn || !fsSettingsBtn.contains(target))
+          );
+
+          if (!clickedOutsideRec && !clickedOutsideDesc && !clickedOutsideComments && !clickedOutsideSettings) return;
 
           if (clickedOutsideRec && typeof applyRecStage === 'function') {
             applyRecStage(0);
@@ -2175,6 +3008,9 @@ window.SyncLevel = SyncLevel;
           }
           if (clickedOutsideComments && typeof setCommentsDrawerState === 'function') {
             setCommentsDrawerState(false);
+          }
+          if (clickedOutsideSettings && typeof setSettingsPopupState === 'function') {
+            setSettingsPopupState(false);
           }
 
           if (!isInsideControlBar && !isTargetInsideTitle(target)) {
@@ -2193,6 +3029,7 @@ window.SyncLevel = SyncLevel;
           if (evt.key === 'Escape') {
             if (recStage !== 0) applyRecStage(0);
             if (isFsCommentsOpen && typeof setCommentsDrawerState === 'function') setCommentsDrawerState(false);
+            if (isFsSettingsOpen && typeof setSettingsPopupState === 'function') setSettingsPopupState(false);
           }
         }, false);
 
@@ -2362,10 +3199,11 @@ window.SyncLevel = SyncLevel;
         if (!isFs) {
           isFsDescOpen = false;
           isFsCommentsOpen = false;
+          isFsSettingsOpen = false;
         }
 
         bindTitleClickHandlers();
-        positionCommentsBtn();
+        positionCustomButtons();
 
         var useLegacyDescButton = isStorageFlagEnabled(LEGACY_DESC_BTN_KEY);
         var hasDescriptionNode = Boolean(document.querySelector('.descriptionHtml'));
@@ -2431,6 +3269,18 @@ window.SyncLevel = SyncLevel;
           }
         }
 
+        if (fsSettingsBtn && fsSettingsPopup) {
+          if (isFs) {
+            fsSettingsBtn.style.setProperty('display', 'inline-flex', 'important');
+          } else {
+            fsSettingsBtn.style.setProperty('display', 'none', 'important');
+            fsSettingsBtn.classList.remove('is-active');
+            fsSettingsBtn.setAttribute('aria-expanded', 'false');
+            fsSettingsPopup.classList.remove('is-visible');
+            fsSettingsPopup.style.display = 'none';
+          }
+        }
+
         if (recOpenBtn && recDrawer) {
           var hasRecNode = Boolean(document.querySelector('.recommended-list .video'));
           var discoverDisabled = isStorageFlagEnabled(DISABLE_FS_DISCOVER_KEY);
@@ -2490,7 +3340,7 @@ window.SyncLevel = SyncLevel;
         }
       }
 
-      positionCommentsBtn();
+      positionCustomButtons();
       syncFullscreenTitleBarVisibility();
       player.on('fullscreenchange', syncFullscreenTitleBarVisibility);
       document.addEventListener('fullscreenchange', syncFullscreenTitleBarVisibility, false);
@@ -2505,7 +3355,7 @@ window.SyncLevel = SyncLevel;
     });
   }
 
-  function createBackgroundShield() {
+   function createBackgroundShield() {
     var wakeLock = null;
     var webLockRelease = null;
 
