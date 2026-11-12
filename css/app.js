@@ -610,9 +610,6 @@ function getSnapshotVideoName() {
 video.addEventListener("contextmenu", function(event) {
     if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement && !document.msFullscreenElement) {
         event.preventDefault();
-        popupMenu.style.display = "block";
-        popupMenu.style.left = event.pageX + "px";
-        popupMenu.style.top = event.pageY + "px";
     }
 });
 
