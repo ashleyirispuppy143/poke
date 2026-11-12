@@ -830,8 +830,7 @@ window.SyncLevel = SyncLevel;
       '  line-height: 1.48 !important;',
       '  color: #f1f1f1 !important;',
       '}',
-      '.video-js .vjs-alabaster-comments-btn, .vjs-alabaster-comments-btn,',
-      '.video-js .vjs-alabaster-settings-btn, .vjs-alabaster-settings-btn {',
+      '.video-js .vjs-alabaster-comments-btn, .vjs-alabaster-comments-btn {',
       '  width:var(--poke-custom-player-button-size)!important;',
       '  height:var(--poke-custom-player-button-size)!important;',
       '  min-width:var(--poke-custom-player-button-size)!important;',
@@ -848,12 +847,30 @@ window.SyncLevel = SyncLevel;
       '  color:#ffffff!important;',
       '  padding:0!important;',
       '}',
+      '.video-js .vjs-alabaster-settings-btn, .vjs-alabaster-settings-btn {',
+      '  width:var(--poke-custom-player-button-size)!important;',
+      '  height:var(--poke-custom-player-button-size)!important;',
+      '  min-width:var(--poke-custom-player-button-size)!important;',
+      '  cursor:pointer!important;',
+      '  border-radius:50%!important;',
+      '  background:var(--poke-custom-player-button-bg)!important;',
+      '  background-color:var(--poke-custom-player-button-bg)!important;',
+      '  background-image:none!important;',
+      '  border:1px solid var(--poke-custom-player-button-border)!important;',
+      '  box-shadow:var(--poke-custom-player-button-shadow)!important;',
+      '  display:inline-flex!important;',
+      '  align-items:center!important;',
+      '  justify-content:center!important;',
+      '  color:#ffffff!important;',
+      '  padding:0!important;',
+      '}',
       '.video-js .alabaster-fs-settings-popup, .alabaster-fs-settings-popup {',
       '  position: absolute !important;',
-      '  right: 34px !important;',
-      '  bottom: 74px !important;',
+      '  right: 18px !important;',
+      '  bottom: 64px !important;',
       '  width: 315px !important;',
-      '  max-width: calc(100vw - 48px) !important;',
+      '  max-width: calc(100% - 36px) !important;',
+      '  max-height: calc(100% - 82px) !important;',
       '  z-index: 46 !important;',
       '  display: none;',
       '  flex-direction: column !important;',
@@ -867,12 +884,27 @@ window.SyncLevel = SyncLevel;
       '  font-family: "poketube flex", "PokeTube Flex", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;',
       '  user-select: none !important;',
       '  pointer-events: auto !important;',
-      '  overflow: hidden !important;',
+      '  overflow-y: auto !important;',
+      '  overflow-x: hidden !important;',
       '  padding: 8px 0 !important;',
       '  box-sizing: border-box !important;',
       '  opacity: 0;',
       '  transform: translateY(8px) scale(0.98);',
       '  transition: opacity 0.18s cubic-bezier(0.22, 1, 0.36, 1), transform 0.18s cubic-bezier(0.22, 1, 0.36, 1) !important;',
+      '}',
+      '.vjs-fullscreen .alabaster-fs-settings-popup {',
+      '  right: 34px !important;',
+      '  bottom: 74px !important;',
+      '}',
+      '.alabaster-fs-settings-popup::-webkit-scrollbar {',
+      '  width: 5px;',
+      '}',
+      '.alabaster-fs-settings-popup::-webkit-scrollbar-track {',
+      '  background: transparent;',
+      '}',
+      '.alabaster-fs-settings-popup::-webkit-scrollbar-thumb {',
+      '  background: rgba(255, 255, 255, 0.22);',
+      '  border-radius: 999px;',
       '}',
       '.video-js .alabaster-fs-settings-popup.is-visible,',
       '.alabaster-fs-settings-popup.is-visible,',
@@ -896,7 +928,7 @@ window.SyncLevel = SyncLevel;
       '.video-js .alabaster-settings-item, .alabaster-settings-item {',
       '  display: flex !important;',
       '  flex-direction: row !important;',
-      '   flex-wrap: nowrap !important;',
+      '  flex-wrap: nowrap !important;',
       '  align-items: center !important;',
       '  justify-content: space-between !important;',
       '  padding: 10px 18px !important;',
@@ -915,6 +947,7 @@ window.SyncLevel = SyncLevel;
       '  border-radius: 0 !important;',
       '  box-shadow: none !important;',
       '  text-align: left !important;',
+      '  text-decoration: none !important;',
       '  transition: background 0.14s ease !important;',
       '}',
       '.video-js .alabaster-settings-item:hover, .alabaster-settings-item:hover {',
@@ -1457,16 +1490,6 @@ window.SyncLevel = SyncLevel;
           rootEl.classList.contains('vjs-fullscreen')
         );
       };
-
-      if (rootEl && !rootEl._alabasterContextMenuDisabled) {
-        rootEl._alabasterContextMenuDisabled = true;
-        rootEl.addEventListener('contextmenu', function(evt) {
-          if (checkIsPlayerFullscreen()) {
-            evt.preventDefault();
-            evt.stopPropagation();
-          }
-        }, true);
-      }
 
       var fsDescToggle = null;
       var fsDescDrawer = null;
@@ -2240,10 +2263,68 @@ window.SyncLevel = SyncLevel;
           '</div>'
         ].join('');
 
+        var configPlayerRow = document.createElement('div');
+        configPlayerRow.className = 'alabaster-settings-item';
+        configPlayerRow.setAttribute('role', 'button');
+        configPlayerRow.tabIndex = 0;
+        configPlayerRow.innerHTML = [
+          '<div class="alabaster-settings-item-left">',
+          '  <span class="alabaster-settings-icon">',
+          '    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
+          '      <line x1="4" y1="21" x2="4" y2="14"></line>',
+          '      <line x1="4" y1="10" x2="4" y2="3"></line>',
+          '      <line x1="12" y1="21" x2="12" y2="12"></line>',
+          '      <line x1="12" y1="8" x2="12" y2="3"></line>',
+          '      <line x1="20" y1="21" x2="20" y2="16"></line>',
+          '      <line x1="20" y1="12" x2="20" y2="3"></line>',
+          '      <line x1="1" y1="14" x2="7" y2="14"></line>',
+          '      <line x1="9" y1="8" x2="15" y2="8"></line>',
+          '      <line x1="17" y1="16" x2="23" y2="16"></line>',
+          '    </svg>',
+          '  </span>',
+          '  <span class="alabaster-settings-label">configure player</span>',
+          '</div>'
+        ].join('');
+
+        var reportProblemRow = document.createElement('div');
+        reportProblemRow.className = 'alabaster-settings-item';
+        reportProblemRow.setAttribute('role', 'button');
+        reportProblemRow.tabIndex = 0;
+        reportProblemRow.innerHTML = [
+          '<div class="alabaster-settings-item-left">',
+          '  <span class="alabaster-settings-icon">',
+          '    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
+          '      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>',
+          '      <line x1="4" y1="22" x2="4" y2="15"></line>',
+          '    </svg>',
+          '  </span>',
+          '  <span class="alabaster-settings-label">report a problemo</span>',
+          '</div>'
+        ].join('');
+
+        var embedVideoRow = document.createElement('div');
+        embedVideoRow.className = 'alabaster-settings-item';
+        embedVideoRow.setAttribute('role', 'button');
+        embedVideoRow.tabIndex = 0;
+        embedVideoRow.innerHTML = [
+          '<div class="alabaster-settings-item-left">',
+          '  <span class="alabaster-settings-icon">',
+          '    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
+          '      <polyline points="16 18 22 12 16 6"></polyline>',
+          '      <polyline points="8 6 2 12 8 18"></polyline>',
+          '    </svg>',
+          '  </span>',
+          '  <span class="alabaster-settings-label">wanna embed? :D</span>',
+          '</div>'
+        ].join('');
+
         mainPanel.appendChild(loopMenuRow);
         mainPanel.appendChild(speedMenuRow);
         mainPanel.appendChild(audioMenuRow);
         mainPanel.appendChild(snapshotMenuRow);
+        mainPanel.appendChild(configPlayerRow);
+        mainPanel.appendChild(reportProblemRow);
+        mainPanel.appendChild(embedVideoRow);
 
         var speedHeader = document.createElement('div');
         speedHeader.className = 'alabaster-settings-subheader';
@@ -2538,6 +2619,27 @@ window.SyncLevel = SyncLevel;
           setSettingsPopupState(false);
         });
 
+        configPlayerRow.addEventListener('click', function(evt) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          setSettingsPopupState(false);
+          window.open('/player-settings', '_blank');
+        });
+
+        reportProblemRow.addEventListener('click', function(evt) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          setSettingsPopupState(false);
+          window.open('https://codeberg.org/ashleyirispuppy/poke/issues/new?template=issue_template%2fplayer-bug.yml', '_blank');
+        });
+
+        embedVideoRow.addEventListener('click', function(evt) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          setSettingsPopupState(false);
+          window.open(window.location.origin + '/embed/' + (new URLSearchParams(window.location.search).get('v') || '') + '?showHow=true', '_blank');
+        });
+
         setSettingsPopupState = function(open) {
           isFsSettingsOpen = Boolean(open);
           if (isFsSettingsOpen && isFsDescOpen && typeof setDrawerState === 'function') {
@@ -2605,7 +2707,6 @@ window.SyncLevel = SyncLevel;
           fsSettingsBtn.addEventListener('click', function(evt) {
             evt.preventDefault();
             evt.stopPropagation();
-            if (!checkIsPlayerFullscreen()) return;
             setSettingsPopupState(!isFsSettingsOpen);
           });
 
@@ -3272,7 +3373,6 @@ window.SyncLevel = SyncLevel;
         if (!isFs) {
           isFsDescOpen = false;
           isFsCommentsOpen = false;
-          isFsSettingsOpen = false;
         }
 
         bindTitleClickHandlers();
@@ -3342,16 +3442,8 @@ window.SyncLevel = SyncLevel;
           }
         }
 
-        if (fsSettingsBtn && fsSettingsPopup) {
-          if (isFs) {
-            fsSettingsBtn.style.setProperty('display', 'inline-flex', 'important');
-          } else {
-            fsSettingsBtn.style.setProperty('display', 'none', 'important');
-            fsSettingsBtn.classList.remove('is-active');
-            fsSettingsBtn.setAttribute('aria-expanded', 'false');
-            fsSettingsPopup.classList.remove('is-visible');
-            fsSettingsPopup.style.display = 'none';
-          }
+        if (fsSettingsBtn) {
+          fsSettingsBtn.style.setProperty('display', 'inline-flex', 'important');
         }
 
         if (recOpenBtn && recDrawer) {
@@ -3428,7 +3520,7 @@ window.SyncLevel = SyncLevel;
     });
   }
 
-   
+  
    function createBackgroundShield() {
     var wakeLock = null;
     var webLockRelease = null;
