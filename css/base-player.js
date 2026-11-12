@@ -481,7 +481,8 @@ window.SyncLevel = SyncLevel;
     };
   })();
 
-   function injectAlabasterFsDescriptionStyles() {
+ 
+  function injectAlabasterFsDescriptionStyles() {
     if (document.getElementById('alabaster-fs-desc-styles')) return;
     var styleEl = document.createElement('style');
     styleEl.id = 'alabaster-fs-desc-styles';
@@ -847,290 +848,352 @@ window.SyncLevel = SyncLevel;
       '  color:#ffffff!important;',
       '  padding:0!important;',
       '}',
-      '.alabaster-fs-settings-popup {',
-      '  position: absolute;',
-      '  right: 34px;',
-      '  bottom: 74px;',
-      '  width: 310px;',
-      '  max-width: calc(100vw - 48px);',
-      '  z-index: 46;',
+      '.video-js .alabaster-fs-settings-popup, .alabaster-fs-settings-popup {',
+      '  position: absolute !important;',
+      '  right: 34px !important;',
+      '  bottom: 74px !important;',
+      '  width: 315px !important;',
+      '  max-width: calc(100vw - 48px) !important;',
+      '  z-index: 46 !important;',
       '  display: none;',
-      '  flex-direction: column;',
-      '  background: rgba(24, 20, 18, 0.92);',
-      '  backdrop-filter: blur(28px);',
-      '  -webkit-backdrop-filter: blur(28px);',
-      '  border-radius: 14px;',
-      '  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.72);',
-      '  color: #f1f1f1;',
-      '  font-family: "poketube flex", "PokeTube Flex", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;',
-      '  user-select: none;',
-      '  pointer-events: auto;',
-      '  overflow: hidden;',
-      '  padding: 6px 0;',
+      '  flex-direction: column !important;',
+      '  background: rgba(24, 20, 18, 0.94) !important;',
+      '  backdrop-filter: blur(28px) !important;',
+      '  -webkit-backdrop-filter: blur(28px) !important;',
+      '  border: 1px solid rgba(255, 255, 255, 0.08) !important;',
+      '  border-radius: 14px !important;',
+      '  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.72) !important;',
+      '  color: #f1f1f1 !important;',
+      '  font-family: "poketube flex", "PokeTube Flex", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;',
+      '  user-select: none !important;',
+      '  pointer-events: auto !important;',
+      '  overflow: hidden !important;',
+      '  padding: 8px 0 !important;',
+      '  box-sizing: border-box !important;',
       '  opacity: 0;',
       '  transform: translateY(8px) scale(0.98);',
-      '  transition: opacity 0.18s cubic-bezier(0.22, 1, 0.36, 1), transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);',
+      '  transition: opacity 0.18s cubic-bezier(0.22, 1, 0.36, 1), transform 0.18s cubic-bezier(0.22, 1, 0.36, 1) !important;',
       '}',
+      '.video-js .alabaster-fs-settings-popup.is-visible,',
       '.alabaster-fs-settings-popup.is-visible,',
       '.vjs-user-inactive.vjs-playing .alabaster-fs-settings-popup.is-visible {',
       '  opacity: 1 !important;',
       '  visibility: visible !important;',
       '  pointer-events: auto !important;',
-      '  transform: translateY(0) scale(1);',
+      '  transform: translateY(0) scale(1) !important;',
       '}',
-      '.alabaster-settings-panel {',
-      '  display: none;',
-      '  flex-direction: column;',
-      '  width: 100%;',
+      '.video-js .alabaster-settings-panel, .alabaster-settings-panel {',
+      '  display: none !important;',
+      '  flex-direction: column !important;',
+      '  width: 100% !important;',
+      '  margin: 0 !important;',
+      '  padding: 0 !important;',
+      '  box-sizing: border-box !important;',
       '}',
-      '.alabaster-settings-panel.is-active {',
-      '  display: flex;',
+      '.video-js .alabaster-settings-panel.is-active, .alabaster-settings-panel.is-active {',
+      '  display: flex !important;',
       '}',
-      '.alabaster-settings-item {',
-      '  display: flex;',
-      '  align-items: center;',
-      '  justify-content: space-between;',
-      '  padding: 11px 18px;',
-      '  min-height: 44px;',
-      '  box-sizing: border-box;',
-      '  cursor: pointer;',
-      '  color: #f1f1f1;',
-      '  font-size: 14px;',
-      '  font-weight: 500;',
-      '  background: transparent;',
-      '  border: none;',
-      '  width: 100%;',
-      '  text-align: left;',
-      '  transition: background 0.14s ease;',
+      '.video-js .alabaster-settings-item, .alabaster-settings-item {',
+      '  display: flex !important;',
+      '  flex-direction: row !important;',
+      '   flex-wrap: nowrap !important;',
+      '  align-items: center !important;',
+      '  justify-content: space-between !important;',
+      '  padding: 10px 18px !important;',
+      '  margin: 0 !important;',
+      '  min-height: 44px !important;',
+      '  height: auto !important;',
+      '  width: 100% !important;',
+      '  box-sizing: border-box !important;',
+      '  cursor: pointer !important;',
+      '  color: #f1f1f1 !important;',
+      '  font-size: 14px !important;',
+      '  font-weight: 500 !important;',
+      '  line-height: 1.3 !important;',
+      '  background: transparent !important;',
+      '  border: none !important;',
+      '  border-radius: 0 !important;',
+      '  box-shadow: none !important;',
+      '  text-align: left !important;',
+      '  transition: background 0.14s ease !important;',
       '}',
-      '.alabaster-settings-item:hover {',
-      '  background: rgba(255, 255, 255, 0.08);',
+      '.video-js .alabaster-settings-item:hover, .alabaster-settings-item:hover {',
+      '  background: rgba(255, 255, 255, 0.1) !important;',
       '}',
-      '.alabaster-settings-item-left {',
-      '  display: flex;',
-      '  align-items: center;',
-      '  gap: 16px;',
-      '  min-width: 0;',
+      '.video-js .alabaster-settings-item-left, .alabaster-settings-item-left {',
+      '  display: flex !important;',
+      '  flex-direction: row !important;',
+      '  align-items: center !important;',
+      '  gap: 16px !important;',
+      '  min-width: 0 !important;',
+      '  flex: 1 1 auto !important;',
       '}',
-      '.alabaster-settings-icon {',
-      '  width: 24px;',
-      '  height: 24px;',
-      '  display: inline-flex;',
-      '  align-items: center;',
-      '  justify-content: center;',
-      '  color: #f1f1f1;',
-      '  flex-shrink: 0;',
+      '.video-js .alabaster-settings-icon, .alabaster-settings-icon {',
+      '  width: 24px !important;',
+      '  height: 24px !important;',
+      '  display: inline-flex !important;',
+      '  align-items: center !important;',
+      '  justify-content: center !important;',
+      '  color: #f1f1f1 !important;',
+      '  flex-shrink: 0 !important;',
       '}',
-      '.alabaster-settings-label {',
-      '  font-size: 14px;',
-      '  font-weight: 500;',
-      '  color: #f1f1f1;',
-      '  white-space: nowrap;',
+      '.video-js .alabaster-settings-label, .alabaster-settings-label {',
+      '  font-size: 14px !important;',
+      '  font-weight: 500 !important;',
+      '  color: #f1f1f1 !important;',
+      '  white-space: nowrap !important;',
+      '  line-height: 1.3 !important;',
       '}',
-      '.alabaster-settings-item-right {',
-      '  display: flex;',
-      '  align-items: center;',
-      '  gap: 6px;',
-      '  color: #aaaaaa;',
-      '  font-size: 13.5px;',
-      '  font-weight: 400;',
-      '  margin-left: 12px;',
+      '.video-js .alabaster-settings-item-right, .alabaster-settings-item-right {',
+      '  display: inline-flex !important;',
+      '  flex-direction: row !important;',
+      '  align-items: center !important;',
+      '  justify-content: flex-end !important;',
+      '  gap: 6px !important;',
+      '  color: #aaaaaa !important;',
+      '  font-size: 13.5px !important;',
+      '  font-weight: 400 !important;',
+      '  margin-left: 12px !important;',
+      '  flex-shrink: 0 !important;',
+      '  white-space: nowrap !important;',
       '}',
-      '.alabaster-settings-switch {',
-      '  position: relative;',
-      '  width: 36px;',
-      '  height: 20px;',
-      '  border-radius: 999px;',
-      '  background: rgba(255, 255, 255, 0.25);',
-      '  transition: background 0.2s ease;',
-      '  flex-shrink: 0;',
+      '.video-js .alabaster-settings-switch, .alabaster-settings-switch {',
+      '  position: relative !important;',
+      '  width: 36px !important;',
+      '  height: 20px !important;',
+      '  border-radius: 999px !important;',
+      '  background: rgba(255, 255, 255, 0.25) !important;',
+      '  transition: background 0.2s ease !important;',
+      '  flex-shrink: 0 !important;',
+      '  margin-left: 12px !important;',
+      '  display: inline-block !important;',
       '}',
-      '.alabaster-settings-switch::after {',
-      '  content: "";',
-      '  position: absolute;',
-      '  top: 2px;',
-      '  left: 2px;',
-      '  width: 16px;',
-      '  height: 16px;',
-      '  border-radius: 50%;',
-      '  background: #bbbbbb;',
-      '  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), background 0.2s ease;',
+      '.video-js .alabaster-settings-switch::after, .alabaster-settings-switch::after {',
+      '  content: "" !important;',
+      '  position: absolute !important;',
+      '  top: 2px !important;',
+      '  left: 2px !important;',
+      '  width: 16px !important;',
+      '  height: 16px !important;',
+      '  border-radius: 50% !important;',
+      '  background: #bbbbbb !important;',
+      '  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), background 0.2s ease !important;',
       '}',
-      '.alabaster-settings-switch.is-on {',
-      '  background: rgba(255, 255, 255, 0.38);',
+      '.video-js .alabaster-settings-switch.is-on, .alabaster-settings-switch.is-on {',
+      '  background: rgba(255, 255, 255, 0.38) !important;',
       '}',
-      '.alabaster-settings-switch.is-on::after {',
-      '  transform: translateX(16px);',
-      '  background: #ffffff;',
+      '.video-js .alabaster-settings-switch.is-on::after, .alabaster-settings-switch.is-on::after {',
+      '  transform: translateX(16px) !important;',
+      '  background: #ffffff !important;',
       '}',
-      '.alabaster-settings-subheader {',
-      '  display: flex;',
-      '  align-items: center;',
-      '  gap: 12px;',
-      '  padding: 10px 16px;',
-      '  border-bottom: 1px solid rgba(255, 255, 255, 0.1);',
-      '  margin-bottom: 4px;',
+      '.video-js .alabaster-settings-subheader, .alabaster-settings-subheader {',
+      '  display: flex !important;',
+      '  flex-direction: row !important;',
+      '  align-items: center !important;',
+      '  gap: 10px !important;',
+      '  padding: 6px 14px 10px 14px !important;',
+      '  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;',
+      '  margin-bottom: 4px !important;',
+      '  width: 100% !important;',
+      '  box-sizing: border-box !important;',
       '}',
-      '.alabaster-settings-back-btn {',
-      '  width: 30px;',
-      '  height: 30px;',
-      '  border-radius: 50%;',
-      '  border: none;',
-      '  background: transparent;',
-      '  color: #f1f1f1;',
-      '  display: inline-flex;',
-      '  align-items: center;',
-      '  justify-content: center;',
-      '  cursor: pointer;',
-      '  padding: 0;',
-      '  transition: background 0.14s ease;',
+      '.video-js .alabaster-settings-back-btn, .alabaster-settings-back-btn {',
+      '  width: 30px !important;',
+      '  height: 30px !important;',
+      '  min-width: 30px !important;',
+      '  border-radius: 50% !important;',
+      '  border: none !important;',
+      '  background: transparent !important;',
+      '  color: #f1f1f1 !important;',
+      '  display: inline-flex !important;',
+      '  align-items: center !important;',
+      '  justify-content: center !important;',
+      '  cursor: pointer !important;',
+      '  padding: 0 !important;',
+      '  margin: 0 !important;',
+      '  box-shadow: none !important;',
+      '  flex-shrink: 0 !important;',
+      '  transition: background 0.14s ease !important;',
       '}',
-      '.alabaster-settings-back-btn:hover {',
-      '  background: rgba(255, 255, 255, 0.1);',
+      '.video-js .alabaster-settings-back-btn:hover, .alabaster-settings-back-btn:hover {',
+      '  background: rgba(255, 255, 255, 0.1) !important;',
       '}',
-      '.alabaster-settings-subtitle {',
-      '  font-size: 14.5px;',
-      '  font-weight: 600;',
-      '  color: #ffffff;',
+      '.video-js .alabaster-settings-subtitle, .alabaster-settings-subtitle {',
+      '  font-size: 14.5px !important;',
+      '  font-weight: 600 !important;',
+      '  color: #ffffff !important;',
+      '  line-height: 1.2 !important;',
       '}',
-      '.alabaster-speed-panel-body {',
-      '  display: flex;',
-      '  flex-direction: column;',
-      '  align-items: center;',
-      '  padding: 16px 18px 14px 18px;',
-      '  gap: 16px;',
+      '.video-js .alabaster-speed-panel-body, .alabaster-speed-panel-body {',
+      '  display: flex !important;',
+      '  flex-direction: column !important;',
+      '  align-items: center !important;',
+      '  padding: 14px 18px 12px 18px !important;',
+      '  gap: 16px !important;',
+      '  width: 100% !important;',
+      '  box-sizing: border-box !important;',
       '}',
-      '.alabaster-speed-readout {',
-      '  font-size: 20px;',
-      '  font-weight: 700;',
-      '  color: #ffffff;',
-      '  letter-spacing: 0.2px;',
+      '.video-js .alabaster-speed-readout, .alabaster-speed-readout {',
+      '  font-size: 20px !important;',
+      '  font-weight: 700 !important;',
+      '  color: #ffffff !important;',
+      '  letter-spacing: 0.2px !important;',
+      '  line-height: 1.2 !important;',
+      '  text-align: center !important;',
       '}',
-      '.alabaster-speed-slider-row {',
-      '  display: flex;',
-      '  align-items: center;',
-      '  gap: 12px;',
-      '  width: 100%;',
+      '.video-js .alabaster-speed-slider-row, .alabaster-speed-slider-row {',
+      '  display: flex !important;',
+      '  flex-direction: row !important;',
+      '  align-items: center !important;',
+      '  justify-content: space-between !important;',
+      '  gap: 12px !important;',
+      '  width: 100% !important;',
+      '  box-sizing: border-box !important;',
       '}',
-      '.alabaster-speed-step-btn {',
-      '  width: 34px;',
-      '  height: 34px;',
-      '  border-radius: 50%;',
-      '  border: none;',
-      '  background: rgba(255, 255, 255, 0.1);',
-      '  color: #ffffff;',
-      '  font-size: 20px;',
-      '  font-weight: 500;',
-      '  display: inline-flex;',
-      '  align-items: center;',
-      '  justify-content: center;',
-      '  cursor: pointer;',
-      '  flex-shrink: 0;',
-      '  padding: 0;',
-      '  transition: background 0.15s ease;',
+      '.video-js .alabaster-speed-step-btn, .alabaster-speed-step-btn {',
+      '  width: 36px !important;',
+      '  height: 36px !important;',
+      '  min-width: 36px !important;',
+      '  border-radius: 50% !important;',
+      '  border: none !important;',
+      '  background: rgba(255, 255, 255, 0.1) !important;',
+      '  color: #ffffff !important;',
+      '  font-size: 20px !important;',
+      '  font-weight: 500 !important;',
+      '  line-height: 1 !important;',
+      '  display: inline-flex !important;',
+      '  align-items: center !important;',
+      '  justify-content: center !important;',
+      '  cursor: pointer !important;',
+      '  flex-shrink: 0 !important;',
+      '  padding: 0 !important;',
+      '  margin: 0 !important;',
+      '  box-shadow: none !important;',
+      '  transition: background 0.15s ease !important;',
       '}',
-      '.alabaster-speed-step-btn:hover {',
-      '  background: rgba(255, 255, 255, 0.2);',
+      '.video-js .alabaster-speed-step-btn:hover, .alabaster-speed-step-btn:hover {',
+      '  background: rgba(255, 255, 255, 0.2) !important;',
       '}',
-      '.alabaster-speed-range {',
-      '  flex: 1 1 auto;',
-      '  -webkit-appearance: none;',
-      '  appearance: none;',
-      '  height: 4px;',
-      '  border-radius: 999px;',
-      '  background: rgba(255, 255, 255, 0.24);',
-      '  outline: none;',
-      '  cursor: pointer;',
+      '.video-js .alabaster-speed-range, .alabaster-speed-range {',
+      '  flex: 1 1 auto !important;',
+      '  width: 100% !important;',
+      '  -webkit-appearance: none !important;',
+      '  appearance: none !important;',
+      '  height: 4px !important;',
+      '  border-radius: 999px !important;',
+      '  background: rgba(255, 255, 255, 0.24) !important;',
+      '  outline: none !important;',
+      '  cursor: pointer !important;',
+      '  margin: 0 !important;',
+      '  padding: 0 !important;',
       '}',
       '.alabaster-speed-range::-webkit-slider-thumb {',
-      '  -webkit-appearance: none;',
-      '  appearance: none;',
-      '  width: 16px;',
-      '  height: 16px;',
-      '  border-radius: 50%;',
-      '  background: #ffffff;',
-      '  cursor: pointer;',
-      '  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);',
+      '  -webkit-appearance: none !important;',
+      '  appearance: none !important;',
+      '  width: 16px !important;',
+      '  height: 16px !important;',
+      '  border-radius: 50% !important;',
+      '  background: #ffffff !important;',
+      '  cursor: pointer !important;',
+      '  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45) !important;',
       '}',
       '.alabaster-speed-range::-moz-range-thumb {',
-      '  width: 16px;',
-      '  height: 16px;',
-      '  border-radius: 50%;',
-      '  border: none;',
-      '  background: #ffffff;',
-      '  cursor: pointer;',
-      '  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);',
+      '  width: 16px !important;',
+      '  height: 16px !important;',
+      '  border-radius: 50% !important;',
+      '  border: none !important;',
+      '  background: #ffffff !important;',
+      '  cursor: pointer !important;',
+      '  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45) !important;',
       '}',
-      '.alabaster-speed-presets {',
-      '  display: grid;',
-      '  grid-template-columns: repeat(5, 1fr);',
-      '  gap: 6px;',
-      '  width: 100%;',
-      '  margin-top: 2px;',
+      '.video-js .alabaster-speed-presets, .alabaster-speed-presets {',
+      '  display: grid !important;',
+      '  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;',
+      '  gap: 6px !important;',
+      '  width: 100% !important;',
+      '  margin-top: 2px !important;',
+      '  box-sizing: border-box !important;',
       '}',
-      '.alabaster-speed-preset-col {',
-      '  display: flex;',
-      '  flex-direction: column;',
-      '  align-items: center;',
-      '  gap: 4px;',
+      '.video-js .alabaster-speed-preset-col, .alabaster-speed-preset-col {',
+      '  display: flex !important;',
+      '  flex-direction: column !important;',
+      '  align-items: center !important;',
+      '  gap: 4px !important;',
+      '  min-width: 0 !important;',
       '}',
-      '.alabaster-speed-pill {',
-      '  width: 100%;',
-      '  padding: 7px 0;',
-      '  border-radius: 999px;',
-      '  border: 1px solid transparent;',
-      '  background: rgba(255, 255, 255, 0.09);',
-      '  color: #f1f1f1;',
-      '  font-size: 12.5px;',
-      '  font-weight: 600;',
-      '  cursor: pointer;',
-      '  text-align: center;',
-      '  transition: background 0.14s ease, border-color 0.14s ease;',
+      '.video-js .alabaster-speed-pill, .alabaster-speed-pill {',
+      '  width: 100% !important;',
+      '  height: 32px !important;',
+      '  min-height: 32px !important;',
+      '  padding: 0 !important;',
+      '  margin: 0 !important;',
+      '  border-radius: 999px !important;',
+      '  border: 1px solid transparent !important;',
+      '  background: rgba(255, 255, 255, 0.09) !important;',
+      '  color: #f1f1f1 !important;',
+      '  font-size: 12.5px !important;',
+      '  font-weight: 600 !important;',
+      '  line-height: 1 !important;',
+      '  cursor: pointer !important;',
+      '  display: inline-flex !important;',
+      '  align-items: center !important;',
+      '  justify-content: center !important;',
+      '  text-align: center !important;',
+      '  box-shadow: none !important;',
+      '  transition: background 0.14s ease, border-color 0.14s ease !important;',
       '}',
-      '.alabaster-speed-pill:hover {',
-      '  background: rgba(255, 255, 255, 0.16);',
+      '.video-js .alabaster-speed-pill:hover, .alabaster-speed-pill:hover {',
+      '  background: rgba(255, 255, 255, 0.16) !important;',
       '}',
-      '.alabaster-speed-pill.is-active {',
-      '  background: rgba(255, 255, 255, 0.22);',
-      '  border-color: rgba(255, 255, 255, 0.35);',
-      '  color: #ffffff;',
+      '.video-js .alabaster-speed-pill.is-active, .alabaster-speed-pill.is-active {',
+      '  background: rgba(255, 255, 255, 0.22) !important;',
+      '  border-color: rgba(255, 255, 255, 0.35) !important;',
+      '  color: #ffffff !important;',
       '}',
-      '.alabaster-speed-pill-sub {',
-      '  font-size: 10.5px;',
-      '  color: #aaaaaa;',
-      '  line-height: 1.1;',
+      '.video-js .alabaster-speed-pill-sub, .alabaster-speed-pill-sub {',
+      '  font-size: 10.5px !important;',
+      '  color: #aaaaaa !important;',
+      '  line-height: 1.1 !important;',
       '}',
-      '.alabaster-audio-option-item {',
-      '  display: flex;',
-      '  align-items: center;',
-      '  gap: 14px;',
-      '  padding: 11px 18px;',
-      '  width: 100%;',
-      '  box-sizing: border-box;',
-      '  background: transparent;',
-      '  border: none;',
-      '  color: #f1f1f1;',
-      '  font-size: 14px;',
-      '  font-weight: 500;',
-      '  cursor: pointer;',
-      '  text-align: left;',
-      '  transition: background 0.14s ease;',
+      '.video-js .alabaster-audio-option-item, .alabaster-audio-option-item {',
+      '  display: flex !important;',
+      '  flex-direction: row !important;',
+      '  align-items: center !important;',
+      '  justify-content: flex-start !important;',
+      '  gap: 14px !important;',
+      '  padding: 10px 18px !important;',
+      '  margin: 0 !important;',
+      '  min-height: 42px !important;',
+      '  height: auto !important;',
+      '  width: 100% !important;',
+      '  box-sizing: border-box !important;',
+      '  background: transparent !important;',
+      '  border: none !important;',
+      '  border-radius: 0 !important;',
+      '  box-shadow: none !important;',
+      '  color: #f1f1f1 !important;',
+      '  font-size: 14px !important;',
+      '  font-weight: 500 !important;',
+      '  cursor: pointer !important;',
+      '  text-align: left !important;',
+      '  transition: background 0.14s ease !important;',
       '}',
-      '.alabaster-audio-option-item:hover {',
-      '  background: rgba(255, 255, 255, 0.08);',
+      '.video-js .alabaster-audio-option-item:hover, .alabaster-audio-option-item:hover {',
+      '  background: rgba(255, 255, 255, 0.1) !important;',
       '}',
-      '.alabaster-audio-check {',
-      '  width: 20px;',
-      '  height: 20px;',
-      '  display: inline-flex;',
-      '  align-items: center;',
-      '  justify-content: center;',
-      '  color: #9e9e9e;',
-      '  opacity: 0;',
-      '  flex-shrink: 0;',
+      '.video-js .alabaster-audio-check, .alabaster-audio-check {',
+      '  width: 20px !important;',
+      '  height: 20px !important;',
+      '  display: inline-flex !important;',
+      '  align-items: center !important;',
+      '  justify-content: center !important;',
+      '  color: #9e9e9e !important;',
+      '  opacity: 0 !important;',
+      '  flex-shrink: 0 !important;',
       '}',
+      '.video-js .alabaster-audio-option-item.is-selected .alabaster-audio-check,',
       '.alabaster-audio-option-item.is-selected .alabaster-audio-check {',
-      '  opacity: 1;',
+      '  opacity: 1 !important;',
       '}',
       '.alabaster-rec-open-btn {',
       '  position: absolute;',
@@ -1330,7 +1393,7 @@ window.SyncLevel = SyncLevel;
       '  display: inline-block;',
       '  font-size: 10px;',
       '  margin-right: 4px;',
-      '   color: #cccccc;',
+      '  color: #cccccc;',
       '  transform: translateY(-0.5px);',
       '}'
     ].join('\n');
@@ -2092,9 +2155,10 @@ window.SyncLevel = SyncLevel;
           return 'Off';
         };
 
-        var loopMenuRow = document.createElement('button');
-        loopMenuRow.type = 'button';
+        var loopMenuRow = document.createElement('div');
         loopMenuRow.className = 'alabaster-settings-item';
+        loopMenuRow.setAttribute('role', 'button');
+        loopMenuRow.tabIndex = 0;
         var loopSwitchEl = document.createElement('div');
         loopSwitchEl.className = 'alabaster-settings-switch';
         loopMenuRow.innerHTML = [
@@ -2112,9 +2176,10 @@ window.SyncLevel = SyncLevel;
         ].join('');
         loopMenuRow.appendChild(loopSwitchEl);
 
-        var speedMenuRow = document.createElement('button');
-        speedMenuRow.type = 'button';
+        var speedMenuRow = document.createElement('div');
         speedMenuRow.className = 'alabaster-settings-item';
+        speedMenuRow.setAttribute('role', 'button');
+        speedMenuRow.tabIndex = 0;
         var speedValueLabel = document.createElement('span');
         speedValueLabel.textContent = 'Normal';
         var speedRightWrap = document.createElement('div');
@@ -2135,9 +2200,10 @@ window.SyncLevel = SyncLevel;
         ].join('');
         speedMenuRow.appendChild(speedRightWrap);
 
-        var audioMenuRow = document.createElement('button');
-        audioMenuRow.type = 'button';
+        var audioMenuRow = document.createElement('div');
         audioMenuRow.className = 'alabaster-settings-item';
+        audioMenuRow.setAttribute('role', 'button');
+        audioMenuRow.tabIndex = 0;
         var audioValueLabel = document.createElement('span');
         audioValueLabel.textContent = 'Off';
         var audioRightWrap = document.createElement('div');
@@ -2158,9 +2224,10 @@ window.SyncLevel = SyncLevel;
         ].join('');
         audioMenuRow.appendChild(audioRightWrap);
 
-        var snapshotMenuRow = document.createElement('button');
-        snapshotMenuRow.type = 'button';
+        var snapshotMenuRow = document.createElement('div');
         snapshotMenuRow.className = 'alabaster-settings-item';
+        snapshotMenuRow.setAttribute('role', 'button');
+        snapshotMenuRow.tabIndex = 0;
         snapshotMenuRow.innerHTML = [
           '<div class="alabaster-settings-item-left">',
           '  <span class="alabaster-settings-icon">',
@@ -2180,9 +2247,10 @@ window.SyncLevel = SyncLevel;
 
         var speedHeader = document.createElement('div');
         speedHeader.className = 'alabaster-settings-subheader';
-        var speedBackBtn = document.createElement('button');
-        speedBackBtn.type = 'button';
+        var speedBackBtn = document.createElement('div');
         speedBackBtn.className = 'alabaster-settings-back-btn';
+        speedBackBtn.setAttribute('role', 'button');
+        speedBackBtn.tabIndex = 0;
         speedBackBtn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>';
         var speedSubTitle = document.createElement('span');
         speedSubTitle.className = 'alabaster-settings-subtitle';
@@ -2200,9 +2268,10 @@ window.SyncLevel = SyncLevel;
         var speedSliderRow = document.createElement('div');
         speedSliderRow.className = 'alabaster-speed-slider-row';
 
-        var speedMinusBtn = document.createElement('button');
-        speedMinusBtn.type = 'button';
+        var speedMinusBtn = document.createElement('div');
         speedMinusBtn.className = 'alabaster-speed-step-btn';
+        speedMinusBtn.setAttribute('role', 'button');
+        speedMinusBtn.tabIndex = 0;
         speedMinusBtn.textContent = '-';
 
         var speedRange = document.createElement('input');
@@ -2213,9 +2282,10 @@ window.SyncLevel = SyncLevel;
         speedRange.step = '0.05';
         speedRange.value = '1';
 
-        var speedPlusBtn = document.createElement('button');
-        speedPlusBtn.type = 'button';
+        var speedPlusBtn = document.createElement('div');
         speedPlusBtn.className = 'alabaster-speed-step-btn';
+        speedPlusBtn.setAttribute('role', 'button');
+        speedPlusBtn.tabIndex = 0;
         speedPlusBtn.textContent = '+';
 
         speedSliderRow.appendChild(speedMinusBtn);
@@ -2237,9 +2307,10 @@ window.SyncLevel = SyncLevel;
           (function(preset) {
             var col = document.createElement('div');
             col.className = 'alabaster-speed-preset-col';
-            var pill = document.createElement('button');
-            pill.type = 'button';
+            var pill = document.createElement('div');
             pill.className = 'alabaster-speed-pill';
+            pill.setAttribute('role', 'button');
+            pill.tabIndex = 0;
             pill.textContent = preset.label;
             pill.setAttribute('data-rate', String(preset.val));
             pill.addEventListener('click', function(evt) {
@@ -2267,9 +2338,10 @@ window.SyncLevel = SyncLevel;
 
         var audioHeader = document.createElement('div');
         audioHeader.className = 'alabaster-settings-subheader';
-        var audioBackBtn = document.createElement('button');
-        audioBackBtn.type = 'button';
+        var audioBackBtn = document.createElement('div');
         audioBackBtn.className = 'alabaster-settings-back-btn';
+        audioBackBtn.setAttribute('role', 'button');
+        audioBackBtn.tabIndex = 0;
         audioBackBtn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>';
         var audioSubTitle = document.createElement('span');
         audioSubTitle.className = 'alabaster-settings-subtitle';
@@ -2287,9 +2359,10 @@ window.SyncLevel = SyncLevel;
 
         for (var aIdx = 0; aIdx < audioModes.length; aIdx++) {
           (function(mItem) {
-            var optBtn = document.createElement('button');
-            optBtn.type = 'button';
+            var optBtn = document.createElement('div');
             optBtn.className = 'alabaster-audio-option-item';
+            optBtn.setAttribute('role', 'button');
+            optBtn.tabIndex = 0;
             optBtn.innerHTML = [
               '<span class="alabaster-audio-check">',
               '  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#9e9e9e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">',
@@ -2345,7 +2418,7 @@ window.SyncLevel = SyncLevel;
           speedRange.value = String(curRate);
 
           var pct = Math.max(0, Math.min(100, ((curRate - 0.25) / (2 - 0.25)) * 100));
-          speedRange.style.background = 'linear-gradient(to right, #ffffff 0%, #ffffff ' + pct + '%, rgba(255, 255, 255, 0.24) ' + pct + '%, rgba(255, 255, 255, 0.24) 100%)';
+          speedRange.style.setProperty('background', 'linear-gradient(to right, #ffffff 0%, #ffffff ' + pct + '%, rgba(255, 255, 255, 0.24) ' + pct + '%, rgba(255, 255, 255, 0.24) 100%)', 'important');
 
           if (Math.abs(curRate - 1) < 0.01) {
             speedValueLabel.textContent = 'Normal';
@@ -3355,6 +3428,7 @@ window.SyncLevel = SyncLevel;
     });
   }
 
+   
    function createBackgroundShield() {
     var wakeLock = null;
     var webLockRelease = null;
