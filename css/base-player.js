@@ -2242,7 +2242,7 @@ window.SyncLevel = SyncLevel;
           '      <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>',
           '    </svg>',
           '  </span>',
-          '  <span class="alabaster-settings-label">Audio options</span>',
+          '  <span class="alabaster-settings-label">Audio Effects</span>',
           '</div>'
         ].join('');
         audioMenuRow.appendChild(audioRightWrap);
@@ -2426,7 +2426,7 @@ window.SyncLevel = SyncLevel;
         audioBackBtn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>';
         var audioSubTitle = document.createElement('span');
         audioSubTitle.className = 'alabaster-settings-subtitle';
-        audioSubTitle.textContent = 'Audio options';
+        audioSubTitle.textContent = 'Audio Effects';
         audioHeader.appendChild(audioBackBtn);
         audioHeader.appendChild(audioSubTitle);
         audioPanel.appendChild(audioHeader);
