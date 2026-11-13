@@ -4,6 +4,129 @@ const { URL } = require("url");
 const zlib = require("zlib");
 const fs = require("fs");
 const path = require("path");
+const dns = require("dns");
+ 
+
+const SmartIPadressProxy = {
+   enabled: true,
+   forceFamily: null,
+   autoSelectFamily: true,
+  autoSelectFamilyAttemptTimeout: 250,
+   connectTimeout: 10000,
+   rememberBrokenIpv6: true,
+  cooldownMs: 10 * 60 * 1000, // 10 minutes
+};
+
+// Runtime state for SmartIPadressProxy
+const smartIpState = {
+  ipv6BrokenUntil: 0,
+  dualStackAgent: null,
+  ipv4Agent: null,
+  ipv6Agent: null,
+};
+
+/**
+ * Checks whether an error (or any nested cause / AggregateError sub-error)
+ * was caused by an unreachable or broken IPv6 network route.
+ * @param {any} err
+ * @returns {boolean}
+ */
+const isIpv6RoutingError = (err) => {
+  if (!err) return false;
+  const ipv6ErrorCodes = new Set([
+    "EHOSTUNREACH",
+    "ENETUNREACH",
+    "EADDRNOTAVAIL",
+    "EAFNOSUPPORT",
+    "UND_ERR_CONNECT_TIMEOUT",
+  ]);
+
+  let cur = err;
+  let depth = 0;
+  while (cur && depth < 6) {
+    depth++;
+    const isV6Addr = typeof cur.address === "string" && cur.address.includes(":");
+    if (ipv6ErrorCodes.has(cur.code) && (isV6Addr || cur.code === "EAFNOSUPPORT" || cur.code === "ENETUNREACH")) {
+      return true;
+    }
+    if (typeof cur.message === "string" && /EHOSTUNREACH|ENETUNREACH|2001:|2606:|2607:|2a00:|::/i.test(cur.message)) {
+      return true;
+    }
+    if (Array.isArray(cur.errors)) {
+      for (const sub of cur.errors) {
+        if (isIpv6RoutingError(sub)) return true;
+      }
+    }
+    cur = cur.cause;
+  }
+  return false;
+};
+
+/**
+ * Smart fetch wrapper powered by undici + SmartIPadressProxy config.
+ * Automatically uses IPv6 when available and falls back to IPv4 if needed.
+ */
+const getUndiciFetch = async () => {
+  const undici = await import("undici");
+
+  if (!smartIpState.dualStackAgent) {
+    smartIpState.dualStackAgent = new undici.Agent({
+      connect: {
+        autoSelectFamily: SmartIPadressProxy.autoSelectFamily,
+        autoSelectFamilyAttemptTimeout: SmartIPadressProxy.autoSelectFamilyAttemptTimeout,
+        timeout: SmartIPadressProxy.connectTimeout,
+      },
+    });
+    smartIpState.ipv4Agent = new undici.Agent({
+      connect: {
+        family: 4,
+        timeout: SmartIPadressProxy.connectTimeout,
+      },
+    });
+    smartIpState.ipv6Agent = new undici.Agent({
+      connect: {
+        family: 6,
+        timeout: SmartIPadressProxy.connectTimeout,
+      },
+    });
+  }
+
+  return async (url, opts = {}) => {
+    // 1. If smart proxy is disabled, use standard undici fetch
+    if (!SmartIPadressProxy.enabled) {
+      return undici.fetch(url, opts);
+    }
+
+    // 2. Respect explicit forceFamily override if set (4 or 6)
+    if (SmartIPadressProxy.forceFamily === 4) {
+      return undici.fetch(url, { ...opts, dispatcher: smartIpState.ipv4Agent });
+    }
+    if (SmartIPadressProxy.forceFamily === 6) {
+      return undici.fetch(url, { ...opts, dispatcher: smartIpState.ipv6Agent });
+    }
+
+     const now = Date.now();
+    if (SmartIPadressProxy.rememberBrokenIpv6 && now < smartIpState.ipv6BrokenUntil) {
+      return undici.fetch(url, { ...opts, dispatcher: smartIpState.ipv4Agent });
+    }
+
+     try {
+      return await undici.fetch(url, { ...opts, dispatcher: smartIpState.dualStackAgent });
+    } catch (err) {
+      if (isIpv6RoutingError(err)) {
+        console.warn(`[SmartIPadressProxy] IPv6 unreachable for ${url}, falling back to IPv4...`);
+        if (SmartIPadressProxy.rememberBrokenIpv6) {
+          smartIpState.ipv6BrokenUntil = Date.now() + SmartIPadressProxy.cooldownMs;
+          console.warn(
+            `[SmartIPadressProxy] Caching IPv4-preferred mode for ${Math.round(SmartIPadressProxy.cooldownMs / 1000)}s`
+          );
+        }
+        return await undici.fetch(url, { ...opts, dispatcher: smartIpState.ipv4Agent });
+      }
+      throw err;
+    }
+  };
+};
 
 /**
  * Formats an Error (including undici's nested `err.cause` and AggregateError)
@@ -57,13 +180,12 @@ const formatError = (err) => {
 const getErrorSummary = (err) => {
   if (!err) return "UNKNOWN_ERROR";
   const cause = err.cause || err;
-  
+
   if (Array.isArray(cause.errors) && cause.errors.length > 0) {
-    // Handle AggregateError by pulling just the codes
     const codes = cause.errors.map((e) => e.code || e.name || "ERROR").join(", ");
     return cause.code ? `${cause.code} (${codes})` : codes;
   }
-  
+
   return cause.code || cause.name || "UNKNOWN_ERROR";
 };
 
@@ -205,17 +327,12 @@ const sendErrorPage = (res, status, statusText, messageHtml, detailText = "") =>
   res.send(html);
 };
 
-// ---------------------------------------------------------------------------
-// Font Awesome local cache setup
-// ---------------------------------------------------------------------------
-
+ 
 const FONTS_DIR = path.join(__dirname, "fonts");
 if (!fs.existsSync(FONTS_DIR)) {
   fs.mkdirSync(FONTS_DIR, { recursive: true });
 }
 
-// All Font Awesome v6.1.1 webfont filenames we need to serve locally.
-// woff2 and ttf only — those are the only formats referenced in the CSS.
 const FA_WEBFONTS = [
   "fa-brands-400.woff2",
   "fa-brands-400.ttf",
@@ -233,7 +350,6 @@ const FA_WEBFONTS = [
   "fa-v4compatibility.ttf",
 ];
 
-// MIME types for font extensions
 const FONT_MIME = {
   ".woff2": "font/woff2",
   ".ttf":   "font/ttf",
@@ -241,30 +357,15 @@ const FONT_MIME = {
   ".eot":   "application/vnd.ms-fontobject",
 };
 
-// In-memory cache for the rewritten CSS text — populated once, served forever
-// (the fonts never change, so there's no need to re-fetch)
 let FA_CSS_CACHE = null;
-
-// In-memory cache for CDX timestamps keyed by original URL
 const cdxTimestampCache = {};
-
-// ---------------------------------------------------------------------------
-// Wayback Machine CDX snapshot discovery + download
-// ---------------------------------------------------------------------------
-
-/**
- * Query the Wayback Machine CDX API to find the most recent valid snapshot
- * timestamp for a given URL. Caches the result in memory.
- * Returns null if none found.
- * @param {string} assetUrl
- * @returns {Promise<string|null>}
- */
+ 
 const findArchiveTimestamp = async (assetUrl) => {
   if (cdxTimestampCache[assetUrl]) {
     return cdxTimestampCache[assetUrl];
   }
 
-  const { fetch } = await import("undici");
+  const uFetch = await getUndiciFetch();
   const cdxUrl =
     `https://web.archive.org/cdx/search/cdx` +
     `?url=${encodeURIComponent(assetUrl)}` +
@@ -272,7 +373,7 @@ const findArchiveTimestamp = async (assetUrl) => {
     `&filter=statuscode:200&from=20220101&fastLatest=true`;
 
   try {
-    const res = await fetch(cdxUrl, {
+    const res = await uFetch(cdxUrl, {
       headers: {
         "User-Agent": "Mozilla/5.0 (compatible; poketube-proxy/1.0)",
         "Accept": "application/json",
@@ -282,7 +383,6 @@ const findArchiveTimestamp = async (assetUrl) => {
     });
     if (!res.ok) return null;
     const rows = await res.json();
-    // rows[0] is the header ["timestamp","statuscode"], rows[1] is first result
     if (!Array.isArray(rows) || rows.length < 2) return null;
     const ts = rows[1][0];
     cdxTimestampCache[assetUrl] = ts;
@@ -293,11 +393,6 @@ const findArchiveTimestamp = async (assetUrl) => {
   }
 };
 
-/**
- * Validate that a buffer is actually the binary font format we expect.
- * @param {Buffer} buf
- * @param {string} filename
- */
 const validateFontBuffer = (buf, filename) => {
   if (!buf || buf.length < 8) return false;
   const ext = path.extname(filename).toLowerCase();
@@ -312,13 +407,8 @@ const validateFontBuffer = (buf, filename) => {
   return true;
 };
 
-/**
- * Download a single font file from the Wayback Machine via CDX-discovered timestamp.
- * @param {string} filename
- * @returns {Promise<boolean>}
- */
 const downloadFont = async (filename) => {
-  const { fetch } = await import("undici");
+  const uFetch = await getUndiciFetch();
   const destPath = path.join(FONTS_DIR, filename);
   const originalUrl = `https://site-assets.fontawesome.com/releases/v6.1.1/webfonts/${filename}`;
 
@@ -334,7 +424,7 @@ const downloadFont = async (filename) => {
   console.log(`[fonts] Downloading ${filename} @ ts=${timestamp}`);
 
   try {
-    const res = await fetch(archiveUrl, {
+    const res = await uFetch(archiveUrl, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "Accept": "*/*",
@@ -371,20 +461,9 @@ const downloadFont = async (filename) => {
   }
 };
 
-/**
- * Rewrite all font URL variants inside CSS text to local /fonts/<filename> paths.
- * Handles:
- *   /web/20260129053127im_/https://site-assets.fontawesome.com/.../fa-solid-900.woff2
- *   https://web.archive.org/web/<ts>if_/https://site-assets.fontawesome.com/.../fa-solid-900.woff2
- *   https://site-assets.fontawesome.com/.../fa-solid-900.woff2
- * @param {string} css
- * @returns {string}
- */
 const rewriteCssFontUrls = (css) => {
-  // Strip Wayback Machine injected comment blocks (header notice + playback timings)
   css = css.replace(/\/\*[\s\S]*?FILE ARCHIVED ON[\s\S]*?\*\//g, "");
   css = css.replace(/\/\*\s*playback timings[\s\S]*?\*\//gi, "");
-  // Rewrite all font URLs to local /fonts/<filename>
   css = css.replace(
     /(?:(?:https?:\/\/web\.archive\.org)?\/web\/\d{14}[a-z_]*\/)?(?:https?:\/\/)?site-assets\.fontawesome\.com\/releases\/v6\.1\.1\/webfonts\/(fa-[\w-]+\.(?:woff2|ttf|woff|eot))/g,
     "/fonts/$1"
@@ -392,26 +471,12 @@ const rewriteCssFontUrls = (css) => {
   return css.trim();
 };
 
-// Disk path for the cached & rewritten CSS (lives alongside the fonts)
 const FA_CSS_DISK_PATH = path.join(__dirname, "fonts", "all.css");
 
-/**
- * Load, rewrite, and cache the Font Awesome CSS.
- *
- * Priority order:
- *   1. In-memory cache  (instant, zero I/O)
- *   2. Disk cache at fonts/all.css  (fast, no network)
- *   3. Fetch from Wayback Machine, rewrite, save to disk + memory
- *
- * Safe to call concurrently — a single in-flight promise is shared so
- * parallel requests during the first fetch don't fire duplicate downloads.
- */
 let cssLoadPromise = null;
 const loadCss = () => {
-  // 1. Already in memory
   if (FA_CSS_CACHE !== null) return Promise.resolve(FA_CSS_CACHE);
 
-  // 2. Already on disk — load synchronously into memory and return immediately
   if (fs.existsSync(FA_CSS_DISK_PATH) && fs.statSync(FA_CSS_DISK_PATH).size > 100) {
     try {
       FA_CSS_CACHE = fs.readFileSync(FA_CSS_DISK_PATH, "utf8");
@@ -422,7 +487,6 @@ const loadCss = () => {
     }
   }
 
-  // 3. Not on disk yet — fetch, rewrite, persist
   if (cssLoadPromise) return cssLoadPromise;
 
   cssLoadPromise = (async () => {
@@ -437,8 +501,8 @@ const loadCss = () => {
       const archiveUrl = `https://web.archive.org/web/${cssTimestamp}if_/${cssOriginalUrl}`;
       console.log(`[css] Fetching FA CSS from ${archiveUrl}`);
 
-      const { fetch } = await import("undici");
-      const f = await fetch(archiveUrl, {
+      const uFetch = await getUndiciFetch();
+      const f = await uFetch(archiveUrl, {
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
           "Accept": "text/css,*/*;q=0.1",
@@ -458,7 +522,6 @@ const loadCss = () => {
 
       cssText = rewriteCssFontUrls(cssText);
 
-      // Persist to disk so future server restarts skip the network entirely
       try {
         fs.writeFileSync(FA_CSS_DISK_PATH, cssText, "utf8");
         console.log(`[css] FA CSS saved to disk (${Buffer.byteLength(cssText, "utf8")} bytes)`);
@@ -476,9 +539,6 @@ const loadCss = () => {
   return cssLoadPromise;
 };
 
-/**
- * Download all missing font files at startup. Non-blocking.
- */
 const ensureFontsDownloaded = async () => {
   for (const filename of FA_WEBFONTS) {
     const destPath = path.join(FONTS_DIR, filename);
@@ -497,14 +557,13 @@ const ensureFontsDownloaded = async () => {
   console.log("[fonts] Font cache check complete");
 };
 
-// Kick off both font downloads and CSS pre-warming in background
 Promise.all([
   ensureFontsDownloaded(),
   loadCss(),
 ]).catch((err) => console.error(`[startup] Background init error:\n${formatError(err)}`));
 
 // ---------------------------------------------------------------------------
-// URL whitelist (Glitch CDNs removed)
+// URL whitelist
 // ---------------------------------------------------------------------------
 
 const URL_WHITELIST = [
@@ -545,33 +604,13 @@ const URL_WHITELIST = [
 // Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Dynamically extracts and normalizes a target URL from Express's req.originalUrl
- * without relying on hardcoded character slice indices.
- *
- * Handles:
- *   - /https://fonts.bunny.net/...
- *   - /http://fonts.bunny.net/...
- *   - /https:/fonts.bunny.net/... (when a reverse proxy collapses double slashes)
- *   - /fonts.bunny.net/...        (when protocol is omitted)
- *   - //fonts.bunny.net/...
- *
- * @param {string} originalUrl
- * @returns {string}
- */
 const extractTargetUrl = (originalUrl) => {
-  // 1. Strip any leading slashes
   let cleaned = originalUrl.replace(/^\/+/, "");
-
-  // 2. If it starts with http://, https://, http:/, or https:/ (collapsed slash),
-  //    normalize the scheme to always have exactly "://"
   if (/^https?:\/+/i.test(cleaned)) {
     cleaned = cleaned.replace(/^(https?):\/+/i, "$1://");
   } else {
-    // 3. Otherwise, default to https://
     cleaned = "https://" + cleaned;
   }
-
   return cleaned;
 };
 
@@ -621,15 +660,15 @@ const decompress = (buf, encoding) => {
   });
 };
 
-const fetchAndForward = async (targetUrl, originalUrl, method, res) => {
-  const { fetch } = await import("undici");
+const fetchAndForward = async (targetUrl, displayUrl, method, res) => {
+  const uFetch = await getUndiciFetch();
   const url = new URL(targetUrl);
   const headers = getSpoofedHeaders(url.host);
 
   console.log(`==> Fetching ${targetUrl}`);
   let f;
   try {
-    f = await fetch(targetUrl, { method, headers, redirect: "follow" });
+    f = await uFetch(targetUrl, { method, headers, redirect: "follow" });
   } catch (err) {
     console.error(`==> Fetch failed for ${targetUrl}:\n${formatError(err)}`);
     throw err;
@@ -641,7 +680,7 @@ const fetchAndForward = async (targetUrl, originalUrl, method, res) => {
       res,
       f.status,
       f.statusText || "Upstream Error",
-      `The requested URL <code>${escapeHtml(originalUrl)}</code> returned an error from the upstream server (<code>${escapeHtml(url.host)}</code>).`,
+      `The requested URL <code>${escapeHtml(displayUrl)}</code> returned an error from the upstream server (<code>${escapeHtml(url.host)}</code>).`,
       `Upstream HTTP ${f.status} ${f.statusText || ""}`.trim()
     );
   }
@@ -731,12 +770,13 @@ const FA_CSS_HANDLER = async (req, res) => {
     res.setHeader("content-length", buf.length);
     res.send(cssText);
   } catch (e) {
+    const displayUrl = extractTargetUrl(req.originalUrl);
     console.error(`==> FA CSS handler error:\n${formatError(e)}`);
     return sendErrorPage(
       res,
       500,
       "Internal Server Error",
-      `The server encountered an error while loading <code>${escapeHtml(req.originalUrl)}</code>.`,
+      `The server encountered an error while loading <code>${escapeHtml(displayUrl)}</code>.`,
       getErrorSummary(e)
     );
   }
@@ -763,7 +803,7 @@ app.get(
         res,
         404,
         "Not Found",
-        `The requested URL <code>${escapeHtml(req.originalUrl)}</code> was not found on this server.`
+        `The requested URL <code>${escapeHtml(extractTargetUrl(req.originalUrl))}</code> was not found on this server.`
       );
     }
     res.redirect(301, `/fonts/${filename}`);
@@ -778,6 +818,18 @@ app.get("/", (_req, res) => {
   res.json({
     status: "200",
     version: "1.3.332a-b3-9e",
+    SmartIPadressProxy: {
+      enabled: SmartIPadressProxy.enabled,
+      forceFamily: SmartIPadressProxy.forceFamily,
+      activeMode:
+        SmartIPadressProxy.forceFamily === 4
+          ? "ipv4-forced"
+          : SmartIPadressProxy.forceFamily === 6
+          ? "ipv6-forced"
+          : Date.now() < smartIpState.ipv6BrokenUntil
+          ? "ipv4-fallback-active"
+          : "dual-stack-ipv6-preferred",
+    },
     URL_WHITELIST,
     cache: "max-age-864000",
   });
@@ -796,7 +848,7 @@ const apiUrls = [
 const apiCache = {};
 
 app.get("/api", async (req, res) => {
-  const { fetch } = await import("undici");
+  const uFetch = await getUndiciFetch();
   try {
     const cacheKey = req.query.v;
     if (apiCache[cacheKey] && Date.now() - apiCache[cacheKey].timestamp < 3600000) {
@@ -805,7 +857,7 @@ app.get("/api", async (req, res) => {
     const errors = [];
     for (const apiUrl of apiUrls) {
       try {
-        const engagement = await fetch(apiUrl + req.query.v).then((r) => r.json());
+        const engagement = await uFetch(apiUrl + req.query.v).then((r) => r.json());
         apiCache[cacheKey] = { data: engagement, timestamp: Date.now() };
         return res.json(engagement);
       } catch (err) {
@@ -834,9 +886,9 @@ app.get("/bangs", async (req, res) => {
 
 const proxy = async (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=864000");
-  try {
-    const rawUrl = extractTargetUrl(req.originalUrl);
+  const rawUrl = extractTargetUrl(req.originalUrl);
 
+  try {
     let url;
     try {
       url = new URL(rawUrl);
@@ -846,7 +898,7 @@ const proxy = async (req, res) => {
         res,
         400,
         "Bad Request",
-        `Your client has issued a malformed or illegal request for URL <code>${escapeHtml(req.originalUrl)}</code>.`
+        `Your client has issued a malformed or illegal request for URL <code>${escapeHtml(rawUrl)}</code>.`
       );
     }
 
@@ -864,14 +916,14 @@ const proxy = async (req, res) => {
       url.searchParams.set("cachefixer", Buffer.from(String(Date.now())).toString("base64"));
     }
 
-    await fetchAndForward(url.toString(), req.originalUrl, req.method, res);
+    await fetchAndForward(url.toString(), rawUrl, req.method, res);
   } catch (e) {
-    console.error(`==> Proxy Error for ${req.originalUrl}:\n${formatError(e)}`);
+    console.error(`==> Proxy Error for ${rawUrl}:\n${formatError(e)}`);
     return sendErrorPage(
       res,
       502,
       "Bad Gateway",
-      `The proxy server could not fetch the requested URL <code>${escapeHtml(req.originalUrl)}</code>.`,
+      `The proxy server could not fetch the requested URL <code>${escapeHtml(rawUrl)}</code>.`,
       getErrorSummary(e)
     );
   }
