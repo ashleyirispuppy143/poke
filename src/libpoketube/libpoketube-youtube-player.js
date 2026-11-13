@@ -84,6 +84,14 @@ class InnerTubePokeVidious {
       str.includes("protect our community")
     );
   }
+
+  /**
+   * Checks if the error text indicates an upcoming live event.
+   */
+  isLiveEventError(textOrMsg) {
+    if (!textOrMsg) return false;
+    return String(textOrMsg).toLowerCase().includes("this live event will begin in");
+  }
   
   loadBlockedVideos() {
     try {
@@ -211,7 +219,8 @@ class InnerTubePokeVidious {
       "UPLOADER_REMOVED": "This video has been removed by the uploader.",
       "VIDEO_UNAVAILABLE": "Video unavailable.",
       "INAPPROPRIATE": "This video may be inappropriate for some users.",
-      "MEMBERS_ONLY": "This video is available to this channel's members."
+      "MEMBERS_ONLY": "This video is available to this channel's members.",
+      "LIVE_EVENT_UPCOMING": "This live event has not started yet."
     };
 
     if (this.shouldBlockRequest(v)) {
@@ -293,6 +302,20 @@ class InnerTubePokeVidious {
             if (this.isBackendBlockedError(text)) {
               return;
             }
+
+            if (this.isLiveEventError(text)) {
+              let customMsg = knownErrors["LIVE_EVENT_UPCOMING"];
+              try {
+                const parsedErr = JSON.parse(text);
+                if (parsedErr?.error) customMsg = parsedErr.error;
+              } catch {
+                const match = text.match(/This live event will begin in[^"<\n]*/i);
+                if (match) customMsg = match[0].trim();
+              }
+              const liveErr = new Error("LIVE_EVENT_UPCOMING");
+              liveErr.customMessage = customMsg;
+              throw liveErr;
+            }
             
             if (resp.status === 500 && text.includes("who has blocked it on copyright grounds")) {
               this.addBlockedVideo(v, "COPYRIGHT_BLOCKED");
@@ -319,7 +342,7 @@ class InnerTubePokeVidious {
               throw new Error("VIDEO_UNAVAILABLE");
             }
           } catch (err) {
-            if (UNRECOVERABLE_REASONS.has(err.message)) {
+            if (UNRECOVERABLE_REASONS.has(err.message) || err.message === "LIVE_EVENT_UPCOMING") {
               throw err;
             }
           }
@@ -399,7 +422,7 @@ class InnerTubePokeVidious {
         } catch (err) {
           if (err.message === "REQUEST_DROPPED") throw err;
           if (callerSignal && callerSignal.aborted) throw err;
-          if (UNRECOVERABLE_REASONS.has(err.message)) throw err;
+          if (UNRECOVERABLE_REASONS.has(err.message) || err.message === "LIVE_EVENT_UPCOMING") throw err;
           
           lastError = err;
           const remaining2 = maxRetryTime - (Date.now() - retryStart);
@@ -433,6 +456,12 @@ class InnerTubePokeVidious {
             if (this.isBackendBlockedError(errText)) {
               throw new Error("BACKEND_BLOCKED");
             }
+            if (this.isLiveEventError(errText)) {
+              const liveErr = new Error("LIVE_EVENT_UPCOMING");
+              const match = errText.match(/This live event will begin in[^"<\n]*/i);
+              liveErr.customMessage = match ? match[0].trim() : knownErrors["LIVE_EVENT_UPCOMING"];
+              throw liveErr;
+            }
             throw new Error(`HTTP Error ${r.status}`);
           }
           const text = await r.text();
@@ -447,6 +476,11 @@ class InnerTubePokeVidious {
               if (this.isBackendBlockedError(parsed.error)) {
                 throw new Error("BACKEND_BLOCKED");
               }
+              if (this.isLiveEventError(parsed.error)) {
+                const liveErr = new Error("LIVE_EVENT_UPCOMING");
+                liveErr.customMessage = parsed.error;
+                throw liveErr;
+              }
               if (
                 parsed.error.includes("This video is available to this channel's members on level") ||
                 parsed.error.includes("This video is available to this channel's members") ||
@@ -459,13 +493,17 @@ class InnerTubePokeVidious {
             }
             return null;
           } catch (parseErr) {
-            if (parseErr.message === "BACKEND_BLOCKED" || UNRECOVERABLE_REASONS.has(parseErr.message)) {
+            if (
+              parseErr.message === "BACKEND_BLOCKED" ||
+              parseErr.message === "LIVE_EVENT_UPCOMING" ||
+              UNRECOVERABLE_REASONS.has(parseErr.message)
+            ) {
               throw parseErr;
             }
           }
         } catch (err) {
           if (err.message === "REQUEST_DROPPED") throw err;
-          if (UNRECOVERABLE_REASONS.has(err.message)) throw err;
+          if (UNRECOVERABLE_REASONS.has(err.message) || err.message === "LIVE_EVENT_UPCOMING") throw err;
           fetchError = err;
         }
       }
@@ -602,7 +640,15 @@ class InnerTubePokeVidious {
         return { error: true, message: "Request cancelled by server.", reason: "REQUEST_DROPPED" };
       }
       if (knownErrors[error.message]) {
-        return { error: true, message: knownErrors[error.message], reason: error.message };
+        // If the video was previously marked as VIDEO_UNAVAILABLE, unblock it since we now know it's an upcoming stream
+        if (error.message === "LIVE_EVENT_UPCOMING" && this.blockedVideos.has(v)) {
+          this.unblockVideo(v);
+        }
+        return { 
+          error: true, 
+          message: error.customMessage || knownErrors[error.message], 
+          reason: error.message 
+        };
       }
       this.initError(`Error getting video ${v}`, error);
       return { error: true, message: error.message || "An unexpected error occurred qwq", reason: "UNKNOWN_ERROR" };
