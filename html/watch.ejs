@@ -1609,8 +1609,12 @@ for (const format of (VideoData.adaptiveFormats || [])) {
         }
     });
     %>                                             
+
+<% if (VideoData.aiMade) { %>
+        <div><i title="GenAI" class="fa-light fa-sparkles"></i>&nbsp;GenAI generated video</div>
+<% } %>
     
-    <% if (VideoData.genre !== "Music" && nonhditag !== "302") { %> 
+<% if (VideoData.genre !== "Music" && nonhditag !== "302") { %> 
         <a href="#connections" style="font-weight: bolder; font-family: sans-serif; color: var(--text-color); font-size: small; text-decoration: none;">Jump to Connections</a>
     <% } %>
     
@@ -1618,7 +1622,8 @@ for (const format of (VideoData.adaptiveFormats || [])) {
         <div><i title="60 FPS" class="fa-light fa-circle-waveform-lines"></i>&nbsp;60 FPS video</div>
     <% } %> 
 
-    <!-- injected by JS -->
+
+
     <div id="audioStatusDisplay"></div>
 
 </div>
