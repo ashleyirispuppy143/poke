@@ -266,7 +266,11 @@
             <% } %>
         </p>
 
-        <% if (locals.knownErrors && locals.err_reason && knownErrors[err_reason]) { %>
+        <% if (
+            (locals.knownErrors && locals.err_reason && knownErrors[err_reason]) ||
+            locals.err_reason === "LIVE_EVENT_UPCOMING" ||
+            /this live event will begin in/i.test(issueErrorMessage)
+        ) { %>
         <% } else { %>
             <div class="might-be">This usually happens because...</div>
             <ul class="reasons-list">
