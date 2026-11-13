@@ -14,10 +14,9 @@ const SmartIPadressProxy = {
   autoSelectFamilyAttemptTimeout: 250,
    connectTimeout: 10000,
    rememberBrokenIpv6: true,
-  cooldownMs: 10 * 60 * 1000, // 10 minutes
+  cooldownMs: 10 * 60 * 1000, 
 };
 
-// Runtime state for SmartIPadressProxy
 const smartIpState = {
   ipv6BrokenUntil: 0,
   dualStackAgent: null,
@@ -63,7 +62,6 @@ const isIpv6RoutingError = (err) => {
 };
 
 /**
- * Smart fetch wrapper powered by undici + SmartIPadressProxy config.
  * Automatically uses IPv6 when available and falls back to IPv4 if needed.
  */
 const getUndiciFetch = async () => {
@@ -574,10 +572,10 @@ const URL_WHITELIST = [
   "fonts.gstatic.com",
   "cdn.jsdelivr.net",
   "yt3.ggpht.com",
-  "tube.kuylar.dev",
   "lh3.googleusercontent.com",
   "is4-ssl.mzstatic.com",
   "is2-ssl.mzstatic.com",
+  "fonts.googleapis.com",
   "is1-ssl.mzstatic.com",
   "fonts.bunny.net",
   "demo.matomo.org",
@@ -590,13 +588,7 @@ const URL_WHITELIST = [
   "youtube.com",
   "returnyoutubedislikeapi.com",
   "cdn.zptr.cc",
-  "inv.vern.cc",
-  "invidious.privacydev.net",
-  "inv.zzls.xyz",
   "vid.puffyan.us",
-  "invidious.lidarshield.cloud",
-  "invidious.epicsite.xyz",
-  "invidious.esmailelbob.xyz",
   "web.archive.org",
 ];
 
