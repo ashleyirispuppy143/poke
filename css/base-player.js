@@ -1476,6 +1476,96 @@ window.SyncLevel = SyncLevel;
       '}',
       '.alabaster-hold-2x-pill.is-visible svg {',
       '  animation: alabaster2xPulse 0.9s infinite ease-in-out !important;',
+      '}',
+      '.alabaster-hold-2x-pill.is-visible svg {',
+      '  animation: alabaster2xPulse 0.9s infinite ease-in-out !important;',
+      '}',
+      '.video-js .alabaster-stats-for-nerds, .alabaster-stats-for-nerds {',
+      '  position: absolute !important;',
+      '  top: 16px !important;',
+      '  left: 16px !important;',
+      '  z-index: 47 !important;',
+      '  width: 440px !important;',
+      '  max-width: calc(100% - 32px) !important;',
+      '  max-height: calc(100% - 96px) !important;',
+      '  overflow-y: auto !important;',
+      '  overflow-x: hidden !important;',
+      '  display: none !important;',
+      '  flex-direction: column !important;',
+      '  padding: 12px 14px !important;',
+      '  box-sizing: border-box !important;',
+      '  border-radius: 10px !important;',
+      '  background: rgba(12, 12, 12, 0.84) !important;',
+      '  backdrop-filter: blur(18px) !important;',
+      '  -webkit-backdrop-filter: blur(18px) !important;',
+      '  border: 1px solid rgba(255, 255, 255, 0.14) !important;',
+      '  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.65) !important;',
+      '  color: #e8e8e8 !important;',
+      '  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace !important;',
+      '  font-size: 11px !important;',
+      '  line-height: 1.45 !important;',
+      '  pointer-events: auto !important;',
+      '  user-select: text !important;',
+      '}',
+      '.video-js .alabaster-stats-for-nerds.is-visible, .alabaster-stats-for-nerds.is-visible {',
+      '  display: flex !important;',
+      '}',
+      '.alabaster-stats-header {',
+      '  display: flex !important;',
+      '  flex-direction: row !important;',
+      '  align-items: center !important;',
+      '  justify-content: space-between !important;',
+      '  margin-bottom: 6px !important;',
+      '  padding-bottom: 5px !important;',
+      '  border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;',
+      '}',
+      '.alabaster-stats-title {',
+      '  font-weight: 700 !important;',
+      '  font-size: 11.5px !important;',
+      '  color: #ffffff !important;',
+      '  letter-spacing: 0.2px !important;',
+      '}',
+      '.video-js .alabaster-stats-close, .alabaster-stats-close {',
+      '  width: 22px !important;',
+      '  height: 22px !important;',
+      '  min-width: 22px !important;',
+      '  border-radius: 4px !important;',
+      '  border: none !important;',
+      '  background: transparent !important;',
+      '  color: #bbbbbb !important;',
+      '  display: inline-flex !important;',
+      '  align-items: center !important;',
+      '  justify-content: center !important;',
+      '  cursor: pointer !important;',
+      '  padding: 0 !important;',
+      '  margin: 0 !important;',
+      '  box-shadow: none !important;',
+      '  font-size: 15px !important;',
+      '  line-height: 1 !important;',
+      '}',
+      '.video-js .alabaster-stats-close:hover, .alabaster-stats-close:hover {',
+      '  background: rgba(255, 255, 255, 0.14) !important;',
+      '  color: #ffffff !important;',
+      '}',
+      '.alabaster-stats-row {',
+      '  display: flex !important;',
+      '  flex-direction: row !important;',
+      '  align-items: flex-start !important;',
+      '  gap: 8px !important;',
+      '  padding: 1.5px 0 !important;',
+      '  word-break: break-all !important;',
+      '}',
+      '.alabaster-stats-key {',
+      '  flex: 0 0 132px !important;',
+      '  color: #9e9e9e !important;',
+      '  font-weight: 600 !important;',
+      '  text-align: right !important;',
+      '  word-break: normal !important;',
+      '}',
+      '.alabaster-stats-val {',
+      '  flex: 1 1 auto !important;',
+      '  color: #f1f1f1 !important;',
+      '  font-weight: 400 !important;',
       '}'
     ].join('\n');
     document.head.appendChild(styleEl);
@@ -1490,7 +1580,9 @@ window.SyncLevel = SyncLevel;
     return true;
   }
 
-function SetAlabasterUI(player, onRetryCallback) {
+
+
+  function SetAlabasterUI(player, onRetryCallback) {
     var info = metadataParser.read();
     injectAlabasterFsDescriptionStyles();
 
@@ -1555,6 +1647,12 @@ function SetAlabasterUI(player, onRetryCallback) {
       var fsSettingsPopup = null;
       var isFsSettingsOpen = false;
       var setSettingsPopupState = null;
+
+      var statsOverlayEl = null;
+      var statsBodyEl = null;
+      var statsTitleSpan = null;
+      var isStatsOpen = false;
+      var statsIntervalId = 0;
 
       var getTitleElements = function() {
         if (!rootEl) return [];
@@ -2366,6 +2464,25 @@ function SetAlabasterUI(player, onRetryCallback) {
           '</div>'
         ].join('');
 
+        var statsForNerdsRow = document.createElement('div');
+        statsForNerdsRow.className = 'alabaster-settings-item';
+        statsForNerdsRow.setAttribute('role', 'button');
+        statsForNerdsRow.tabIndex = 0;
+        var statsMenuLabelEl = document.createElement('span');
+        statsMenuLabelEl.className = 'alabaster-settings-label';
+        statsMenuLabelEl.textContent = 'Stats for nerds';
+        statsForNerdsRow.innerHTML = [
+          '<div class="alabaster-settings-item-left">',
+          '  <span class="alabaster-settings-icon">',
+          '    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
+          '      <polyline points="4 17 10 11 4 5"></polyline>',
+          '      <line x1="12" y1="19" x2="20" y2="19"></line>',
+          '    </svg>',
+          '  </span>',
+          '</div>'
+        ].join('');
+        statsForNerdsRow.querySelector('.alabaster-settings-item-left').appendChild(statsMenuLabelEl);
+
         mainPanel.appendChild(loopMenuRow);
         mainPanel.appendChild(speedMenuRow);
         mainPanel.appendChild(audioMenuRow);
@@ -2373,6 +2490,191 @@ function SetAlabasterUI(player, onRetryCallback) {
         mainPanel.appendChild(configPlayerRow);
         mainPanel.appendChild(reportProblemRow);
         mainPanel.appendChild(embedVideoRow);
+        mainPanel.appendChild(statsForNerdsRow);
+
+        statsOverlayEl = document.createElement('div');
+        statsOverlayEl.className = 'alabaster-stats-for-nerds';
+        var statsHeaderEl = document.createElement('div');
+        statsHeaderEl.className = 'alabaster-stats-header';
+        statsTitleSpan = document.createElement('span');
+        statsTitleSpan.className = 'alabaster-stats-title';
+        statsTitleSpan.textContent = 'Stats for nerds';
+        var statsCloseBtn = document.createElement('button');
+        statsCloseBtn.type = 'button';
+        statsCloseBtn.className = 'alabaster-stats-close';
+        statsCloseBtn.setAttribute('aria-label', 'Close stats');
+        statsCloseBtn.textContent = '\u00D7';
+        statsHeaderEl.appendChild(statsTitleSpan);
+        statsHeaderEl.appendChild(statsCloseBtn);
+        statsBodyEl = document.createElement('div');
+        statsBodyEl.className = 'alabaster-stats-body';
+        statsOverlayEl.appendChild(statsHeaderEl);
+        statsOverlayEl.appendChild(statsBodyEl);
+        rootEl.appendChild(statsOverlayEl);
+
+        ['click', 'mousedown', 'pointerdown', 'touchstart', 'touchend', 'wheel'].forEach(function(evName) {
+          statsOverlayEl.addEventListener(evName, function(evt) {
+            evt.stopPropagation();
+          }, false);
+        });
+
+        var parseDivBoxEntries = function() {
+          var box = document.querySelector('.div_box');
+          if (!box) return [];
+          var rawLines = (box.innerHTML || '').split(/<br\s*\/?>/i);
+          var parsed = [];
+          for (var i = 0; i < rawLines.length; i++) {
+            var tmp = document.createElement('div');
+            tmp.innerHTML = rawLines[i];
+            var lineText = (tmp.textContent || '').replace(/\s+/g, ' ').trim();
+            if (!lineText) continue;
+            var colonPos = lineText.indexOf(':');
+            if (colonPos !== -1) {
+              var k = lineText.slice(0, colonPos).trim();
+              var v = lineText.slice(colonPos + 1).trim();
+              if (k.toLowerCase() === 'date') continue;
+              parsed.push({ key: k, val: v });
+            } else {
+              parsed.push({ key: 'Info', val: lineText });
+            }
+          }
+          return parsed;
+        };
+
+        var buildYtMysteryText = function(vNode, curTimeSec, bufHealthSec) {
+          var stCode = '4';
+          if (SyncLevel.buffering) stCode = '9';
+          else if (!vNode || vNode.paused) stCode = '8';
+          var vidId = (new URLSearchParams(window.location.search).get('v') || '00000000000');
+          var vw = (rootEl && rootEl.clientWidth) || 640;
+          var vh = (rootEl && rootEl.clientHeight) || 360;
+          return 's:' + stCode + ' t:' + curTimeSec.toFixed(2) + ' b:' + bufHealthSec.toFixed(2) + ' p:' + vidId + ' d:' + vw + 'x' + vh + ' df:' + SyncLevel.driftMs + 'ms';
+        };
+
+        var updateStatsOverlayContent = function() {
+          if (!isStatsOpen || !statsBodyEl) return;
+          var vNode = getVideoElementNode();
+          var boxEntries = parseDivBoxEntries();
+
+          var vw = (rootEl && rootEl.clientWidth) || (vNode && vNode.clientWidth) || 0;
+          var vh = (rootEl && rootEl.clientHeight) || (vNode && vNode.clientHeight) || 0;
+          var dpr = window.devicePixelRatio || 1;
+          var resW = (vNode && vNode.videoWidth) || 0;
+          var resH = (vNode && vNode.videoHeight) || 0;
+
+          var droppedFrames = 0;
+          var totalFrames = 0;
+          if (vNode && typeof vNode.getVideoPlaybackQuality === 'function') {
+            try {
+              var q = vNode.getVideoPlaybackQuality();
+              droppedFrames = q.droppedVideoFrames || 0;
+              totalFrames = q.totalVideoFrames || 0;
+            } catch (_) {}
+          } else if (vNode && typeof vNode.webkitDecodedFrameCount === 'number') {
+            totalFrames = vNode.webkitDecodedFrameCount || 0;
+            droppedFrames = vNode.webkitDroppedFrameCount || 0;
+          }
+
+          var viewportFramesStr = vw + 'x' + vh + (dpr !== 1 ? '*' + Number(dpr.toFixed(2)) : '') +
+            (resW > 0 ? ' (' + resW + 'x' + resH + ')' : '') +
+            ' / ' + droppedFrames + ' dropped of ' + totalFrames;
+
+          var connStr = 'Unknown';
+          var navConn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+          if (navConn && typeof navConn.downlink === 'number' && navConn.downlink > 0) {
+            connStr = Math.round(navConn.downlink * 1000) + ' Kbps' + (navConn.effectiveType ? ' (' + navConn.effectiveType + ')' : '');
+          } else {
+            for (var b = 0; b < boxEntries.length; b++) {
+              var bpsMatch = boxEntries[b].val.match(/(\d+)\s*bps/i);
+              if (bpsMatch && bpsMatch[1]) {
+                connStr = Math.round(Number(bpsMatch[1]) / 1000) + ' Kbps (stream)';
+                break;
+              }
+            }
+          }
+
+          var vBuf = typeof SyncLevel.videoBufferAhead === 'number' ? SyncLevel.videoBufferAhead : (vNode ? bufferMonitor.ahead(vNode) : 0);
+          var aBuf = typeof SyncLevel.audioBufferAhead === 'number' ? SyncLevel.audioBufferAhead : 0;
+          var bufHealthSec = window.Alabaster.muxedMode ? vBuf : Math.min(vBuf, aBuf);
+          var bufStr = bufHealthSec.toFixed(2) + ' s' + (!window.Alabaster.muxedMode ? ' (v: ' + vBuf.toFixed(1) + 's, a: ' + aBuf.toFixed(1) + 's)' : '');
+
+          var curTimeSec = Number(player.currentTime ? player.currentTime() : (vNode ? vNode.currentTime : 0)) || 0;
+          var nowDate = new Date();
+          var userDateStr = nowDate.getTime() + ' (' + nowDate.toString() + ')';
+          var moreMysteryStr = buildYtMysteryText(vNode, curTimeSec, bufHealthSec);
+
+          var rows = [];
+          var insertedExtras = false;
+
+          for (var idx = 0; idx < boxEntries.length; idx++) {
+            var entry = boxEntries[idx];
+            rows.push(entry);
+            if (entry.key.toLowerCase().indexOf('audio format') !== -1 && !insertedExtras) {
+              insertedExtras = true;
+              rows.push({ key: 'Viewport / Frames', val: viewportFramesStr });
+              rows.push({ key: 'Connection Speed', val: connStr });
+              rows.push({ key: 'Buffer Health', val: bufStr });
+            }
+          }
+
+          if (!insertedExtras) {
+            rows.unshift({ key: 'Buffer Health', val: bufStr });
+            rows.unshift({ key: 'Connection Speed', val: connStr });
+            rows.unshift({ key: 'Viewport / Frames', val: viewportFramesStr });
+          }
+
+          rows.push({ key: 'Date', val: userDateStr });
+          rows.push({ key: 'More Mystery text', val: moreMysteryStr });
+
+          statsBodyEl.innerHTML = '';
+          for (var r = 0; r < rows.length; r++) {
+            var rowDiv = document.createElement('div');
+            rowDiv.className = 'alabaster-stats-row';
+            var kSpan = document.createElement('span');
+            kSpan.className = 'alabaster-stats-key';
+            kSpan.textContent = rows[r].key;
+            var vSpan = document.createElement('span');
+            vSpan.className = 'alabaster-stats-val';
+            vSpan.textContent = rows[r].val;
+            rowDiv.appendChild(kSpan);
+            rowDiv.appendChild(vSpan);
+            statsBodyEl.appendChild(rowDiv);
+          }
+        };
+
+        var setStatsOverlayState = function(open) {
+          isStatsOpen = Boolean(open);
+          if (statsIntervalId) {
+            clearInterval(statsIntervalId);
+            statsIntervalId = 0;
+          }
+          if (!statsOverlayEl) return;
+          if (isStatsOpen) {
+            statsTitleSpan.textContent = statsMenuLabelEl.textContent;
+            statsOverlayEl.classList.add('is-visible');
+            updateStatsOverlayContent();
+            statsIntervalId = setInterval(updateStatsOverlayContent, 500);
+          } else {
+            statsOverlayEl.classList.remove('is-visible');
+          }
+        };
+
+        statsCloseBtn.addEventListener('click', function(evt) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          setStatsOverlayState(false);
+        });
+
+        statsForNerdsRow.addEventListener('click', function(evt) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          setSettingsPopupState(false);
+          setStatsOverlayState(!isStatsOpen);
+        });
+
+        player.on('dispose', function() {
+          if (statsIntervalId) clearInterval(statsIntervalId);
+        });
 
         var speedHeader = document.createElement('div');
         speedHeader.className = 'alabaster-settings-subheader';
@@ -2699,6 +3001,7 @@ function SetAlabasterUI(player, onRetryCallback) {
 
           if (!fsSettingsPopup) return;
           if (isFsSettingsOpen) {
+            statsMenuLabelEl.textContent = Math.floor(Math.random() * 50) === 0 ? 'stats for puppies' : 'Stats for nerds';
             showSettingsPanel(mainPanel);
             refreshSettingsUI();
             if (fsSettingsBtn) {
@@ -3637,7 +3940,7 @@ function SetAlabasterUI(player, onRetryCallback) {
         var isInteractivePlayerUI = function(target) {
           if (!target || !target.closest) return false;
           return Boolean(target.closest(
-            '.vjs-control-bar, .alabaster-fs-settings-popup, .alabaster-fs-desc-drawer, .alabaster-fs-comments-drawer, .alabaster-rec-drawer, .alabaster-fs-desc-toggle, .vjs-title-bar-title, .vjs-big-play-button, button, a, input'
+            '.vjs-control-bar, .alabaster-fs-settings-popup, .alabaster-stats-for-nerds, .alabaster-fs-desc-drawer, .alabaster-fs-comments-drawer, .alabaster-rec-drawer, .alabaster-fs-desc-toggle, .vjs-title-bar-title, .vjs-big-play-button, button, a, input'
           ));
         };
 
