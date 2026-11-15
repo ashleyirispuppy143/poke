@@ -287,8 +287,17 @@ document.addEventListener("click", function (event) {
 }); 
 
 const videoElement = document.getElementById("video");
-videoElement.addEventListener("fullscreenchange", () => {
-  videoElement.style.borderRadius = document.fullscreenElement === videoElement ? "0em !important" : "16px";
+
+document.addEventListener("fullscreenchange", () => {
+  const isFullscreen =
+    document.fullscreenElement === videoElement ||
+    document.fullscreenElement?.contains(videoElement);
+
+  if (isFullscreen) {
+    videoElement.style.setProperty("border-radius", "0px", "important");
+  } else {
+    videoElement.style.setProperty("border-radius", "16px");
+  }
 });
 
 function fetchUrls(urls) {
