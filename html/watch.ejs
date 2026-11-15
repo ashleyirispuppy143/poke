@@ -3059,34 +3059,7 @@ document.addEventListener('DOMContentLoaded', checkTheaterMode);
 	if (!urlParams.has('hl') && !urlParams.has('region') && languageCode && regionCode) {
 	  location.href = currentURL + `&region=${regionCode}&hl=${languageCode}`;
 	}
-	       
-	let isMiddleButtonPressed = false;
-	
-	// Function to change video speed
-	function changeVideoSpeed() {
-	   if (isMiddleButtonPressed) {
-	    video.playbackRate = 2; // Set the video speed to 2x
-	  } else {
-	    video.playbackRate = 1; // Set the video speed to 1x
-	  }
-	}
-	
-	// Event listener for mouse button press
-	document.addEventListener('mousedown', function (event) {
-	  if (event.button === 1) {
-	    isMiddleButtonPressed = true;
-	    changeVideoSpeed();
-	  }
-	});
-	
-	// Event listener for mouse button release
-	document.addEventListener('mouseup', function (event) {
-	  if (event.button === 1) {
-	    isMiddleButtonPressed = false;
-	    changeVideoSpeed();
-	  }
-	});""
-	
+	        
 	var anchor = document.getElementById("sub");
 	
 	// Check if there's a user ID in localStorage
