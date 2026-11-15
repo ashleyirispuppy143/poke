@@ -1429,6 +1429,54 @@ window.SyncLevel = SyncLevel;
       '  color: #cccccc;',
       '  transform: translateY(-0.5px);',
       '}'
+      '.alabaster-rec-play-unicode {',
+      '  display: inline-block;',
+      '  font-size: 10px;',
+      '  margin-right: 4px;',
+      '  color: #cccccc;',
+      '  transform: translateY(-0.5px);',
+      '}',
+      '.video-js .alabaster-hold-2x-pill, .alabaster-hold-2x-pill {',
+      '  position: absolute !important;',
+      '  top: 22px !important;',
+      '  left: 50% !important;',
+      '  transform: translateX(-50%) translateY(-6px) scale(0.95) !important;',
+      '  z-index: 44 !important;',
+      '  display: inline-flex !important;',
+      '  flex-direction: row !important;',
+      '  align-items: center !important;',
+      '  justify-content: center !important;',
+      '  gap: 7px !important;',
+      '  padding: 6px 15px !important;',
+      '  border-radius: 999px !important;',
+      '  background: rgba(20, 22, 26, 0.78) !important;',
+      '  backdrop-filter: blur(12px) !important;',
+      '  -webkit-backdrop-filter: blur(12px) !important;',
+      '  color: #ffffff !important;',
+      '  font-family: "poketube flex", "PokeTube Flex", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;',
+      '  font-size: 13.5px !important;',
+      '  font-weight: 700 !important;',
+      '  line-height: 1 !important;',
+      '  letter-spacing: 0.2px !important;',
+      '  pointer-events: none !important;',
+      '  user-select: none !important;',
+      '  opacity: 0 !important;',
+      '  visibility: hidden !important;',
+      '  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35) !important;',
+      '  transition: opacity 0.16s ease, transform 0.16s cubic-bezier(0.22, 1, 0.36, 1), visibility 0.16s ease !important;',
+      '}',
+      '.video-js .alabaster-hold-2x-pill.is-visible, .alabaster-hold-2x-pill.is-visible {',
+      '  opacity: 1 !important;',
+      '  visibility: visible !important;',
+      '  transform: translateX(-50%) translateY(0) scale(1) !important;',
+      '}',
+      '@keyframes alabaster2xPulse {',
+      '  0%, 100% { transform: translateX(0); opacity: 0.85; }',
+      '  50% { transform: translateX(2.5px); opacity: 1; }',
+      '}',
+      '.alabaster-hold-2x-pill.is-visible svg {',
+      '  animation: alabaster2xPulse 0.9s infinite ease-in-out !important;',
+      '}'
     ].join('\n');
     document.head.appendChild(styleEl);
   }
@@ -1442,7 +1490,7 @@ window.SyncLevel = SyncLevel;
     return true;
   }
 
-  function SetAlabasterUI(player, onRetryCallback) {
+function SetAlabasterUI(player, onRetryCallback) {
     var info = metadataParser.read();
     injectAlabasterFsDescriptionStyles();
 
@@ -3505,6 +3553,249 @@ window.SyncLevel = SyncLevel;
         }
       }
 
+      if (rootEl && !rootEl.querySelector('.alabaster-hold-2x-pill')) {
+        var hold2xPill = document.createElement('div');
+        hold2xPill.className = 'alabaster-hold-2x-pill';
+        hold2xPill.innerHTML = [
+          '<span>2x</span>',
+          '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" style="display:block;">',
+          '  <polygon points="4,5 12,12 4,19"></polygon>',
+          '  <polygon points="12,5 20,12 12,19"></polygon>',
+          '</svg>'
+        ].join('');
+        rootEl.appendChild(hold2xPill);
+
+        var hold2xState = {
+          active: false,
+          source: '',
+          savedRate: 1,
+          timer: 0,
+          spaceDown: false,
+          pointerDown: false,
+          startX: 0,
+          startY: 0,
+          suppressClickUntil: 0
+        };
+
+        var getMediaNodes = function() {
+          return {
+            v: (rootEl && rootEl.querySelector('video')) || document.querySelector('video.video-js, video'),
+            a: document.querySelector('audio')
+          };
+        };
+
+        var isCurrentlyPlaying = function() {
+          var nodes = getMediaNodes();
+          return Boolean(
+            (typeof player.paused === 'function' && !player.paused()) ||
+            rootEl.classList.contains('vjs-playing') ||
+            (nodes.v && !nodes.v.paused)
+          );
+        };
+
+        var setRateOnAll = function(rateVal) {
+          var nodes = getMediaNodes();
+          if (typeof player.playbackRate === 'function') {
+            player.playbackRate(rateVal);
+          }
+          if (nodes.v) nodes.v.playbackRate = rateVal;
+          if (nodes.a) nodes.a.playbackRate = rateVal;
+        };
+
+        var startHold2x = function(sourceName) {
+          if (hold2xState.active) return;
+          if (!isCurrentlyPlaying()) return;
+          var nodes = getMediaNodes();
+          var currentRate = (typeof player.playbackRate === 'function' ? player.playbackRate() : (nodes.v ? nodes.v.playbackRate : 1)) || 1;
+          hold2xState.savedRate = currentRate;
+          hold2xState.active = true;
+          hold2xState.source = sourceName;
+          setRateOnAll(2);
+          hold2xPill.classList.add('is-visible');
+        };
+
+        var stopHold2x = function() {
+          if (hold2xState.timer) {
+            clearTimeout(hold2xState.timer);
+            hold2xState.timer = 0;
+          }
+          if (!hold2xState.active) return;
+          var restore = hold2xState.savedRate || 1;
+          hold2xState.active = false;
+          hold2xState.source = '';
+          hold2xPill.classList.remove('is-visible');
+          setRateOnAll(restore);
+          hold2xState.suppressClickUntil = compat.now() + 380;
+        };
+
+        var isEditableTarget = function(el) {
+          if (!el) return false;
+          var tag = el.tagName ? el.tagName.toLowerCase() : '';
+          return tag === 'input' || tag === 'textarea' || tag === 'select' || Boolean(el.isContentEditable);
+        };
+
+        var isInteractivePlayerUI = function(target) {
+          if (!target || !target.closest) return false;
+          return Boolean(target.closest(
+            '.vjs-control-bar, .alabaster-fs-settings-popup, .alabaster-fs-desc-drawer, .alabaster-fs-comments-drawer, .alabaster-rec-drawer, .alabaster-fs-desc-toggle, .vjs-title-bar-title, .vjs-big-play-button, button, a, input'
+          ));
+        };
+
+        var onSpaceKeyDown = function(evt) {
+          if (!evt || !evt.isTrusted) return;
+          if (evt.code !== 'Space' && evt.key !== ' ') return;
+          if (evt.ctrlKey || evt.altKey || evt.metaKey) return;
+          if (isEditableTarget(document.activeElement) || isEditableTarget(evt.target)) return;
+          if (!isCurrentlyPlaying() && !hold2xState.spaceDown) return;
+
+          evt.preventDefault();
+          evt.stopPropagation();
+          evt.stopImmediatePropagation();
+
+          if (evt.repeat) {
+            if (!hold2xState.active && isCurrentlyPlaying()) {
+              if (hold2xState.timer) {
+                clearTimeout(hold2xState.timer);
+                hold2xState.timer = 0;
+              }
+              startHold2x('space');
+            }
+            return;
+          }
+
+          if (hold2xState.spaceDown) return;
+          hold2xState.spaceDown = true;
+          clearTimeout(hold2xState.timer);
+          hold2xState.timer = setTimeout(function() {
+            hold2xState.timer = 0;
+            if (hold2xState.spaceDown && isCurrentlyPlaying()) {
+              startHold2x('space');
+            }
+          }, 320);
+        };
+
+        var onSpaceKeyUp = function(evt) {
+          if (!evt || (evt.code !== 'Space' && evt.key !== ' ')) return;
+          if (!hold2xState.spaceDown && !hold2xState.active) return;
+
+          if (isEditableTarget(document.activeElement) || isEditableTarget(evt.target)) {
+            hold2xState.spaceDown = false;
+            stopHold2x();
+            return;
+          }
+
+          evt.preventDefault();
+          evt.stopPropagation();
+          evt.stopImmediatePropagation();
+
+          var wasActive2x = hold2xState.active;
+          hold2xState.spaceDown = false;
+          stopHold2x();
+
+          if (!wasActive2x) {
+            var nodes = getMediaNodes();
+            if (nodes.v) {
+              if (isCurrentlyPlaying()) {
+                rootEl.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                nodes.v.click();
+              } else {
+                nodes.v.play();
+              }
+            }
+          }
+        };
+
+        var onPointerHoldStart = function(clientX, clientY, evt) {
+          if (!isCurrentlyPlaying()) return;
+          if (isInteractivePlayerUI(evt.target)) return;
+          hold2xState.pointerDown = true;
+          hold2xState.startX = clientX;
+          hold2xState.startY = clientY;
+          clearTimeout(hold2xState.timer);
+          hold2xState.timer = setTimeout(function() {
+            hold2xState.timer = 0;
+            if (hold2xState.pointerDown && isCurrentlyPlaying()) {
+              startHold2x('pointer');
+            }
+          }, 420);
+        };
+
+        var onPointerHoldMove = function(clientX, clientY) {
+          if (!hold2xState.pointerDown || hold2xState.active) return;
+          if (Math.abs(clientX - hold2xState.startX) > 18 || Math.abs(clientY - hold2xState.startY) > 18) {
+            hold2xState.pointerDown = false;
+            if (hold2xState.timer) {
+              clearTimeout(hold2xState.timer);
+              hold2xState.timer = 0;
+            }
+          }
+        };
+
+        var onPointerHoldEnd = function() {
+          if (!hold2xState.pointerDown && !hold2xState.active) return;
+          hold2xState.pointerDown = false;
+          if (hold2xState.source === 'pointer' || hold2xState.timer) {
+            stopHold2x();
+          }
+        };
+
+        var suppressClickAfterHold = function(evt) {
+          if (hold2xState.active || compat.now() < hold2xState.suppressClickUntil) {
+            evt.preventDefault();
+            evt.stopPropagation();
+            evt.stopImmediatePropagation();
+          }
+        };
+
+        var onMouseDownHold = function(evt) {
+          if (evt.button !== 0) return;
+          onPointerHoldStart(evt.clientX, evt.clientY, evt);
+        };
+        var onMouseMoveHold = function(evt) {
+          onPointerHoldMove(evt.clientX, evt.clientY);
+        };
+        var onTouchStartHold = function(evt) {
+          if (!evt.touches || evt.touches.length !== 1) return;
+          var t = evt.touches[0];
+          onPointerHoldStart(t.clientX, t.clientY, evt);
+        };
+        var onTouchMoveHold = function(evt) {
+          if (!evt.touches || !evt.touches.length) return;
+          var t = evt.touches[0];
+          onPointerHoldMove(t.clientX, t.clientY);
+        };
+        var onBlurResetHold = function() {
+          hold2xState.spaceDown = false;
+          hold2xState.pointerDown = false;
+          stopHold2x();
+        };
+
+        window.addEventListener('keydown', onSpaceKeyDown, true);
+        window.addEventListener('keyup', onSpaceKeyUp, true);
+        rootEl.addEventListener('mousedown', onMouseDownHold, true);
+        window.addEventListener('mousemove', onMouseMoveHold, true);
+        window.addEventListener('mouseup', onPointerHoldEnd, true);
+        rootEl.addEventListener('touchstart', onTouchStartHold, { capture: true, passive: true });
+        window.addEventListener('touchmove', onTouchMoveHold, { capture: true, passive: true });
+        window.addEventListener('touchend', onPointerHoldEnd, true);
+        window.addEventListener('touchcancel', onPointerHoldEnd, true);
+        rootEl.addEventListener('click', suppressClickAfterHold, true);
+        rootEl.addEventListener('touchend', suppressClickAfterHold, true);
+        window.addEventListener('blur', onBlurResetHold, false);
+        player.on('pause', onBlurResetHold);
+
+        player.on('dispose', function() {
+          window.removeEventListener('keydown', onSpaceKeyDown, true);
+          window.removeEventListener('keyup', onSpaceKeyUp, true);
+          window.removeEventListener('mousemove', onMouseMoveHold, true);
+          window.removeEventListener('mouseup', onPointerHoldEnd, true);
+          window.removeEventListener('touchmove', onTouchMoveHold, true);
+          window.removeEventListener('touchend', onPointerHoldEnd, true);
+          window.removeEventListener('touchcancel', onPointerHoldEnd, true);
+          window.removeEventListener('blur', onBlurResetHold, false);
+        });
+      }
+
       positionCustomButtons();
       syncFullscreenTitleBarVisibility();
       player.on('fullscreenchange', syncFullscreenTitleBarVisibility);
@@ -3519,7 +3810,6 @@ window.SyncLevel = SyncLevel;
       });
     });
   }
-
   
    function createBackgroundShield() {
     var wakeLock = null;
@@ -6131,10 +6421,6 @@ window.SyncLevel = SyncLevel;
     // Volume
     'arrowup':     (p) => { adjustVolume(p,  VOLUME_STEP); return true; },
     'arrowdown':   (p) => { adjustVolume(p, -VOLUME_STEP); return true; },
-
-    // Playback speed
-    '>':           (p) => { adjustSpeed(p,  SPEED_STEP); return true; },
-    '<':           (p) => { adjustSpeed(p, -SPEED_STEP); return true; },
 
     // Number keys → seek to 0%–90%
     '0': (p) => { seekToPercent(p,  0); return true; },
