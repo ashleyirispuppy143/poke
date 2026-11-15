@@ -1428,7 +1428,7 @@ window.SyncLevel = SyncLevel;
       '  margin-right: 4px;',
       '  color: #cccccc;',
       '  transform: translateY(-0.5px);',
-      '}'
+      '}',
       '.alabaster-rec-play-unicode {',
       '  display: inline-block;',
       '  font-size: 10px;',
