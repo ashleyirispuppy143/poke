@@ -1,4 +1,4 @@
- <!--
+<!--
     This Source Code Form is subject to the terms of the GNU General Public License:
 
     Copyright (C) 2021-2026 PokeTube (https://codeberg.org/ashleyirispuppy/poketube)
@@ -286,7 +286,7 @@
     
     <style>
     :root {
-         --bg-body: #202124;
+        --bg-body: #202124;
         --bg-surface: #202124; 
         --bg-output: #303134;
         --bg-hover: rgba(255, 255, 255, 0.08);
@@ -297,7 +297,7 @@
         --text-main: #e8eaed;
         --text-muted: #9aa0a6;
         
-         --accent-pink: #ffabcc;
+        --accent-pink: #ffabcc;
         --accent-hover: #f88ab4;
         --accent-bg: rgba(255, 171, 204, 0.15); 
         
@@ -393,10 +393,31 @@
         border-radius: 3px 3px 0 0;
     }
 
+    .mobile-lang-btn {
+        display: none;
+        flex: 1;
+        background: transparent;
+        border: none;
+        color: var(--accent-pink);
+        font-size: 14px;
+        font-weight: 500;
+        height: 48px;
+        padding: 0 12px;
+        cursor: pointer;
+        text-align: center;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        border-radius: 4px;
+        transition: background 0.2s;
+    }
+    .mobile-lang-btn:hover { background: var(--bg-hover); }
+
     .dropdown-btn {
         background: transparent; border: none; color: var(--text-muted);
         height: 40px; width: 40px; display: flex; align-items: center;
         justify-content: center; border-radius: 50%; cursor: pointer; margin-left: 4px;
+        flex-shrink: 0;
     }
     .dropdown-btn:hover { background: var(--bg-hover); color: var(--text-main); }
 
@@ -404,7 +425,7 @@
         background: transparent; border: none; color: var(--text-muted);
         height: 40px; width: 40px; display: flex; align-items: center; text-decoration: none;
         justify-content: center; border-radius: 50%; cursor: pointer;
-        margin: 0 12px; transition: transform 0.2s;
+        margin: 0 12px; transition: transform 0.2s; flex-shrink: 0;
     }
     .swap-btn:hover { background: var(--bg-hover); color: var(--text-main); }
 
@@ -450,16 +471,28 @@
     .lang-modal-overlay.active { display: flex; }
 
     .modal-header {
-        display: flex; align-items: center; padding: 8px 16px;
+        display: flex; align-items: center; padding: 6px 12px;
         border-bottom: 1px solid var(--divider-subtle);
+        min-height: 56px;
     }
     
-    .modal-back {
+    .modal-back, .modal-search-btn {
         background: none; border: none; color: var(--text-muted);
-        width: 48px; height: 48px; border-radius: 50%;
-        cursor: pointer; margin-right: 8px;
+        width: 44px; height: 44px; border-radius: 50%;
+        cursor: pointer; display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
     }
-    .modal-back:hover { background: var(--bg-hover); color: var(--text-main); }
+    .modal-back { margin-right: 8px; }
+    .modal-back:hover, .modal-search-btn:hover { background: var(--bg-hover); color: var(--text-main); }
+
+    .modal-title {
+        display: none;
+        font-size: 18px;
+        font-weight: 500;
+        color: var(--text-main);
+        flex: 1;
+    }
+    .modal-search-btn { display: none; }
 
     .search-input {
         background: transparent; border: none; color: var(--text-main);
@@ -467,6 +500,20 @@
     }
 
     .modal-body { padding: 16px 24px; overflow-y: auto; flex: 1; }
+
+    .modal-section-title {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text-muted);
+        padding: 12px 16px 8px;
+        letter-spacing: 0.3px;
+    }
+
+    .modal-divider {
+        height: 1px;
+        background: var(--divider-subtle);
+        margin: 8px 0;
+    }
 
     .lang-grid {
         display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 4px;
@@ -476,17 +523,16 @@
         background: transparent; border: none; color: var(--text-main);
         font-size: 14px; text-align: left; padding: 10px 16px;
         border-radius: 6px; cursor: pointer; display: flex; align-items: center;
+        width: 100%;
     }
     .lang-item:hover { background: var(--bg-hover); }
     .lang-item.selected { background: var(--accent-bg); color: var(--accent-pink); font-weight: 500; }
-    .lang-item .check-icon { margin-right: 12px; font-size: 18px; opacity: 0; }
+    .lang-item .check-icon { margin-right: 16px; font-size: 18px; opacity: 0; }
     .lang-item.selected .check-icon { opacity: 1; }
     
-    /* Sparkle Icon for Detect Language */
-    .sparkle-icon { font-size: 16px; margin-left: 6px; color: var(--text-muted); }
+    .sparkle-icon { font-size: 16px; margin-left: 8px; color: var(--text-muted); }
     .lang-item.selected .sparkle-icon { color: var(--accent-pink); }
 
-    /* Throbber and loading states */
     .throbber-container {
         position: absolute;
         top: 50%;
@@ -519,10 +565,7 @@
         transition: opacity 0.2s ease-in-out;
     }
 
-    /* ---------------------------------
-       No-JS Fallback Base Styling
-       --------------------------------- */
-    .no-js-fallback { display: none; } /* Hidden by default when JS is active */
+    .no-js-fallback { display: none; } 
     .fallback-controls { display: none; }
     
     .translate-submit-btn {
@@ -533,18 +576,39 @@
     .translate-submit-btn:hover { background: var(--accent-hover); }
 
     @media (max-width: 800px) {
+        main { padding: 16px 12px; }
         .editor-grid { grid-template-columns: 1fr; }
         .input-panel { border-right: none; border-bottom: 1px solid var(--divider-subtle); }
+
+        .lang-tabs-group, .dropdown-btn { display: none !important; }
+        .mobile-lang-btn { display: block; }
+        .swap-btn { margin: 0 4px; }
+
+        .lang-modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            border-radius: 0;
+            z-index: 9999;
+        }
+        .modal-body { padding: 8px 0; }
+        .lang-grid { grid-template-columns: 1fr; gap: 0; }
+        .lang-item { border-radius: 0; padding: 14px 24px; font-size: 16px; }
+        .modal-section-title { padding: 16px 24px 8px; font-size: 13px; }
+
+        /* Mobile Modal Header Search Toggle */
+        .modal-header:not(.searching) .modal-title { display: block; }
+        .modal-header:not(.searching) .modal-search-btn { display: flex; }
+        .modal-header:not(.searching) .search-input { display: none; }
     }
 
     a {
-  color: var(--text-muted);
-  text-decoration: none; 
-}
+        color: var(--text-muted);
+        text-decoration: none; 
+    }
 
     a:hover {
-  text-decoration: underline;  
-}
+        text-decoration: underline;  
+    }
     </style>
 
     <noscript>
@@ -616,11 +680,13 @@
             
             <div class="toolbar">
                 <div class="lang-tabs-group" id="tabs_from"></div>
+                <button type="button" class="mobile-lang-btn" id="mobile_from_btn" onclick="openModal('from')"></button>
                 <button type="button" class="dropdown-btn material-icons" onclick="openModal('from')">expand_more</button>
 
                 <button type="button" id="swapBtn" class="swap-btn material-icons" title="Swap languages">swap_horiz</button>
 
                 <div class="lang-tabs-group" id="tabs_to" style="justify-content: flex-end;"></div>
+                <button type="button" class="mobile-lang-btn" id="mobile_to_btn" onclick="openModal('to')"></button>
                 <button type="button" class="dropdown-btn material-icons" onclick="openModal('to')">expand_more</button>
             </div>
 
@@ -673,13 +739,13 @@
             </div>
 
             <div class="lang-modal-overlay" id="langModal">
-                <div class="modal-header">
-                    <button type="button" class="modal-back material-icons" onclick="closeModal()">arrow_back</button>
+                <div class="modal-header" id="modalHeader">
+                    <button type="button" class="modal-back material-icons" onclick="handleModalBack()">arrow_back</button>
+                    <div class="modal-title" id="modalTitle">Translate from</div>
                     <input type="text" class="search-input" id="langSearch" placeholder="Search languages">
+                    <button type="button" class="modal-search-btn material-icons" id="modalSearchBtn" onclick="enableModalSearch()">search</button>
                 </div>
-                <div class="modal-body">
-                    <div class="lang-grid" id="modalLangGrid"></div>
-                </div>
+                <div class="modal-body" id="modalBody"></div>
             </div>
 
         </form>
@@ -705,21 +771,25 @@
             nativeTo: document.getElementById('native_to'),
             tabsFrom: document.getElementById('tabs_from'),
             tabsTo: document.getElementById('tabs_to'),
+            mobileFromBtn: document.getElementById('mobile_from_btn'),
+            mobileToBtn: document.getElementById('mobile_to_btn'),
             input: document.getElementById('input'),
             output: document.getElementById('output'),
             throbber: document.getElementById('throbber'),
             swapBtn: document.getElementById('swapBtn'),
             modal: document.getElementById('langModal'),
-            modalGrid: document.getElementById('modalLangGrid'),
+            modalHeader: document.getElementById('modalHeader'),
+            modalTitle: document.getElementById('modalTitle'),
+            modalBody: document.getElementById('modalBody'),
             searchInput: document.getElementById('langSearch'),
             textareas: document.querySelectorAll('textarea')
         };
 
-         let state = {
+        let state = {
             currentFrom: DOM.nativeFrom.value,
             currentTo: DOM.nativeTo.value,
             recentFrom: [],
-            recentTo:[],
+            recentTo: [],
             modalMode: null 
         };
 
@@ -736,12 +806,12 @@
                 let sT = JSON.parse(localStorage.getItem(STORAGE_KEYS.TO));
                 
                 state.recentFrom = Array.isArray(sF) && sF.length ? sF : ['en', 'es', 'fr'];
-                state.recentTo = Array.isArray(sT) && sT.length ? sT :['en', 'es', 'fr'];
+                state.recentTo = Array.isArray(sT) && sT.length ? sT : ['en', 'es', 'fr'];
                 
                 state.recentFrom = state.recentFrom.filter(c => c !== 'auto');
                 state.recentTo = state.recentTo.filter(c => c !== 'auto');
             } catch(e) {
-                state.recentFrom =['en', 'es', 'fr'];
+                state.recentFrom = ['en', 'es', 'fr'];
                 state.recentTo = ['en', 'es', 'fr'];
             }
         };
@@ -776,23 +846,56 @@
             DOM.tabsFrom.innerHTML = '';
             DOM.tabsTo.innerHTML = '';
 
-            // Source Tabs
             DOM.tabsFrom.appendChild(createTab('auto', state.currentFrom === 'auto', 'from'));
             state.recentFrom.forEach(code => {
                 DOM.tabsFrom.appendChild(createTab(code, state.currentFrom === code, 'from'));
             });
 
-            // Target Tabs
             state.recentTo.forEach(code => {
                 DOM.tabsTo.appendChild(createTab(code, state.currentTo === code, 'to'));
             });
+
+            DOM.mobileFromBtn.textContent = getLangName(state.currentFrom);
+            DOM.mobileToBtn.textContent = getLangName(state.currentTo);
             
-            // Keep native selects synced for form submission functionality
             DOM.nativeFrom.value = state.currentFrom;
             DOM.nativeTo.value = state.currentTo;
         };
 
+        const performSwap = () => {
+            let safeFrom = state.currentFrom === 'auto' ? (state.recentFrom[0] || 'en') : state.currentFrom;
+            if (safeFrom === state.currentTo) {
+                safeFrom = safeFrom === 'en' ? 'es' : 'en';
+            }
+            
+            const temp = safeFrom;
+            state.currentFrom = state.currentTo;
+            state.currentTo = temp;
+            
+            addRecent('from', state.currentFrom);
+            addRecent('to', state.currentTo);
+            
+            if (DOM.output.value) {
+                [DOM.input.value, DOM.output.value] = [DOM.output.value, DOM.input.value];
+            }
+            
+            renderTabs();
+            resizeAllTextareas();
+            fetchTranslation();
+        };
+
         const selectLanguage = (type, code) => {
+            if (type === 'from' && code !== 'auto' && code === state.currentTo) {
+                closeModal();
+                performSwap();
+                return;
+            }
+            if (type === 'to' && code === state.currentFrom && state.currentFrom !== 'auto') {
+                closeModal();
+                performSwap();
+                return;
+            }
+
             if(type === 'from') {
                 state.currentFrom = code;
                 addRecent('from', code);
@@ -808,69 +911,135 @@
 
         window.openModal = (type) => {
             state.modalMode = type;
+            DOM.modalTitle.textContent = type === 'from' ? 'Translate from' : 'Translate to';
+            DOM.modalHeader.classList.remove('searching');
             DOM.modal.classList.add('active');
             DOM.searchInput.value = '';
-            renderModalGrid('');
+            renderModalContent('');
+            
+            if (window.innerWidth > 800) {
+                DOM.searchInput.focus();
+            }
+        };
+
+        window.enableModalSearch = () => {
+            DOM.modalHeader.classList.add('searching');
             DOM.searchInput.focus();
+        };
+
+        window.handleModalBack = () => {
+            if (window.innerWidth <= 800 && DOM.modalHeader.classList.contains('searching')) {
+                DOM.modalHeader.classList.remove('searching');
+                DOM.searchInput.value = '';
+                renderModalContent('');
+            } else {
+                closeModal();
+            }
         };
 
         window.closeModal = () => {
             DOM.modal.classList.remove('active');
+            DOM.modalHeader.classList.remove('searching');
         };
 
-        const renderModalGrid = (filterText) => {
-            DOM.modalGrid.innerHTML = '';
-            const lowerFilter = filterText.toLowerCase();
+        const createLangItem = (lang, currentSelected) => {
+            const isSelected = lang.code === currentSelected;
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = `lang-item ${isSelected ? 'selected' : ''}`;
+            
+            const icon = document.createElement('span');
+            icon.className = 'material-icons check-icon';
+            icon.textContent = 'check';
+            btn.appendChild(icon);
+            
+            const textNode = document.createTextNode(lang.name);
+            btn.appendChild(textNode);
+            
+            if(lang.code === 'auto') {
+                const sparkle = document.createElement('span');
+                sparkle.className = 'material-icons sparkle-icon';
+                sparkle.textContent = 'auto_awesome';
+                btn.appendChild(sparkle);
+            }
+            
+            btn.onclick = () => selectLanguage(state.modalMode, lang.code);
+            return btn;
+        };
+
+        const renderModalContent = (filterText) => {
+            DOM.modalBody.innerHTML = '';
+            const lowerFilter = filterText.trim().toLowerCase();
             const currentSelected = state.modalMode === 'from' ? state.currentFrom : state.currentTo;
+            const recentList = state.modalMode === 'from' ? state.recentFrom : state.recentTo;
 
-            ALL_LANGS.forEach(lang => {
-                if(state.modalMode === 'to' && lang.code === 'auto') return;
-
-                if(lang.name.toLowerCase().includes(lowerFilter)) {
-                    const isSelected = lang.code === currentSelected;
-                    const btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = `lang-item ${isSelected ? 'selected' : ''}`;
-                    
-                    const icon = document.createElement('span');
-                    icon.className = 'material-icons check-icon';
-                    icon.textContent = 'check';
-                    btn.appendChild(icon);
-                    
-                    const textNode = document.createTextNode(lang.name);
-                    btn.appendChild(textNode);
-                    
-                    // Add Sparkle Icon if it's "Detect Language"
-                    if(lang.code === 'auto') {
-                        const sparkle = document.createElement('span');
-                        sparkle.className = 'material-icons sparkle-icon';
-                        sparkle.textContent = 'auto_awesome';
-                        btn.appendChild(sparkle);
+            if (lowerFilter) {
+                const grid = document.createElement('div');
+                grid.className = 'lang-grid';
+                ALL_LANGS.forEach(lang => {
+                    if (state.modalMode === 'to' && lang.code === 'auto') return;
+                    if (lang.name.toLowerCase().includes(lowerFilter)) {
+                        grid.appendChild(createLangItem(lang, currentSelected));
                     }
-                    
-                    btn.onclick = () => selectLanguage(state.modalMode, lang.code);
-                    DOM.modalGrid.appendChild(btn);
+                });
+                DOM.modalBody.appendChild(grid);
+                return;
+            }
+
+            if (state.modalMode === 'from') {
+                const autoLang = ALL_LANGS.find(l => l.code === 'auto');
+                if (autoLang) {
+                    const topGrid = document.createElement('div');
+                    topGrid.className = 'lang-grid';
+                    topGrid.appendChild(createLangItem(autoLang, currentSelected));
+                    DOM.modalBody.appendChild(topGrid);
+
+                    const div = document.createElement('div');
+                    div.className = 'modal-divider';
+                    DOM.modalBody.appendChild(div);
                 }
+            }
+
+            if (recentList && recentList.length > 0) {
+                const recTitle = document.createElement('div');
+                recTitle.className = 'modal-section-title';
+                recTitle.textContent = 'Recent languages';
+                DOM.modalBody.appendChild(recTitle);
+
+                const recGrid = document.createElement('div');
+                recGrid.className = 'lang-grid';
+                recentList.forEach(code => {
+                    const lang = ALL_LANGS.find(l => l.code === code);
+                    if (lang) {
+                        recGrid.appendChild(createLangItem(lang, currentSelected));
+                    }
+                });
+                DOM.modalBody.appendChild(recGrid);
+
+                const div2 = document.createElement('div');
+                div2.className = 'modal-divider';
+                DOM.modalBody.appendChild(div2);
+            }
+
+            const allTitle = document.createElement('div');
+            allTitle.className = 'modal-section-title';
+            allTitle.textContent = 'All languages';
+            DOM.modalBody.appendChild(allTitle);
+
+            const allGrid = document.createElement('div');
+            allGrid.className = 'lang-grid';
+            ALL_LANGS.forEach(lang => {
+                if (lang.code === 'auto') return;
+                allGrid.appendChild(createLangItem(lang, currentSelected));
             });
+            DOM.modalBody.appendChild(allGrid);
         };
 
-        DOM.searchInput.addEventListener('input', (e) => renderModalGrid(e.target.value));
+        DOM.searchInput.addEventListener('input', (e) => renderModalContent(e.target.value));
 
         DOM.swapBtn.addEventListener('click', (e) => {
-            e.preventDefault(); // Prevent the fallback anchor link from firing in JS mode
-            let safeFrom = state.currentFrom === 'auto' ? 'en' : state.currentFrom;
-            
-            const temp = safeFrom;
-            safeFrom = state.currentTo;
-            state.currentTo = temp;
-            state.currentFrom = safeFrom;
-            
-            addRecent('from', state.currentFrom);
-            addRecent('to', state.currentTo);[DOM.input.value, DOM.output.value] = [DOM.output.value, DOM.input.value];
-            
-            renderTabs();
-            resizeAllTextareas();
-            fetchTranslation();
+            e.preventDefault();
+            performSwap();
         });
 
         const resize = (el) => {
@@ -898,7 +1067,6 @@
                 return;
             }
 
-            // Show proper loading indicator depending on current state
             if (!DOM.output.value) {
                 DOM.throbber.classList.add('active');
                 DOM.output.classList.add('text-hidden');
@@ -927,7 +1095,6 @@
             } catch (error) {
                 console.error("Translation Error:", error);
             } finally {
-                // Remove all loading states once request resolves
                 DOM.throbber.classList.remove('active');
                 DOM.output.classList.remove('text-hidden');
                 DOM.output.classList.remove('text-loading');
@@ -937,7 +1104,6 @@
         const debouncedTranslate = debounce(fetchTranslation, 100);
         DOM.input.addEventListener('input', debouncedTranslate);
 
-        // Run Setup
         initRecents();
         if(state.currentFrom && state.currentFrom !== 'auto') addRecent('from', state.currentFrom);
         if(state.currentTo) addRecent('to', state.currentTo);
