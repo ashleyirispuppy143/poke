@@ -196,6 +196,10 @@
         const issuePageUrl = locals.url || locals.page_url || "Please paste the Poke page URL here";
         const issueLabel = "bug";
 
+        const isAgeRestricted =
+            locals.err_reason === "AGE_RESTRICTED" ||
+            /sign in to confirm your age|this video is age-restricted/i.test(issueErrorMessage);
+
         const issueTitle = `[Video Error] ${issueVideoId} | ${issueErrorMessage}`;
 
         const issueBody = [
@@ -255,7 +259,9 @@
         <h1>Video unavailable</h1>
 
         <p class="subtitle">
-            <% if (locals.error_message) { %>
+            <% if (isAgeRestricted) { %>
+                this video is age-restricted. please try to watch this on youtube
+            <% } else if (locals.error_message) { %>
                 <% if (error_message === "Video unavailable.") { %>
                     Video unavailable - This Backend is blocked (╥﹏╥)
                 <% } else { %>
@@ -267,6 +273,7 @@
         </p>
 
         <% if (
+            isAgeRestricted ||
             (locals.knownErrors && locals.err_reason && knownErrors[err_reason]) ||
             locals.err_reason === "LIVE_EVENT_UPCOMING" ||
             /this live event will begin in/i.test(issueErrorMessage)
@@ -291,10 +298,12 @@
             <% } %>
         </div>
 
-        <div class="report-issue">
-            Think this is a Poke mistake?<br>
-            <a href="<%= issueUrl %>" target="_blank" rel="noopener noreferrer">Report an issue here</a>.
-        </div>
+        <% if (!isAgeRestricted) { %>
+            <div class="report-issue">
+                Think this is a Poke mistake?<br>
+                <a href="<%= issueUrl %>" target="_blank" rel="noopener noreferrer">Report an issue here</a>.
+            </div>
+        <% } %>
 
     </div>
 
