@@ -23,7 +23,8 @@ const UNRECOVERABLE_REASONS = new Set([
   "UPLOADER_REMOVED",
   "VIDEO_UNAVAILABLE",
   "INAPPROPRIATE",
-  "MEMBERS_ONLY"
+  "MEMBERS_ONLY",
+  "AGE_RESTRICTED"
 ]);
 
 class InnerTubePokeVidious {
@@ -168,7 +169,7 @@ class InnerTubePokeVidious {
   }
 
   /**
-   * Hard blocks (copyright, uploader removed, inappropriate, members only) are blocked forever.
+   * Hard blocks (copyright, uploader removed, inappropriate, members only, age restricted) are blocked forever.
    */
   shouldBlockRequest(videoId) {
     const entry = this.blockedVideos.get(videoId);
@@ -220,7 +221,8 @@ class InnerTubePokeVidious {
       "VIDEO_UNAVAILABLE": "Video unavailable.",
       "INAPPROPRIATE": "This video may be inappropriate for some users.",
       "MEMBERS_ONLY": "This video is available to this channel's members.",
-      "LIVE_EVENT_UPCOMING": "This live event has not started yet."
+      "LIVE_EVENT_UPCOMING": "This live event has not started yet.",
+      "AGE_RESTRICTED": "this video is age-restricted. please try to watch this on youtube"
     };
 
     if (this.shouldBlockRequest(v)) {
@@ -303,6 +305,7 @@ class InnerTubePokeVidious {
               return;
             }
 
+            // Detect upcoming live events without adding them to blockedfilterlist.txt
             if (this.isLiveEventError(text)) {
               let customMsg = knownErrors["LIVE_EVENT_UPCOMING"];
               try {
@@ -328,6 +331,13 @@ class InnerTubePokeVidious {
             if (resp.status === 500 && text.includes("This video may be inappropriate for some users")) {
               this.addBlockedVideo(v, "INAPPROPRIATE");
               throw new Error("INAPPROPRIATE");
+            }
+            if (
+              text.includes("Sign in to confirm your age") ||
+              text.toLowerCase().includes("sign in to confirm your age")
+            ) {
+              this.addBlockedVideo(v, "AGE_RESTRICTED");
+              throw new Error("AGE_RESTRICTED");
             }
             if (
               text.includes("This video is available to this channel's members on level") ||
@@ -480,6 +490,13 @@ class InnerTubePokeVidious {
                 const liveErr = new Error("LIVE_EVENT_UPCOMING");
                 liveErr.customMessage = parsed.error;
                 throw liveErr;
+              }
+              if (
+                parsed.error.includes("Sign in to confirm your age") ||
+                parsed.error.toLowerCase().includes("sign in to confirm your age")
+              ) {
+                this.addBlockedVideo(v, "AGE_RESTRICTED");
+                throw new Error("AGE_RESTRICTED");
               }
               if (
                 parsed.error.includes("This video is available to this channel's members on level") ||
