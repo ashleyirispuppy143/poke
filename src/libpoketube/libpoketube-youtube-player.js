@@ -305,7 +305,7 @@ class InnerTubePokeVidious {
               return;
             }
 
-            // Detect upcoming live events without adding them to blockedfilterlist.txt
+            // Detect upcoming live events without adding them to blockedfilterlist, since they are not un-recovarable
             if (this.isLiveEventError(text)) {
               let customMsg = knownErrors["LIVE_EVENT_UPCOMING"];
               try {
