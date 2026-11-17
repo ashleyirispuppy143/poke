@@ -93,7 +93,7 @@ window.SyncLevel = SyncLevel;
     };
   }
 
-  var config = {
+var config = {
     minPlayBuffer: 0.25,
     minResumeBuffer: 0.55,
     longVideoThresholdSec: 600,
@@ -105,14 +105,14 @@ window.SyncLevel = SyncLevel;
     highResMinPlayBuffer: 0.75,
     highResMinResumeBuffer: 1.5,
     endTolerance: 0.45,
-    alignThreshold: 0.025,
-    maxStartDesyncSec: 0.085,
-    driftTolerance: 0.085,
-    heavyDriftTolerance: 0.095,
+    alignThreshold: 0.01,
+    maxStartDesyncSec: 0.06,
+    driftTolerance: 0.06,
+    heavyDriftTolerance: 0.065,
     hardSeekDrift: 0.2,
     heavyHardSeekDrift: 0.2,
-    syncCooldownMs: 900,
-    longSyncCooldownMs: 1400,
+    syncCooldownMs: 1200,
+    longSyncCooldownMs: 1600,
     watchdogMs: 180,
     tickMs: 45,
     seekTimeoutMs: 2500,
@@ -120,7 +120,7 @@ window.SyncLevel = SyncLevel;
     highResSeekTimeoutMs: 6500,
     startupProtectionMs: 5500
   };
-
+  
   window.Alabaster = {
     active: false,
     muxedMode: false,
@@ -4746,6 +4746,15 @@ function SetAlabasterUI(player, onRetryCallback) {
         });
       }
 
+      function snapAudioToVideoLive(targetSeconds) {
+        state.internalAudioSeeking = true;
+        state.liveSnapUntil = compat.now() + 250;
+        state.savedMasterTime = targetSeconds;
+        runInternal(function() {
+          try { nativeSetATime(targetSeconds); } catch (_) {}
+        });
+      }
+      
       function setAudioTimeInternally(seconds) {
         state.internalAudioSeeking = true;
         state.savedMasterTime = seconds;
@@ -5238,19 +5247,13 @@ function SetAlabasterUI(player, onRetryCallback) {
         var vNow = nativeGetVTime();
         var diff = Math.abs(vNow - aNow);
 
-        if (diff > config.maxStartDesyncSec) {
-          if (bufferMonitor.isTimeBuffered(videoEl, aNow, 0.1)) {
-            snapVideoToAudioLive(aNow);
-          } else {
-            freezeBothStreams();
-            setBufferSpinner(true);
-            seekVideoAndWait(aNow, function() {
-              syncPlaybackState();
-            });
+        if (diff > config.maxStartDesyncSec && vNow > 0.02) {
+          if (bufferMonitor.isTimeBuffered(audioEl, vNow, 0.1)) {
+            snapAudioToVideoLive(vNow);
           }
         }
       }
-
+      
       function startLockstepPlayback() {
         var currentSeq = ++state.sequence;
         clearPendingWait();
@@ -5451,7 +5454,7 @@ function SetAlabasterUI(player, onRetryCallback) {
           return;
         }
 
-        var fireSimultaneousPlay = function() {
+      var fireSimultaneousPlay = function() {
           if (currentSeq !== state.sequence || !state.wantPlaying || state.userSeeking) return;
 
           if (isPlaybackCompleted()) {
@@ -5542,20 +5545,12 @@ function SetAlabasterUI(player, onRetryCallback) {
                   var postPlayA = nativeGetATime();
                   var postPlayV = nativeGetVTime();
                   if (!isVideoBypassed() && !state.hidden && Math.abs(postPlayV - postPlayA) > config.maxStartDesyncSec) {
-                    if (bufferMonitor.isTimeBuffered(videoEl, postPlayA, 0.12) || isTabWaking()) {
-                      snapVideoToAudioLive(postPlayA);
-                    } else {
-                      freezeBothStreams();
-                      setBufferSpinner(true);
-                      seekVideoAndWait(postPlayA, function() {
-                        syncPlaybackState();
-                      });
-                      return;
+                    if (postPlayV > 0.02 && bufferMonitor.isTimeBuffered(audioEl, postPlayV, 0.1)) {
+                      snapAudioToVideoLive(postPlayV);
                     }
                   }
 
-                  setTimeout(function() { verifyLockstepAndUnfreeze(currentSeq); }, 90);
-                  setTimeout(function() { verifyLockstepAndUnfreeze(currentSeq); }, 240);
+                  setTimeout(function() { verifyLockstepAndUnfreeze(currentSeq); }, 180);
 
                   state.hasStartedPlayback = true;
                   state.initialAutoplayAttempt = false;
@@ -5600,7 +5595,7 @@ function SetAlabasterUI(player, onRetryCallback) {
             }
           });
         };
-
+        
         fireSimultaneousPlay();
       }
 
@@ -6290,7 +6285,7 @@ function SetAlabasterUI(player, onRetryCallback) {
       }, false);
 
 
-state.tickTimer = setInterval(function() {
+      state.tickTimer = setInterval(function() {
         var now = compat.now();
         if (Boolean(document.hidden) !== state.hidden) {
           handleTabVisibility();
@@ -6333,6 +6328,7 @@ state.tickTimer = setInterval(function() {
 
         if (!state.wantPlaying) {
           state.highDriftSince = 0;
+          state.emaDrift = 0;
           if (state.buffering) setBufferSpinner(false);
           if (!nativeGetVPaused()) pauseVideoOnly();
           if (!nativeGetAPaused()) pauseAudioOnly();
@@ -6354,6 +6350,7 @@ state.tickTimer = setInterval(function() {
 
         if (isTabWaking()) {
           state.highDriftSince = 0;
+          state.emaDrift = 0;
           if (!aPaused) {
             if (videoEl.readyState === 0) {
               reprimeEvictedVideo(liveAudio);
@@ -6365,10 +6362,7 @@ state.tickTimer = setInterval(function() {
         }
 
         if (isLiveSnapping()) {
-          if (videoEl.seeking || videoEl.readyState < 2) {
-            if (!isTabWaking() && !aPaused && videoEl.readyState >= 1 && bufferMonitor.ahead(videoEl, liveAudio) < 0.05) {
-              pauseAudioOnly();
-            }
+          if (videoEl.seeking || audioEl.seeking || videoEl.readyState < 2) {
             return;
           }
           state.liveSnapUntil = 0;
@@ -6396,6 +6390,7 @@ state.tickTimer = setInterval(function() {
 
         if (state.userSeeking) {
           state.highDriftSince = 0;
+          state.emaDrift = 0;
           freezeBothStreams();
           if ((!isVideoBypassed() && !state.hidden && videoEl.seeking) || audioEl.seeking) {
             return;
@@ -6418,6 +6413,7 @@ state.tickTimer = setInterval(function() {
 
         if (isVideoBypassed()) {
           state.highDriftSince = 0;
+          state.emaDrift = 0;
           if (aPaused && !audioEl.ended && !audioEl.seeking && audioEl.readyState >= 2) {
             setBufferSpinner(false);
             runInternal(function() { compat.safePlay(nativeAudioPlay); });
@@ -6427,6 +6423,7 @@ state.tickTimer = setInterval(function() {
 
         if (state.hidden) {
           state.highDriftSince = 0;
+          state.emaDrift = 0;
           if (state.buffering) {
             syncPlaybackState();
             return;
@@ -6467,6 +6464,7 @@ state.tickTimer = setInterval(function() {
 
         if (state.buffering) {
           state.highDriftSince = 0;
+          state.emaDrift = 0;
           if (!aPaused || !vPaused) freezeBothStreams();
           syncPlaybackState();
           return;
@@ -6484,6 +6482,7 @@ state.tickTimer = setInterval(function() {
 
         if (videoStarved || audioStarved) {
           state.highDriftSince = 0;
+          state.emaDrift = 0;
           setBufferSpinner(true);
           freezeBothStreams();
           armNetworkWatchdog();
@@ -6492,6 +6491,7 @@ state.tickTimer = setInterval(function() {
 
         if (vPaused || aPaused) {
           state.highDriftSince = 0;
+          state.emaDrift = 0;
           if (!isInPlayGrace() && !isTabWaking()) {
             if (!aPaused) pauseAudioOnly();
             if (!vPaused) pauseVideoOnly();
@@ -6527,6 +6527,7 @@ state.tickTimer = setInterval(function() {
             state.vStallSince = 0;
             state.aStallSince = 0;
             state.highDriftSince = 0;
+            state.emaDrift = 0;
             setBufferSpinner(true);
             freezeBothStreams();
             armNetworkWatchdog();
@@ -6539,6 +6540,7 @@ state.tickTimer = setInterval(function() {
             state.vStallSince = 0;
             state.aStallSince = 0;
             state.highDriftSince = 0;
+            state.emaDrift = 0;
             setBufferSpinner(true);
             freezeBothStreams();
             armNetworkWatchdog();
@@ -6557,13 +6559,16 @@ state.tickTimer = setInterval(function() {
         if (videoEl.ended || audioEl.ended || bufferMonitor.isNearEnd(videoEl, vNow) || bufferMonitor.isNearEnd(audioEl, aNow)) {
           state.driftCount = 0;
           state.highDriftSince = 0;
+          state.emaDrift = 0;
           return;
         }
 
-        var absDrift = Math.abs(aNow - vNow);
+        var rawDrift = Math.abs(aNow - vNow);
+        state.emaDrift = state.emaDrift ? (state.emaDrift * 0.55 + rawDrift * 0.45) : rawDrift;
+        var absDrift = state.emaDrift;
         var tolerance = getDriftTolerance();
 
-        if (absDrift <= 0.2) {
+        if (rawDrift <= 0.2) {
           state.highDriftSince = 0;
         }
 
@@ -6572,7 +6577,7 @@ state.tickTimer = setInterval(function() {
           return;
         }
 
-        if (absDrift > 0.2) {
+        if (rawDrift > 0.2) {
           if (!state.highDriftSince) {
             state.highDriftSince = now;
           }
@@ -6581,6 +6586,7 @@ state.tickTimer = setInterval(function() {
           if (highDriftDuration >= 2500) {
             state.highDriftSince = 0;
             state.driftCount = 0;
+            state.emaDrift = 0;
             state.lastCorrectionAt = now;
             setBufferSpinner(true);
             freezeBothStreams();
@@ -6605,11 +6611,11 @@ state.tickTimer = setInterval(function() {
             return;
           }
 
-          if ((now - state.lastCorrectionAt) > getSyncCooldown()) {
-            var reqSnapLeadQuick = isLongVideo() ? 0.4 : 0.2;
-            if (bufferMonitor.isTimeBuffered(videoEl, aNow, reqSnapLeadQuick)) {
+          if ((now - state.lastCorrectionAt) > getSyncCooldown() && !vNotMoving && vNow > 0.05) {
+            if (bufferMonitor.isTimeBuffered(audioEl, vNow, 0.2)) {
               state.lastCorrectionAt = now;
-              snapVideoToAudioLive(aNow);
+              state.emaDrift = 0;
+              snapAudioToVideoLive(vNow);
             }
           }
           return;
@@ -6618,21 +6624,15 @@ state.tickTimer = setInterval(function() {
         state.driftCount++;
         var cooldownPassed = (now - state.lastCorrectionAt) > getSyncCooldown();
 
-        if (state.driftCount >= 2 && cooldownPassed) {
+        if (state.driftCount >= 3 && cooldownPassed) {
           state.driftCount = 0;
           state.lastCorrectionAt = now;
+          state.emaDrift = 0;
 
-          var reqSnapLead = isLongVideo() ? 0.4 : 0.2;
-          if (bufferMonitor.isTimeBuffered(videoEl, aNow, reqSnapLead)) {
-            snapVideoToAudioLive(aNow);
+          if (!vNotMoving && vNow > 0.05 && bufferMonitor.isTimeBuffered(audioEl, vNow, 0.2)) {
+            snapAudioToVideoLive(vNow);
             return;
           }
-
-          setBufferSpinner(true);
-          freezeBothStreams();
-          seekVideoAndWait(aNow, function() {
-            syncPlaybackState();
-          });
         }
       }, config.tickMs);
       
