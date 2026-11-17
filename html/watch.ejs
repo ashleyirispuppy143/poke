@@ -5,7 +5,7 @@
   HEYOOOOOOOOOO!!!!!!
 
   poke is the privacy first youtube front end ! feel free to pull request on codeberg.org!
-
+  
   if you want to host an instance, see README.md 
 
   the license below:
@@ -1323,13 +1323,11 @@ Offical Discord Server! :3
     <% } %>
   <% } %>
 
-<!--
    <% if (Array.isArray(VideoData.captions)) { %> 
     <% VideoData.captions.forEach(x => { %>
       <track src="/api/subtitles?v=<%=VideoData.videoId%>&h=<%= x.label %>" label="<%= x.label.replace("United States","Simplified - USA") %>" kind="subtitles">      
     <% }) %>   
   <% } %>
-   -->
    
 </video>
 
@@ -3395,7 +3393,7 @@ document.addEventListener("fullscreenchange", handleFullscreen);
     })
     .catch(err => console.error('Failed to load pokeInnerTube config:', err));
 </script> <script src="/static/stats.js?e=341082025_0143ab5845544493_videojs815456gw3605"></script><!-- BASE_ES6 -->  <link rel="innertube-base-config-api-clientConfigure" href="/api/innertube.json">
-  <script id="baseScript" src="/static/base-player.js?ver=202g60442h25&videoID=<%=VideoData.videoId%>&version=17nov2026v4243545n52332342354343254h5343e55434tj6g35"> </script> 
+  <script id="baseScript" src="/static/base-player.js?ver=202g60442h25&videoID=<%=VideoData.videoId%>&version=17nov2026v42354343254h5343e55434tj635"> </script> 
   <script>
 (function(){
   var script = document.getElementById("baseScript");
