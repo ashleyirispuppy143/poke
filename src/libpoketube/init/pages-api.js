@@ -378,7 +378,10 @@ app.get("/api/getYoutubeUrl", async function (req, res) {
   res.send(page);
 });  
   
+
 app.get("/api/subtitles", async (req, res) => {
+  const subtitleCache = new Map();
+const oneHourMs = 3600 * 1000;
   const { fetch } = await import("undici");
 
   const id = req.query.v;
@@ -386,6 +389,19 @@ app.get("/api/subtitles", async (req, res) => {
 
   if (!id || !l) {
     return res.status(400).send("Missing 'v' (video ID) or 'h' (label) query parameter");
+  }
+
+  const cacheKey = `${id}-${l}`;
+  const now = Date.now();
+
+  if (subtitleCache.has(cacheKey)) {
+    const cachedItem = subtitleCache.get(cacheKey);
+    if (now < cachedItem.expiresAt) {
+      res.setHeader("Content-Type", cachedItem.contentType);
+      res.setHeader("Cache-Control", "public, max-age=3600");
+      return res.send(cachedItem.body);
+    }
+    subtitleCache.delete(cacheKey);
   }
 
   try {
@@ -404,14 +420,23 @@ app.get("/api/subtitles", async (req, res) => {
     }
 
     const body = await f.text();
-    res.setHeader("Content-Type", f.headers.get("content-type") || "text/vtt; charset=utf-8");
+    const contentType = f.headers.get("content-type") || "text/vtt; charset=utf-8";
+
+    subtitleCache.set(cacheKey, {
+      body,
+      contentType,
+      expiresAt: now + oneHourMs,
+    });
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Cache-Control", "public, max-age=3600");
     res.send(body);
   } catch (err) {
     console.error("Subtitle fetch error:", err);
     res.status(500).send(`Server error: ${err.message}`);
   }
 });
-
+  
   app.get("/api/weather", async (req, res) => {
     try {
       const url = new URL("https://api.open-meteo.com/v1/forecast");
