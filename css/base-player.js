@@ -105,16 +105,16 @@ var config = {
     highResMinPlayBuffer: 0.75,
     highResMinResumeBuffer: 1.5,
     endTolerance: 0.45,
-    alignThreshold: 0.01,
-    maxStartDesyncSec: 0.06,
-    driftTolerance: 0.06,
-    heavyDriftTolerance: 0.065,
+    alignThreshold: 0.008,
+    maxStartDesyncSec: 0.028,
+    driftTolerance: 0.028,
+    heavyDriftTolerance: 0.032,
     hardSeekDrift: 0.2,
     heavyHardSeekDrift: 0.2,
-    syncCooldownMs: 1200,
-    longSyncCooldownMs: 1600,
-    watchdogMs: 180,
-    tickMs: 45,
+    syncCooldownMs: 320,
+    longSyncCooldownMs: 450,
+    watchdogMs: 120,
+    tickMs: 30,
     seekTimeoutMs: 2500,
     longSeekTimeoutMs: 5500,
     highResSeekTimeoutMs: 6500,
@@ -2875,18 +2875,19 @@ function SetAlabasterUI(player, onRetryCallback) {
           return Boolean((vNode && (vNode.loop || vNode.hasAttribute('loop'))) || (typeof player.loop === 'function' && player.loop()));
         };
 
-        var applyPlaybackRate = function(rateVal) {
+    var applyPlaybackRate = function(rateVal) {
           var clamped = Math.max(0.25, Math.min(2, Math.round(Number(rateVal) * 20) / 20));
-          if (typeof player.playbackRate === 'function') {
+          window.Alabaster._rateChangeGraceUntil = compat.now() + 180;
+          var vNode = getVideoElementNode();
+          var aNode = document.querySelector('audio');
+          if (vNode) vNode.playbackRate = clamped;
+          if (aNode) aNode.playbackRate = clamped;
+          if (typeof player.playbackRate === 'function' && player.playbackRate() !== clamped) {
             player.playbackRate(clamped);
           }
-          var vNode = getVideoElementNode();
-          if (vNode) vNode.playbackRate = clamped;
-          var aNode = document.querySelector('audio');
-          if (aNode) aNode.playbackRate = clamped;
           refreshSettingsUI();
         };
-
+        
         var refreshSettingsUI = function() {
           var loopOn = isLoopCurrentlyEnabled();
           if (loopOn) loopSwitchEl.classList.add('is-on');
@@ -3946,22 +3947,15 @@ function SetAlabasterUI(player, onRetryCallback) {
         };
 
 var setRateOnAll = function(rateVal) {
-          window.Alabaster._rateChangeGraceUntil = compat.now() + 650;
+          window.Alabaster._rateChangeGraceUntil = compat.now() + 180;
           var nodes = getMediaNodes();
-          if (nodes.v && nodes.a && !window.Alabaster.muxedMode && !nodes.v.paused) {
-            var vT = nodes.v.currentTime;
-            var aT = nodes.a.currentTime;
-            if (Math.abs(vT - aT) > 0.015 && aT > 0.05) {
-              try { nodes.v.currentTime = aT; } catch (_) {}
-            }
-          }
           if (nodes.v) nodes.v.playbackRate = rateVal;
           if (nodes.a) nodes.a.playbackRate = rateVal;
           if (typeof player.playbackRate === 'function' && player.playbackRate() !== rateVal) {
             player.playbackRate(rateVal);
           }
         };
-
+        
         var startHold2x = function(sourceName) {
           if (hold2xState.active) return;
           if (!isCurrentlyPlaying()) return;
@@ -4756,12 +4750,14 @@ var setRateOnAll = function(rateVal) {
         });
       }
 
-      function snapAudioToVideoLive(targetSeconds) {
+function snapAudioToVideoLive(targetSeconds) {
+        var curRate = player.playbackRate() || 1;
+        var compensated = Math.max(0, targetSeconds + (0.006 * curRate));
         state.internalAudioSeeking = true;
-        state.liveSnapUntil = compat.now() + 250;
-        state.savedMasterTime = targetSeconds;
+        state.liveSnapUntil = compat.now() + 140;
+        state.savedMasterTime = compensated;
         runInternal(function() {
-          try { nativeSetATime(targetSeconds); } catch (_) {}
+          try { nativeSetATime(compensated); } catch (_) {}
         });
       }
       
@@ -5251,7 +5247,7 @@ var setRateOnAll = function(rateVal) {
         }, config.watchdogMs);
       }
 
-     function verifyLockstepAndUnfreeze(expectedSeq) {
+ function verifyLockstepAndUnfreeze(expectedSeq) {
         if (expectedSeq !== state.sequence || !state.wantPlaying || state.userSeeking || isVideoBypassed() || state.hidden) return;
         if (nativeGetVPaused() || nativeGetAPaused() || videoEl.seeking || audioEl.seeking) return;
 
@@ -5259,9 +5255,9 @@ var setRateOnAll = function(rateVal) {
         var vNow = nativeGetVTime();
         var diff = Math.abs(vNow - aNow);
 
-        if (diff > 0.09 && aNow > 0.05) {
-          if (bufferMonitor.isTimeBuffered(videoEl, aNow, 0.15)) {
-            snapVideoToAudioLive(aNow);
+        if (diff > 0.022 && vNow > 0.02) {
+          if (bufferMonitor.isTimeBuffered(audioEl, vNow, 0.08)) {
+            snapAudioToVideoLive(vNow);
           }
         }
       }
@@ -5434,6 +5430,11 @@ var setRateOnAll = function(rateVal) {
         }
 
         if (!nativeGetAPaused() && !nativeGetVPaused() && !videoEl.seeking && !audioEl.seeking) {
+          var liveV = nativeGetVTime();
+          var liveA = nativeGetATime();
+          if (Math.abs(liveV - liveA) > 0.025 && liveV > 0.02 && bufferMonitor.isTimeBuffered(audioEl, liveV, 0.08)) {
+            snapAudioToVideoLive(liveV);
+          }
           state.hasStartedPlayback = true;
           state.initialAutoplayAttempt = false;
           state.isFrozen = false;
@@ -5467,9 +5468,9 @@ var setRateOnAll = function(rateVal) {
 
           var preA = nativeGetATime();
           var preV = nativeGetVTime();
-          if (!isVideoBypassed() && !state.hidden && Math.abs(preV - preA) > 0.015) {
-            if (!nativeGetAPaused() && isTabWaking()) {
-              snapVideoToAudioLive(preA, 1200);
+          if (!isVideoBypassed() && !state.hidden && Math.abs(preV - preA) > 0.012) {
+            if (preV > 0.02 && bufferMonitor.isTimeBuffered(audioEl, preV, 0.1)) {
+              setAudioTimeInternally(preV);
             } else {
               freezeBothStreams();
               setBufferSpinner(true);
@@ -5482,7 +5483,7 @@ var setRateOnAll = function(rateVal) {
 
           state.launchingPlay = true;
           state.isFrozen = false;
-          state.playGraceUntil = compat.now() + 500;
+          state.playGraceUntil = compat.now() + 380;
           state.vStallSince = 0;
           state.aStallSince = 0;
           setBufferSpinner(false);
@@ -5538,12 +5539,13 @@ var setRateOnAll = function(rateVal) {
                     return;
                   }
 
-                  setTimeout(function() { verifyLockstepAndUnfreeze(currentSeq); }, 350);
+                  setTimeout(function() { verifyLockstepAndUnfreeze(currentSeq); }, 65);
+                  setTimeout(function() { verifyLockstepAndUnfreeze(currentSeq); }, 180);
 
                   state.hasStartedPlayback = true;
                   state.initialAutoplayAttempt = false;
                   state.awaitingGestureUnlock = false;
-                  state.playGraceUntil = compat.now() + 500;
+                  state.playGraceUntil = compat.now() + 380;
                   clearErrorOverlayOnHealthyStream();
                   setBufferSpinner(false);
                   clearWatchdog();
@@ -5586,7 +5588,8 @@ var setRateOnAll = function(rateVal) {
         };
 
         fireSimultaneousPlay();
-      } 
+      }
+
       
       function syncPlaybackState() {
         if (state.syncingState) return;
@@ -5926,41 +5929,41 @@ var setRateOnAll = function(rateVal) {
       }, true);
 
       listen(videoEl, 'play', function() {
-        if (isVideoBypassed() || state.hidden) {
-          if (isVideoBypassed()) pauseVideoOnly();
-          return;
-        }
-        if (state.launchingPlay || isTabWaking() || isLiveSnapping() || isInPlayGrace()) return;
-        var timeBuf = state.buffering ? (compat.now() - state.bufferStartTime) : 0;
-        var needed = state.buffering ? getMinResumeBuffer() : getMinPlayBuffer();
-        var aReady = bufferMonitor.canPlayCleanly(audioEl, needed, timeBuf, nativeGetATime());
-        var vReady = bufferMonitor.canPlayCleanly(videoEl, needed, timeBuf, nativeGetVTime());
-        var inSync = Math.abs(nativeGetVTime() - nativeGetATime()) <= config.maxStartDesyncSec;
-        if (!state.wantPlaying || state.buffering || state.userSeeking || nativeGetAPaused() || audioEl.seeking || videoEl.seeking || !aReady || !vReady || !inSync) {
-          pauseVideoOnly();
-        }
-      }, true);
+     if (isVideoBypassed() || state.hidden) {
+       if (isVideoBypassed()) pauseVideoOnly();
+       return;
+     }
+     if (state.launchingPlay || isTabWaking() || isLiveSnapping() || isInPlayGrace()) return;
+     var timeBuf = state.buffering ? (compat.now() - state.bufferStartTime) : 0;
+     var needed = state.buffering ? getMinResumeBuffer() : getMinPlayBuffer();
+     var aReady = bufferMonitor.canPlayCleanly(audioEl, needed, timeBuf, nativeGetATime());
+     var vReady = bufferMonitor.canPlayCleanly(videoEl, needed, timeBuf, nativeGetVTime());
+     var inSync = Math.abs(nativeGetVTime() - nativeGetATime()) <= 0.12;
+     if (!state.wantPlaying || state.buffering || state.userSeeking || nativeGetAPaused() || audioEl.seeking || videoEl.seeking || !aReady || !vReady || !inSync) {
+       pauseVideoOnly();
+     }
+   }, true);
 
-      listen(audioEl, 'play', function() {
-        if (isVideoBypassed()) return;
-        if (state.launchingPlay || isTabWaking() || isLiveSnapping() || isInPlayGrace()) return;
-        var timeBuf = state.buffering ? (compat.now() - state.bufferStartTime) : 0;
-        var needed = state.buffering ? getMinResumeBuffer() : getMinPlayBuffer();
-        var aReady = bufferMonitor.canPlayCleanly(audioEl, needed, timeBuf, nativeGetATime());
-        if (state.hidden || document.hidden) {
-          state.hidden = true;
-          var vReadyHidden = state.hasStartedPlayback || bufferMonitor.canPlayCleanly(videoEl, needed, timeBuf, nativeGetVTime());
-          if (!state.wantPlaying || state.buffering || state.userSeeking || !vReadyHidden || !aReady) {
-            pauseAudioOnly();
-          }
-          return;
-        }
-        var vReady = bufferMonitor.canPlayCleanly(videoEl, needed, timeBuf, nativeGetVTime());
-        var inSync = Math.abs(nativeGetVTime() - nativeGetATime()) <= config.maxStartDesyncSec;
-        if (!state.wantPlaying || state.buffering || state.userSeeking || nativeGetVPaused() || (videoEl.seeking && !isLiveSnapping() && !isTabWaking()) || audioEl.seeking || !vReady || !aReady || (!isLiveSnapping() && !inSync)) {
-          pauseAudioOnly();
-        }
-      }, true);
+   listen(audioEl, 'play', function() {
+     if (isVideoBypassed()) return;
+     if (state.launchingPlay || isTabWaking() || isLiveSnapping() || isInPlayGrace()) return;
+     var timeBuf = state.buffering ? (compat.now() - state.bufferStartTime) : 0;
+     var needed = state.buffering ? getMinResumeBuffer() : getMinPlayBuffer();
+     var aReady = bufferMonitor.canPlayCleanly(audioEl, needed, timeBuf, nativeGetATime());
+     if (state.hidden || document.hidden) {
+       state.hidden = true;
+       var vReadyHidden = state.hasStartedPlayback || bufferMonitor.canPlayCleanly(videoEl, needed, timeBuf, nativeGetVTime());
+       if (!state.wantPlaying || state.buffering || state.userSeeking || !vReadyHidden || !aReady) {
+         pauseAudioOnly();
+       }
+       return;
+     }
+     var vReady = bufferMonitor.canPlayCleanly(videoEl, needed, timeBuf, nativeGetVTime());
+     var inSync = Math.abs(nativeGetVTime() - nativeGetATime()) <= 0.12;
+     if (!state.wantPlaying || state.buffering || state.userSeeking || nativeGetVPaused() || (videoEl.seeking && !isLiveSnapping() && !isTabWaking()) || audioEl.seeking || !vReady || !aReady || (!isLiveSnapping() && !inSync)) {
+       pauseAudioOnly();
+     }
+   }, true);
 
       listen(videoEl, 'seeking', function() {
         if (state.internalDepth > 0 || state.internalVideoSeeking || isLiveSnapping() || isVideoBypassed() || state.hidden || document.hidden || isTabWaking() || state.userSeeking) {
@@ -6002,15 +6005,20 @@ var setRateOnAll = function(rateVal) {
       }, false);
 
       listen(audioEl, 'seeked', function() {
-        if (state.internalAudioSeeking) {
-          state.internalAudioSeeking = false;
-        }
-        if (state.userSeeking) {
-          completeUserSeek();
-        } else if (state.wantPlaying && !isTabWaking() && !state.cancelSeekWait) {
-          syncPlaybackState();
-        }
-      }, false);
+     if (state.internalAudioSeeking) {
+       state.internalAudioSeeking = false;
+     }
+     if (isLiveSnapping() || isTabWaking()) {
+       state.liveSnapUntil = 0;
+       return;
+     }
+     if (state.userSeeking) {
+       completeUserSeek();
+     } else if (state.wantPlaying && !state.cancelSeekWait) {
+       syncPlaybackState();
+     }
+   }, false);
+      
 
       listen(audioEl, 'timeupdate', function() {
         var currentlyHidden = Boolean(state.hidden || document.hidden);
@@ -6095,18 +6103,18 @@ var setRateOnAll = function(rateVal) {
       }, false);
 
       player.on('volumechange', enforceRateAndVolume);
-      player.on('ratechange', function() {
+    player.on('ratechange', function() {
         enforceRateAndVolume();
         updateMediaSessionPosition();
-        state.playGraceUntil = Math.max(state.playGraceUntil, compat.now() + 450);
+        state.playGraceUntil = Math.max(state.playGraceUntil, compat.now() + 220);
         state.emaDrift = 0;
         state.driftCount = 0;
         if (!state.wantPlaying || state.userSeeking || state.buffering || isVideoBypassed() || state.hidden) return;
         var vNow = nativeGetVTime();
         var aNow = nativeGetATime();
-        if (Math.abs(vNow - aNow) > 0.045 && aNow > 0.05) {
-          if (bufferMonitor.isTimeBuffered(videoEl, aNow, 0.2)) {
-            snapVideoToAudioLive(aNow, 500);
+        if (Math.abs(vNow - aNow) > 0.025 && vNow > 0.02) {
+          if (bufferMonitor.isTimeBuffered(audioEl, vNow, 0.1)) {
+            snapAudioToVideoLive(vNow);
             state.lastCorrectionAt = compat.now();
           }
         }
@@ -6556,11 +6564,10 @@ var setRateOnAll = function(rateVal) {
           return;
         }
 
-        var curRate = player.playbackRate() || 1;
         var rawDrift = Math.abs(aNow - vNow);
-        state.emaDrift = state.emaDrift ? (state.emaDrift * 0.5 + rawDrift * 0.5) : rawDrift;
+        state.emaDrift = state.emaDrift ? (state.emaDrift * 0.45 + rawDrift * 0.55) : rawDrift;
         var absDrift = state.emaDrift;
-        var tolerance = getDriftTolerance() * (curRate > 1.2 ? 1.35 : 1);
+        var tolerance = getDriftTolerance();
 
         if (rawDrift <= 0.2) {
           state.highDriftSince = 0;
@@ -6606,11 +6613,14 @@ var setRateOnAll = function(rateVal) {
           }
 
           if ((now - state.lastCorrectionAt) > getSyncCooldown()) {
-            var reqLead = isLongVideo() ? 0.35 : 0.18;
-            if (bufferMonitor.isTimeBuffered(videoEl, aNow, reqLead)) {
+            if (!vNotMoving && vNow > 0.02 && bufferMonitor.isTimeBuffered(audioEl, vNow, 0.1)) {
               state.lastCorrectionAt = now;
               state.emaDrift = 0;
-              snapVideoToAudioLive(aNow, 550);
+              snapAudioToVideoLive(vNow);
+            } else if (bufferMonitor.isTimeBuffered(videoEl, aNow, 0.25)) {
+              state.lastCorrectionAt = now;
+              state.emaDrift = 0;
+              snapVideoToAudioLive(aNow, 450);
             }
           }
           return;
@@ -6619,18 +6629,18 @@ var setRateOnAll = function(rateVal) {
         state.driftCount++;
         var cooldownPassed = (now - state.lastCorrectionAt) > getSyncCooldown();
 
-        if (state.driftCount >= 4 && cooldownPassed) {
+        if (state.driftCount >= 2 && cooldownPassed) {
           state.driftCount = 0;
           state.lastCorrectionAt = now;
           state.emaDrift = 0;
 
-          var reqSnapLead = isLongVideo() ? 0.35 : 0.18;
-          if (bufferMonitor.isTimeBuffered(videoEl, aNow, reqSnapLead)) {
-            snapVideoToAudioLive(aNow, 500);
+          if (!vNotMoving && vNow > 0.02 && bufferMonitor.isTimeBuffered(audioEl, vNow, 0.1)) {
+            snapAudioToVideoLive(vNow);
             return;
           }
         }
-      }, config.tickMs);      
+      }, config.tickMs);
+
       
       updateMediaSessionMetadata();
 
