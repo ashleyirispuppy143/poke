@@ -1599,6 +1599,341 @@ var config = {
   }
 
 
+  function parseCustomWebVTT(rawVttText, scopeSelector) {
+    var scope = scopeSelector || '.alabaster-custom-subs';
+    var text = String(rawVttText || '')
+      .replace(/^\uFEFF/, '')
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n');
+
+    var lines = text.split('\n');
+    var i = 0;
+    var n = lines.length;
+
+    var metadata = {};
+    var rawStyleBlocks = [];
+    var stylesMap = {};
+    var cues = [];
+
+    function parseTimestamp(ts) {
+      var parts = ts.trim().split(':');
+      var secs = 0;
+      if (parts.length === 3) {
+        secs = parseInt(parts[0], 10) * 3600 +
+               parseInt(parts[1], 10) * 60 +
+               parseFloat(parts[2]);
+      } else if (parts.length === 2) {
+        secs = parseInt(parts[0], 10) * 60 +
+               parseFloat(parts[1]);
+      }
+      return isNaN(secs) ? 0 : secs;
+    }
+
+    function convertVttTagsToHtml(cueText) {
+      if (!cueText) return '';
+      var html = cueText.replace(/<c((?:\.[^\s<>\/]+)+)>/gi, function(_, classChain) {
+        var classNames = classChain.slice(1).split('.').filter(Boolean);
+        var inlineRules = [];
+        for (var k = 0; k < classNames.length; k++) {
+          var cls = classNames[k];
+          if (stylesMap[cls]) {
+            inlineRules.push(stylesMap[cls]);
+          } else if (/^color([0-9A-Fa-f]{6})$/.test(cls)) {
+            inlineRules.push('color: #' + cls.slice(5) + ';');
+          }
+        }
+        var styleAttr = inlineRules.length ? ' style="' + inlineRules.join(' ') + '"' : '';
+        return '<span class="' + classNames.join(' ') + '"' + styleAttr + '>';
+      });
+      html = html.replace(/<c>/gi, '<span>');
+      html = html.replace(/<\/c>/gi, '</span>');
+      html = html.replace(/\n/g, '<br>');
+      return html;
+    }
+
+    if (i < n && /^WEBVTT/i.test(lines[i].trim())) {
+      i++;
+    }
+
+    var timecodeRegex = /^(\d{1,2}:)?\d{2}:\d{2}\.\d{3}\s*-->\s*(\d{1,2}:)?\d{2}:\d{2}\.\d{3}/;
+
+    while (i < n) {
+      var line = lines[i].trim();
+      if (timecodeRegex.test(line)) break;
+      if (line && (i + 1 < n) && timecodeRegex.test(lines[i + 1].trim())) break;
+
+      if (/^Style\s*:/i.test(line)) {
+        var firstStyleLine = line.replace(/^Style\s*:/i, '').trim();
+        var styleLines = [];
+        if (firstStyleLine) styleLines.push(firstStyleLine);
+        i++;
+        while (i < n) {
+          var sLine = lines[i].trim();
+          if (sLine === '##' || timecodeRegex.test(sLine)) {
+            if (sLine === '##') i++;
+            break;
+          }
+          styleLines.push(lines[i]);
+          i++;
+        }
+        rawStyleBlocks.push(styleLines.join('\n'));
+        continue;
+      }
+
+      if (/^STYLE$/i.test(line)) {
+        var stdStyleLines = [];
+        i++;
+        while (i < n && lines[i].trim() !== '' && lines[i].trim() !== '##') {
+          stdStyleLines.push(lines[i]);
+          i++;
+        }
+        rawStyleBlocks.push(stdStyleLines.join('\n'));
+        continue;
+      }
+
+      var metaMatch = line.match(/^([A-Za-z0-9_-]+)\s*:\s*(.+)$/);
+      if (metaMatch) {
+        metadata[metaMatch[1].toLowerCase()] = metaMatch[2].trim();
+      }
+      i++;
+    }
+
+    var combinedRawCss = rawStyleBlocks.join('\n');
+    var cueRuleRegex = /::cue\(\s*(?:c\.)?([A-Za-z0-9_-]+)\s*\)\s*\{([^}]*)\}/gi;
+    var scopedCssRules = [];
+    var nativeCueCssRules = [];
+    var match;
+
+    while ((match = cueRuleRegex.exec(combinedRawCss)) !== null) {
+      var className = match[1].trim();
+      var declarations = match[2].replace(/\s+/g, ' ').trim();
+      stylesMap[className] = declarations;
+      scopedCssRules.push(scope + ' .' + className + ' { ' + declarations + ' }');
+      nativeCueCssRules.push('video::cue(c.' + className + '), video::cue(.' + className + ') { ' + declarations + ' }');
+    }
+
+    while (i < n) {
+      var curLine = lines[i].trim();
+      if (!curLine || curLine === '##' || /^NOTE(\s|$)/i.test(curLine)) {
+        if (/^NOTE(\s|$)/i.test(curLine)) {
+          while (i < n && lines[i].trim() !== '') i++;
+        } else {
+          i++;
+        }
+        continue;
+      }
+
+      var cueId = '';
+      if (!timecodeRegex.test(curLine) && (i + 1 < n) && timecodeRegex.test(lines[i + 1].trim())) {
+        cueId = curLine;
+        i++;
+        curLine = lines[i].trim();
+      }
+
+      if (timecodeRegex.test(curLine)) {
+        var arrowParts = curLine.split('-->');
+        var startSec = parseTimestamp(arrowParts[0]);
+        var rightParts = arrowParts[1].trim().split(/\s+/);
+        var endSec = parseTimestamp(rightParts[0]);
+        var cueSettings = rightParts.slice(1).join(' ');
+
+        i++;
+        var payloadLines = [];
+        while (i < n && lines[i].trim() !== '') {
+          payloadLines.push(lines[i]);
+          i++;
+        }
+
+        var rawPayload = payloadLines.join('\n');
+        cues.push({
+          id: cueId,
+          start: startSec,
+          end: endSec,
+          settings: cueSettings,
+          rawText: rawPayload,
+          html: convertVttTagsToHtml(rawPayload)
+        });
+      } else {
+        i++;
+      }
+    }
+
+    return {
+      metadata: metadata,
+      styles: stylesMap,
+      scopedCss: scopedCssRules.join('\n'),
+      nativeCueCss: nativeCueCssRules.join('\n'),
+      cues: cues
+    };
+  }
+
+  function attachCustomWebVTTSubtitles(player, vttString) {
+    if (!player) return null;
+    if (player._alabasterSubCleanup) {
+      player._alabasterSubCleanup();
+    }
+
+    var parsed = parseCustomWebVTT(vttString, '.alabaster-custom-subs');
+
+    var styleId = 'alabaster-vtt-custom-styles';
+    var styleEl = document.getElementById(styleId);
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = styleId;
+      document.head.appendChild(styleEl);
+    }
+    styleEl.textContent = [
+      '.video-js.alabaster-custom-subs-active .vjs-text-track-display {',
+      '  display: none !important;',
+      '}',
+      '.alabaster-custom-subs {',
+      '  position: absolute;',
+      '  left: 5%;',
+      '  right: 5%;',
+      '  bottom: 72px;',
+      '  z-index: 35;',
+      '  pointer-events: none;',
+      '  display: flex;',
+      '  flex-direction: column;',
+      '  align-items: center;',
+      '  justify-content: flex-end;',
+      '  gap: 4px;',
+      '  text-align: center;',
+      '  font-family: "poketube flex", "PokeTube Flex", -apple-system, BlinkMacSystemFont, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;',
+      '  font-size: clamp(16px, 2.4vw, 26px);',
+      '  line-height: 1.38;',
+      '  color: #ffffff;',
+      '  text-shadow: 0 0 4px rgba(0,0,0,0.95), 0 2px 6px rgba(0,0,0,0.9), 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;',
+      '  white-space: pre-wrap;',
+      '}',
+      '.alabaster-custom-subs-line {',
+      '  background: rgba(8, 8, 8, 0.55);',
+      '  padding: 2px 10px;',
+      '  border-radius: 6px;',
+      '  max-width: 92%;',
+      '}',
+      parsed.scopedCss,
+      parsed.nativeCueCss
+    ].join('\n');
+
+    var rootEl = (player && player.el && player.el()) || document.querySelector('.video-js') || document.body;
+    player.addClass('alabaster-custom-subs-active');
+
+    var subContainer = rootEl.querySelector('.alabaster-custom-subs');
+    if (!subContainer) {
+      subContainer = document.createElement('div');
+      subContainer.className = 'alabaster-custom-subs';
+      rootEl.appendChild(subContainer);
+    }
+
+    var lastRenderedHtml = '';
+
+    var renderAtTime = function() {
+      var curTime = Number(player.currentTime ? player.currentTime() : 0) || 0;
+      var activeHtmlLines = [];
+
+      for (var i = 0; i < parsed.cues.length; i++) {
+        var cue = parsed.cues[i];
+        if (curTime >= cue.start && curTime <= cue.end) {
+          activeHtmlLines.push('<div class="alabaster-custom-subs-line">' + cue.html + '</div>');
+        }
+      }
+
+      var combined = activeHtmlLines.join('');
+      if (combined !== lastRenderedHtml) {
+        lastRenderedHtml = combined;
+        subContainer.innerHTML = combined;
+      }
+    };
+
+    player.on('timeupdate', renderAtTime);
+    player.on('seeking', renderAtTime);
+    player.on('seeked', renderAtTime);
+
+    var subTimer = setInterval(function() {
+      if (player && typeof player.paused === 'function' && !player.paused()) {
+        renderAtTime();
+      }
+    }, 30);
+
+    var cleanup = function() {
+      clearInterval(subTimer);
+      player.off('timeupdate', renderAtTime);
+      player.off('seeking', renderAtTime);
+      player.off('seeked', renderAtTime);
+      player.removeClass('alabaster-custom-subs-active');
+      if (subContainer) subContainer.innerHTML = '';
+      player._alabasterSubCleanup = null;
+    };
+
+    player._alabasterSubCleanup = cleanup;
+    player.on('dispose', cleanup);
+    renderAtTime();
+
+    return parsed;
+  }
+
+  function setupAutoCustomWebVTTTracks(player) {
+    if (!player || !player.textTracks) return;
+    var tracks = player.textTracks();
+    var vttCache = {};
+    var activeSrc = '';
+
+    var syncActiveTrack = function() {
+      var rootEl = player.el && player.el();
+      var domTracks = rootEl ? rootEl.querySelectorAll('track') : document.querySelectorAll('track');
+      var showingTrack = null;
+
+      for (var i = 0; i < tracks.length; i++) {
+        var t = tracks[i];
+        if (t.mode === 'showing' && (t.kind === 'captions' || t.kind === 'subtitles')) {
+          showingTrack = t;
+          break;
+        }
+      }
+
+      if (!showingTrack) {
+        activeSrc = '';
+        if (player._alabasterSubCleanup) player._alabasterSubCleanup();
+        return;
+      }
+
+      var srcUrl = showingTrack.src || '';
+      if (!srcUrl && domTracks && domTracks.length) {
+        for (var j = 0; j < domTracks.length; j++) {
+          var dt = domTracks[j];
+          if ((showingTrack.language && dt.srclang === showingTrack.language) ||
+              (showingTrack.label && dt.label === showingTrack.label)) {
+            srcUrl = dt.src || dt.getAttribute('src') || '';
+            break;
+          }
+        }
+      }
+
+      if (!srcUrl || srcUrl === activeSrc) return;
+      activeSrc = srcUrl;
+
+      if (vttCache[srcUrl]) {
+        attachCustomWebVTTSubtitles(player, vttCache[srcUrl]);
+        return;
+      }
+
+      fetch(srcUrl)
+        .then(function(res) { return res.text(); })
+        .then(function(vttText) {
+          vttCache[srcUrl] = vttText;
+          if (activeSrc === srcUrl) {
+            attachCustomWebVTTSubtitles(player, vttText);
+          }
+        })
+        .catch(function() {});
+    };
+
+    tracks.addEventListener('change', syncActiveTrack);
+    syncActiveTrack();
+  }
+  
+
 function SetAlabasterUI(player, onRetryCallback) {
     var info = metadataParser.read();
     injectAlabasterFsDescriptionStyles();
@@ -1702,6 +2037,12 @@ function SetAlabasterUI(player, onRetryCallback) {
         } else {
           fsDescToggle.classList.remove('is-controls-hidden');
         }
+      };
+
+      player.ready(function() {
+      setupAutoCustomWebVTTTracks(player);
+      window.Alabaster.loadCustomVTT = function(vttText) {
+        return attachCustomWebVTTSubtitles(player, vttText);
       };
 
       var updateTitleBarDescVisibility = function(isFs) {
