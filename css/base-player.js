@@ -2039,14 +2039,13 @@ function SetAlabasterUI(player, onRetryCallback) {
         }
       };
 
-      player.ready(function() {
-      setupAutoCustomWebVTTTracks(player);
+       setupAutoCustomWebVTTTracks(player);
       window.Alabaster.loadCustomVTT = function(vttText) {
         return attachCustomWebVTTSubtitles(player, vttText);
       };
 
       var updateTitleBarDescVisibility = function(isFs) {
-        if (!rootEl) return;
+        if (!rootEl) return;""
         var descNodes = rootEl.querySelectorAll('.vjs-title-bar-description, [class*="vjs-title-bar-description"]');
         for (var i = 0; i < descNodes.length; i++) {
           var dNode = descNodes[i];
