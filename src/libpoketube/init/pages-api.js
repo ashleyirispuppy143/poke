@@ -377,26 +377,34 @@ app.get("/api/getYoutubeUrl", async function (req, res) {
 
   res.send(page);
 });  
-  app.get("/api/subtitles", async (req, res) => {
-    const { fetch } = await import("undici");
+  
+app.get("/api/subtitles", async (req, res) => {
+  const { fetch } = await import("undici");
 
-    const id = req.query.v;
-    const l = req.query.h;
+  const id = encodeURIComponent(req.query.v);
+  const l = encodeURIComponent(req.query.h);
 
-    try {
-      let url = `${config.videourl}/companion/api/v1/captions/${id}?label=${l}`;
+  try {
+    const url = `${config.videourl}/companion/api/v1/captions/${id}?label=${l}`;
 
-       
-let f = await fetch(url, {
-        headers: headers, 
-      });
- 
-      res.send(f);
+    const f = await fetch(url, {
+      headers: headers,
+    });
 
+    if (!f.ok) {
+      return res.status(f.status).send("Failed to fetch subtitles");
+    }
 
-    } catch {}
-  });
+    const body = await f.text();
 
+    res.setHeader("Content-Type", f.headers.get("content-type") || "text/vtt; charset=utf-8");
+
+    res.send(body);
+  } catch (err) {
+    console.error("Subtitle error:", err);
+    res.status(500).send("Internal Server Error");
+  }
+});
   
   app.get("/api/weather", async (req, res) => {
     try {
