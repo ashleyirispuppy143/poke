@@ -381,31 +381,37 @@ app.get("/api/getYoutubeUrl", async function (req, res) {
 app.get("/api/subtitles", async (req, res) => {
   const { fetch } = await import("undici");
 
-  const id = encodeURIComponent(req.query.v);
-  const l = encodeURIComponent(req.query.h);
+  const id = req.query.v;
+  const l = req.query.h;
+
+  if (!id || !l) {
+    return res.status(400).send("Missing 'v' (video ID) or 'h' (label) query parameter");
+  }
 
   try {
-    const url = `${config.videourl}/companion/api/v1/captions/${id}?label=${l}`;
+    const baseUrl = config.videourl.replace(/\/+$/, "");
+    const url = `${baseUrl}/companion/api/v1/captions/${encodeURIComponent(id)}?label=${encodeURIComponent(l)}`;
 
     const f = await fetch(url, {
-      headers: headers,
+      headers: {
+        "User-Agent": config.useragent,
+      },
     });
 
     if (!f.ok) {
-      return res.status(f.status).send("Failed to fetch subtitles");
+      const errorText = await f.text();
+      return res.status(f.status).send(`Upstream error ${f.status}: ${errorText}`);
     }
 
     const body = await f.text();
-
     res.setHeader("Content-Type", f.headers.get("content-type") || "text/vtt; charset=utf-8");
-
     res.send(body);
   } catch (err) {
-    console.error("Subtitle error:", err);
-    res.status(500).send("Internal Server Error");
+    console.error("Subtitle fetch error:", err);
+    res.status(500).send(`Server error: ${err.message}`);
   }
 });
-  
+
   app.get("/api/weather", async (req, res) => {
     try {
       const url = new URL("https://api.open-meteo.com/v1/forecast");
