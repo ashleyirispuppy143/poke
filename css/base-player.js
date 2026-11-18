@@ -7859,16 +7859,11 @@ var _boobs = "boobs"
 
 
 // player base 
-const base_player_old_old = "https://www.youtube.com/s/player/a87a9450/player_ias.vflset/en_US/base.js"
-const base_player_old = "https://www.youtube.com/s/player/2d24ba15/player_ias.vflset/en_US/base.js";
-const base_player_broken = "https://www.youtube.com/s/player/6740c111/player_ias.vflset/en_US/base.js";
-const base_player_old_old_old_old_old = "https://www.youtube.com/s/player/0004de42/player_ias.vflset/en_US/base.js";
-
 const hey = " please dont use the above player base stuff!! tyyyyyyyy <3 "
 const youtubeobjects = "https://codeberg.org/ashleyirispuppy/poke/raw/branch/main/src/libpoketube/libpoketube-youtubei-objects.json"
 const watchURl = "https://youtube.com/watch"
-const base_player = "https://www.youtube.com/s/player/140dafda/player_ias.vflset/en_US/base.js";
-const base_player_poketube = "https://poketube.fun/s/player/140dafda/player_ias.vflset/en_US/base.js";
+const base_player = "https://www.youtube.com/s/player/f4280e43/player_ias.vflset/en_US/base.js";
+const base_player_poketube = "https://poketube.fun/s/player/f4280e43/player_ias.vflset/en_US/base.js";
 
 function extractPlayerData(playerUrl) {
     const segments = playerUrl.split('/');
