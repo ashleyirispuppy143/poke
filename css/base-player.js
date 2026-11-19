@@ -62,6 +62,7 @@ window.SyncLevel = SyncLevel;
   const DISABLE_REC_SHORTCUT_KEY = 'AlabasterDontUseYoutubeStyleRecommendationsShortcut';
   const DISABLE_YT_CAPTIONS_KEY = 'DontUseYoutubeStyleCapitions';
   const DISABLE_SAVE_SUBTITLE_KEY = 'DontSaveSubtitleState';
+  const DISABLE_HOLD_2X_KEY = 'AlabasterDisableAttentionSpanFixer';
   const SUB_ENABLED_PERSIST_KEY = 'alabaster_subtitles_enabled';
   const SUB_LANG_PERSIST_KEY = 'alabaster_subtitles_lang';
   const SUB_LABEL_PERSIST_KEY = 'alabaster_subtitles_label';
@@ -2806,7 +2807,7 @@ window.SyncLevel = SyncLevel;
             isPausedFlag +
             isLoopFlag +
             ' pbs:' + playbackSessionId +
-            ' df:' + (Number(SyncLevel.driftSeconds) || 0).toFixed(3) + 's';
+            ' df:' + Math.round(Number(SyncLevel.driftSeconds) || 0) + 's';
         };
 
         var updateStatsOverlayContent = function() {
@@ -4454,6 +4455,7 @@ window.SyncLevel = SyncLevel;
         };
 
         var startHold2x = function(sourceName) {
+          if (isStorageFlagEnabled(DISABLE_HOLD_2X_KEY)) return;
           if (hold2xState.active) return;
           if (!isCurrentlyPlaying()) return;
           var nodes = getMediaNodes();
@@ -4507,6 +4509,20 @@ window.SyncLevel = SyncLevel;
           evt.preventDefault();
           evt.stopPropagation();
           evt.stopImmediatePropagation();
+
+          if (isStorageFlagEnabled(DISABLE_HOLD_2X_KEY)) {
+            if (evt.repeat) return;
+            var nodesNow = getMediaNodes();
+            if (nodesNow.v) {
+              if (isCurrentlyPlaying()) {
+                window.Alabaster._forceUserPause = true;
+                nodesNow.v.pause();
+              } else {
+                nodesNow.v.play();
+              }
+            }
+            return;
+          }
 
           if (evt.repeat) {
             if (!hold2xState.active && hold2xState.spaceDown && hold2xState.spaceDownAt > 0 && (compat.now() - hold2xState.spaceDownAt >= 350) && isCurrentlyPlaying()) {
@@ -4586,6 +4602,7 @@ window.SyncLevel = SyncLevel;
         };
 
         var onPointerHoldStart = function(clientX, clientY, evt) {
+          if (isStorageFlagEnabled(DISABLE_HOLD_2X_KEY)) return;
           if (!isCurrentlyPlaying()) return;
           if (isInteractivePlayerUI(evt.target)) return;
           hold2xState.pointerDown = true;
@@ -8291,12 +8308,31 @@ window.SyncLevel = SyncLevel;
 (function () {
   'use strict';
 
-  const SEEK_STEP     = 10;   // seconds for j/l/arrow keys
-  const SEEK_STEP_BIG = 30;   // seconds for J/L (shift held)
+  const SEEK_STEP     = 10;
+  const SEEK_STEP_BIG = 30;
   const VOLUME_STEP   = 0.1;
   const SPEED_STEP    = 0.25;
   const SPEED_MIN     = 0.25;
   const SPEED_MAX     = 3;
+
+  const KEYBINDS_STORAGE_KEY = 'AlabasterCustomKeybinds';
+
+  const DEFAULT_KEYBINDS = {
+    playPause: 'k',
+    playPauseAlt: ' ',
+    fullscreen: 'f',
+    mute: 'm',
+    seekForward: 'arrowright',
+    seekBackward: 'arrowleft',
+    seekForwardAlt: 'l',
+    seekBackwardAlt: 'j',
+    seekForwardBig: 'L',
+    seekBackwardBig: 'J',
+    volumeUp: 'arrowup',
+    volumeDown: 'arrowdown',
+    seekStart: 'home',
+    seekEnd: 'end',
+  };
 
   const EDITABLE_SELECTOR = [
     'input:not([type="button"]):not([type="checkbox"]):not([type="color"])'
@@ -8319,7 +8355,6 @@ window.SyncLevel = SyncLevel;
     return el.matches(EDITABLE_SELECTOR) || !!el.closest(EDITABLE_SELECTOR);
   }
 
-  // every possible way an element could be focused.
   function isUserTyping(e) {
     if (isEditableEl(e.target)) return true;
     if (isEditableEl(document.activeElement)) return true;
@@ -8330,6 +8365,23 @@ window.SyncLevel = SyncLevel;
     if (e.target && e.target.closest && e.target.closest('form')) return true;
 
     return false;
+  }
+
+  function isNumberKeySeekingDisabled() {
+    try {
+      return localStorage.getItem('AlabasterDisableNumberKeySeeking') === 'true';
+    } catch {
+      return false;
+    }
+  }
+
+  function getKeybinds() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(KEYBINDS_STORAGE_KEY) || '{}');
+      return { ...DEFAULT_KEYBINDS, ...saved };
+    } catch {
+      return { ...DEFAULT_KEYBINDS };
+    }
   }
 
   function getPlayer() {
@@ -8382,75 +8434,65 @@ window.SyncLevel = SyncLevel;
     player.muted(!player.muted());
   }
 
-  // Shift variants use uppercase key names.
-  const KEY_MAP = {
-    // Play / pause
-    'k':          (p) => { togglePlay(p); return true; },
-    ' ':          (p) => { 
-       if (document.activeElement) document.activeElement.blur(); 
-      togglePlay(p); 
-      return true; 
+  const ACTIONS = {
+    playPause: (p) => { togglePlay(p); return true; },
+    playPauseAlt: (p) => {
+      if (document.activeElement) document.activeElement.blur();
+      togglePlay(p);
+      return true;
     },
-
-    // Fullscreen
-    'f':          (p) => { toggleFullscreen(p); return true; },
-
-    // Mute
-    'm':          (p) => { toggleMute(p); return true; },
-
-    // Seeking (10 s / 30 s with Shift)
-    'arrowright':  (p) => { seekBy(p,  SEEK_STEP); return true; },
-    'arrowleft':   (p) => { seekBy(p, -SEEK_STEP); return true; },
-    'l':           (p) => { seekBy(p,  SEEK_STEP); return true; },
-    'j':           (p) => { seekBy(p, -SEEK_STEP); return true; },
-    'L':           (p) => { seekBy(p,  SEEK_STEP_BIG); return true; },
-    'J':           (p) => { seekBy(p, -SEEK_STEP_BIG); return true; },
-
-    // Volume
-    'arrowup':     (p) => { adjustVolume(p,  VOLUME_STEP); return true; },
-    'arrowdown':   (p) => { adjustVolume(p, -VOLUME_STEP); return true; },
-
-    // Number keys → seek to 0%–90%
-    '0': (p) => { seekToPercent(p,  0); return true; },
-    '1': (p) => { seekToPercent(p, 10); return true; },
-    '2': (p) => { seekToPercent(p, 20); return true; },
-    '3': (p) => { seekToPercent(p, 30); return true; },
-    '4': (p) => { seekToPercent(p, 40); return true; },
-    '5': (p) => { seekToPercent(p, 50); return true; },
-    '6': (p) => { seekToPercent(p, 60); return true; },
-    '7': (p) => { seekToPercent(p, 70); return true; },
-    '8': (p) => { seekToPercent(p, 80); return true; },
-    '9': (p) => { seekToPercent(p, 90); return true; },
-
-    // Home / End
-    'home': (p) => { seekToPercent(p,   0); return true; },
-    'end':  (p) => { seekToPercent(p, 100); return true; },
+    fullscreen: (p) => { toggleFullscreen(p); return true; },
+    mute: (p) => { toggleMute(p); return true; },
+    seekForward: (p) => { seekBy(p, SEEK_STEP); return true; },
+    seekBackward: (p) => { seekBy(p, -SEEK_STEP); return true; },
+    seekForwardAlt: (p) => { seekBy(p, SEEK_STEP); return true; },
+    seekBackwardAlt: (p) => { seekBy(p, -SEEK_STEP); return true; },
+    seekForwardBig: (p) => { seekBy(p, SEEK_STEP_BIG); return true; },
+    seekBackwardBig: (p) => { seekBy(p, -SEEK_STEP_BIG); return true; },
+    volumeUp: (p) => { adjustVolume(p, VOLUME_STEP); return true; },
+    volumeDown: (p) => { adjustVolume(p, -VOLUME_STEP); return true; },
+    seekStart: (p) => { seekToPercent(p, 0); return true; },
+    seekEnd: (p) => { seekToPercent(p, 100); return true; },
   };
 
-  // ── Main listener ───────────────────────────────────────────────────────
+  function buildKeyMap() {
+    const binds = getKeybinds();
+    const map = {};
+    for (const [action, key] of Object.entries(binds)) {
+      if (key && ACTIONS[action]) {
+        map[key] = ACTIONS[action];
+      }
+    }
+    return map;
+  }
+
   document.addEventListener('keydown', function (e) {
-    // Bail on modifier combos, IME composition, or already-handled events
     if (e.defaultPrevented) return;
     if (e.ctrlKey || e.altKey || e.metaKey) return;
     if (e.isComposing || e.keyCode === 229) return;
 
     if (isUserTyping(e)) return;
 
+    const raw = e.key;
     const player = getPlayer();
     if (!player) return;
 
-    // Shift-sensitive key: use raw `event.key` for >/</J/L,
-    // lowercase for everything else.
-    const raw = e.key;
     const key = raw.length === 1 && !e.shiftKey ? raw.toLowerCase() : raw;
+    const keyMap = buildKeyMap();
+    const handler = keyMap[raw] || keyMap[key.toLowerCase()];
 
-    // Lookup. Try shift-sensitive first (raw), then normalized.
-    const handler = KEY_MAP[raw] || KEY_MAP[key.toLowerCase()];
     if (handler && handler(player, e)) {
       e.preventDefault();
       e.stopPropagation();
+      return;
     }
-  }, true);  
+
+    if (/^[0-9]$/.test(raw) && !isNumberKeySeekingDisabled()) {
+      seekToPercent(player, Number(raw) * 10);
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, true);
 })();
 
 // https://codeberg.org/ashleyirispuppy/poke/src/branch/main/src/libpoketube/libpoketube-youtubei-objects.json
