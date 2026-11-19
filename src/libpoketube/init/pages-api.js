@@ -1209,6 +1209,27 @@ app.get("/api/redirect", async (req, res) => {
       res.json(innertube)
 });
 
+app.get('/api/latestplayer', async (req, res) => {
+  try {
+    const response = await fetch('https://www.youtube.com/iframe_api');
+
+    if (!response.ok) {
+      return res.status(502).json({ error: `YouTube returned status ${response.status}` });
+    }
+
+    const scriptText = await response.text();
+    const match = scriptText.match(/\\?\/s\\?\/player\\?\/([a-zA-Z0-9_-]+)\\?\//);
+
+    if (!match) {
+      return res.status(404).json({ error: 'Player ID not found in script' });
+    }
+
+    return res.json({ playerID: match[1] });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to fetch YouTube iframe API', details: err.message });
+  }
+}); 
+  
   app.get("/api/instances.json", async (req, res) => {
     const { fetch } = await import("undici");
 
