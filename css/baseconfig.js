@@ -740,19 +740,20 @@ function initSettingsApp() {
     const infoRows = [
       { label: 'AlabasterVersion', value: version },
       { label: 'Video.js Version', value: '8.23.4' },
+      { label: 'YouTube Player ID', value: 'Loading...', id: 'about-yt-player-id' },
       { label: 'Hostname', value: window.location.hostname || 'localhost' },
       { label: 'OS', value: detectOS() },
       { label: 'User Agent', value: navigator.userAgent || 'Unknown' }
     ];
 
     if (userId) {
-      infoRows.splice(3, 0, { label: 'User ID', value: userId });
+      infoRows.splice(4, 0, { label: 'User ID', value: userId });
     }
 
     const infoGroup = document.createElement('div');
     infoGroup.className = 'card-group';
 
-    infoRows.forEach(({ label, value }) => {
+    infoRows.forEach(({ label, value, id }) => {
       const card = document.createElement('div');
       card.className = 'setting-card';
 
@@ -762,12 +763,43 @@ function initSettingsApp() {
 
       const valSpan = document.createElement('span');
       valSpan.className = 'about-value';
+      if (id) valSpan.id = id;
       valSpan.textContent = value;
 
       card.appendChild(titleSpan);
       card.appendChild(valSpan);
       infoGroup.appendChild(card);
     });
+
+    fetch('/api/latestplayer')
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to fetch player ID');
+        return res.json();
+      })
+      .then(data => {
+        const valEl = document.getElementById('about-yt-player-id');
+        if (!valEl) return;
+        const playerID = data && data.playerID ? String(data.playerID).trim() : '';
+        if (!playerID) {
+          valEl.textContent = 'Unknown';
+          return;
+        }
+        const link = document.createElement('a');
+        link.href = `/s/player/${encodeURIComponent(playerID)}/player_ias.vflset/en_US/base.js`;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.textContent = playerID;
+        link.style.color = 'var(--accent)';
+        link.style.textDecoration = 'none';
+        link.addEventListener('mouseenter', () => { link.style.textDecoration = 'underline'; });
+        link.addEventListener('mouseleave', () => { link.style.textDecoration = 'none'; });
+        valEl.textContent = '';
+        valEl.appendChild(link);
+      })
+      .catch(() => {
+        const valEl = document.getElementById('about-yt-player-id');
+        if (valEl) valEl.textContent = 'Unknown';
+      });
 
     const configGroup = document.createElement('div');
     configGroup.className = 'card-group';
