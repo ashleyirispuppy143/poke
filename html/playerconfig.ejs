@@ -22,7 +22,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Player Configure</title>
+  <title>Player Settings</title>
   <style>
     @font-face {
       font-family: "PokeTube Flex";
@@ -32,46 +32,132 @@
       font-display: swap;
     }
 
-    body {
-      background-color: #222222;
-      color: #e0e0e0;
-      font-family: system-ui, -apple-system, sans-serif;
-      display: flex;
-      justify-content: flex-start;
-      align-items: flex-start;
-      margin: 0;
-      padding: 24px;
+    :root {
+      --bg-main: #202124;
+      --bg-sidebar: #28292d;
+      --bg-card: #28292d;
+      --bg-card-hover: #303136;
+      --border-subtle: #3c4043;
+      --pill-active-bg: rgba(255, 171, 204, 0.16);
+      --pill-active-text: #ffabcc;
+      --text-primary: #e8eaed;
+      --text-secondary: #9aa0a6;
+      --accent: #ffabcc;
+      --toggle-off-bg: #9aa0a6;
+      --toggle-off-knob: #202124;
+      --toggle-on-bg: #ffabcc;
+      --toggle-on-knob: #4a152a;
+    }
+
+    * {
       box-sizing: border-box;
-      zoom: 160%;
-      overflow: auto;
     }
 
-    .container {
-      width: 340px;
+    body {
+      background-color: var(--bg-main);
+      color: var(--text-primary);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      -webkit-font-smoothing: antialiased;
     }
 
-    h1 {
-      font-family: "PokeTube Flex", sans-serif;
-      font-stretch: ultra-expanded;
-      margin: 0 0 16px 0;
-      font-size: 24px;
-      color: #fff;
-      font-weight: 1000;
+    .top-bar {
+      display: flex;
+      align-items: center;
+      padding: 16px 24px;
+      gap: 14px;
+      background-color: var(--bg-main);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .logo {
+      height: 28px;
+      width: auto;
+      display: block;
+    }
+
+    .page-title {
+      font-family: "PokeTube Flex", system-ui, sans-serif;
+      font-size: 21px;
+      font-weight: 500;
+      color: var(--text-primary);
+      margin: 0;
+      letter-spacing: -0.2px;
+    }
+
+    .layout {
+      display: flex;
+      flex: 1;
+      max-width: 1200px;
+      width: 100%;
+    }
+
+    .sidebar {
+      width: 260px;
+      padding: 12px 16px 24px 0;
+      flex-shrink: 0;
+    }
+
+    .nav-pill {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 20px 12px 24px;
+      border-radius: 0 24px 24px 0;
+      color: var(--text-primary);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.15s ease;
+      margin-bottom: 4px;
+      border: none;
+      background: transparent;
+      width: 100%;
+      text-align: left;
+    }
+
+    .nav-pill:hover {
+      background-color: rgba(232, 234, 237, 0.08);
+    }
+
+    .nav-pill.active {
+      background-color: var(--pill-active-bg);
+      color: var(--pill-active-text);
+    }
+
+    .nav-pill svg {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+      fill: currentColor;
+    }
+
+    .content {
+      flex: 1;
+      padding: 16px 32px 64px 48px;
+      max-width: 740px;
     }
 
     .loader-wrapper {
       width: 100%;
-      height: 4px;
-      background-color: #333;
-      border-radius: 4px;
+      height: 3px;
+      background-color: var(--bg-card);
+      border-radius: 3px;
       overflow: hidden;
-      margin: 24px 0;
+      margin-bottom: 24px;
     }
 
     .loader-bar {
       height: 100%;
       width: 0%;
-      background-color: #3b82f6;
+      background-color: var(--accent);
       animation: loadProgress 0.4s ease-out forwards;
     }
 
@@ -80,32 +166,121 @@
       100% { width: 100%; }
     }
 
-    .setting-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 12px 0;
-      /* border-bottom: 1px solid #3d3d3d; */
+    .section {
+      margin-bottom: 36px;
+      scroll-margin-top: 80px;
     }
 
-    .setting-row:last-child {
-      border-bottom: none;
+    .section-title {
+      font-size: 20px;
+      font-weight: 400;
+      color: var(--text-primary);
+      margin: 0 0 6px 0;
     }
 
-    .label-group {
+    .section-desc {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin: 0 0 18px 0;
+      line-height: 1.4;
+    }
+
+    .card-group {
       display: flex;
       flex-direction: column;
+      gap: 2px;
+    }
+
+    .setting-card {
+      background-color: var(--bg-card);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 20px;
+      gap: 16px;
+      transition: background-color 0.15s ease, opacity 0.2s ease;
+    }
+
+    .setting-card:hover {
+      background-color: var(--bg-card-hover);
+    }
+
+    .setting-card.is-disabled {
+      opacity: 0.48;
+      cursor: not-allowed;
+    }
+
+    .setting-card.is-disabled:hover {
+      background-color: var(--bg-card);
+    }
+
+    .setting-card:first-child {
+      border-top-left-radius: 16px;
+      border-top-right-radius: 16px;
+    }
+
+    .setting-card:last-child {
+      border-bottom-left-radius: 16px;
+      border-bottom-right-radius: 16px;
+    }
+
+    .card-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      min-width: 0;
+    }
+
+    .card-icon {
+      width: 22px;
+      height: 22px;
+      color: var(--text-secondary);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card-icon svg {
+      width: 22px;
+      height: 22px;
+      fill: currentColor;
+    }
+
+    .setting-info {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
     }
 
     .setting-title {
       font-size: 14px;
       font-weight: 500;
+      color: var(--text-primary);
+      line-height: 1.4;
+    }
+
+    .setting-subtitle {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.35;
+    }
+
+    .dependency-note {
+      display: none;
+      font-size: 11px;
+      color: var(--accent);
+      margin-top: 2px;
+    }
+
+    .setting-card.is-disabled .dependency-note {
+      display: block;
     }
 
     .switch {
       position: relative;
       display: inline-block;
-      width: 46px;
+      width: 44px;
       height: 24px;
       flex-shrink: 0;
     }
@@ -119,155 +294,345 @@
     .slider {
       position: absolute;
       cursor: pointer;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background-color: #444;
-      transition: 0.2s;
+      inset: 0;
+      background-color: var(--toggle-off-bg);
+      transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
       border-radius: 24px;
+    }
+
+    .setting-card.is-disabled .slider {
+      cursor: not-allowed;
     }
 
     .slider:before {
       position: absolute;
       content: "";
-      height: 18px;
-      width: 18px;
-      left: 3px;
-      bottom: 3px;
-      background-color: #fff;
-      transition: 0.2s;
+      height: 16px;
+      width: 16px;
+      left: 4px;
+      bottom: 4px;
+      background-color: var(--toggle-off-knob);
+      transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
       border-radius: 50%;
     }
 
     input:checked + .slider {
-      background-color: #3b82f6;
+      background-color: var(--toggle-on-bg);
     }
 
     input:checked + .slider:before {
-      transform: translateX(22px);
+      transform: translateX(20px);
+      background-color: var(--toggle-on-knob);
+    }
+
+    input:focus-visible + .slider {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .coming-soon {
+      margin: 8px 0 28px 0;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px;
+      font-size: 12px;
+    }
+
+    .footer-links a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .footer-links a:hover {
+      text-decoration: underline;
+    }
+
+    @media (max-width: 768px) {
+      .layout {
+        flex-direction: column;
+      }
+      .sidebar {
+        width: 100%;
+        display: flex;
+        overflow-x: auto;
+        padding: 8px 16px;
+        gap: 8px;
+      }
+      .nav-pill {
+        border-radius: 24px;
+        padding: 8px 16px;
+        width: auto;
+        white-space: nowrap;
+      }
+      .content {
+        padding: 16px 16px 48px 16px;
+      }
     }
   </style>
   <noscript>
-  <style>
-  .container {
-    display:none;
-  }
-  </style>
+    <style>
+      .layout { display: none; }
+    </style>
   </noscript>
 </head>
 <body>
-<noscript>
-settings require javascript to work :p
-</noscript>
+  <noscript>
+    <div style="padding: 24px; color: #e8eaed;">settings require javascript to work :p</div>
+  </noscript>
 
-  <div class="container">
-    <img src="/css/logo-poke.svg?v=5" style="width: 9em;margin-bottom: 10px;">
-    <h1>player settings</h1>
-    <div id="loader" class="loader-wrapper">
-      <div class="loader-bar"></div>
-    </div>
-    <div id="settings-list"></div>
+  <header class="top-bar">
+    <img src="/css/logo-poke.svg?v=5" alt="Poke" class="logo">
+    <h1 class="page-title">Player settings</h1>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar" aria-label="Settings categories">
+      <button class="nav-pill active" data-target="sec-fullscreen">
+        <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+        <span>Fullscreen &amp; UI</span>
+      </button>
+      <button class="nav-pill" data-target="sec-captions">
+        <svg viewBox="0 0 24 24"><path d="M19 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v1c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1zm7 0h-1.5v-.5h-2v3h2V13H18v1c0 .55-.45 1-1 1h-3c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1z"/></svg>
+        <span>Captions &amp; Subtitles</span>
+      </button>
+    </aside>
+
+    <main class="content">
+      <div id="loader" class="loader-wrapper">
+        <div class="loader-bar"></div>
+      </div>
+      <div id="settings-container"></div>
+
+      <p class="coming-soon">more is coming soon!</p>
+
+      <footer class="footer-links">
+        <a href="/">Home</a>
+        <a href="https://codeberg.org/ashleyirispuppy/poke" target="_blank" rel="noopener">Source Code</a>
+        <a href="/privacy">Privacy</a>
+      </footer>
+    </main>
   </div>
 
   <script>
-   // @license magnet:?xt=urn:btih:1f739d935676111cfff4b4693e3816e664797050&dn=gpl-3.0.txt GPL-3.0-or-later
-    const settings = [
+    // @license magnet:?xt=urn:btih:1f739d935676111cfff4b4693e3816e664797050&dn=gpl-3.0.txt GPL-3.0-or-later
+    const sections = [
       {
-        key: 'DontUseAlabasterStyleDescriptionOpeningFS',
-        toggleId: 'toggle-alabaster',
-        title: 'Use Description Button instead of title to open Description'
+        id: 'sec-fullscreen',
+        title: 'Fullscreen & Interface',
+        description: 'Customise how the video player overlays, descriptions, and shortcuts behave',
+        items: [
+          {
+            key: 'DontUseAlabasterStyleDescriptionOpeningFS',
+            toggleId: 'toggle-alabaster',
+            title: 'Use Description button instead of title',
+            subtitle: 'Require clicking the dedicated Description button to open the description panel',
+            icon: '<svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>'
+          },
+          {
+            key: 'CloseFullScreenDiscover',
+            toggleId: 'toggle-discover',
+            title: 'Remove Discover in fullscreen',
+            subtitle: 'Hide the recommended videos drawer when watching in fullscreen mode',
+            icon: '<svg viewBox="0 0 24 24"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46A11.804 11.804 0 0 0 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78 3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>'
+          },
+          {
+            key: 'ShowDislikesOnFullScreenDesc',
+            toggleId: 'toggle-fullscreen-dislikes',
+            title: 'Show dislike count in fullscreen description',
+            subtitle: 'Display the video dislike count instead of the upload date in the fullscreen overlay',
+            icon: '<svg viewBox="0 0 24 24"><path d="M15 3H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v2c0 1.1.9 2 2 2h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 23l6.59-6.59c.36-.36.58-.86.58-1.41V5c0-1.1-.9-2-2-2zm4 0v12h4V3h-4z"/></svg>'
+          },
+          {
+            key: 'DontShowVerifiedBadgeOnPopUpDescription',
+            toggleId: 'toggle-fullscreen-verified-badge',
+            title: 'Hide channel verification badge in popup description',
+            subtitle: 'Omit the verified checkmark next to channel names in the fullscreen description popup',
+            icon: '<svg viewBox="0 0 24 24"><path d="M23 12l-2.44-2.79.34-3.69-3.61-.82-1.89-3.2L12 2.96 8.6 1.5 6.71 4.69 3.1 5.5l.34 3.7L1 12l2.44 2.79-.34 3.7 3.61.82L8.6 22.5l3.4-1.47 3.4 1.46 1.89-3.19 3.61-.82-.34-3.69L23 12zm-12.91 4.72-3.8-3.81 1.48-1.48 2.32 2.33 5.85-5.87 1.48 1.48-7.33 7.35z"/></svg>'
+          },
+          {
+            key: 'AlabasterDontUseYoutubeStyleRecommendationsShortcut',
+            toggleId: 'toggle-fullscreen-videos-shortcut',
+            title: 'Disable "V" shortcut for recommendations',
+            subtitle: 'Prevent pressing the V key from opening recommended videos while in fullscreen',
+            icon: '<svg viewBox="0 0 24 24"><path d="M20 5H4c-1.1 0-1.99.9-1.99 2L2 17c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z"/></svg>',
+            disabledWhen: {
+              key: 'CloseFullScreenDiscover',
+              value: true,
+              reason: 'Unavailable while "Remove Discover in fullscreen" is enabled'
+            }
+          }
+        ]
       },
       {
-        key: 'CloseFullScreenDiscover',
-        toggleId: 'toggle-discover',
-        title: 'Remove Discover in fullscreen'
-      },
-      {
-        key: 'ShowDislikesOnFullScreenDesc',
-        toggleId: 'toggle-fullscreen-dislikes',
-        title: 'Show the dislike count instead of upload date on the fullscreen Description'
-      },
-      {
-        key: 'DontShowVerifiedBadgeOnPopUpDescription',
-        toggleId: 'toggle-fullscreen-verified-badge',
-        title: 'Dont Show Channel verification badge if verified on the fullscreen description-pop up'
-      },
-      {
-        key: 'AlabasterDontUseYoutubeStyleRecommendationsShortcut',
-        toggleId: 'toggle-fullscreen-videos-shortcut',
-        title: 'Disable "V" shortcut to open recommendations in fullscreen'
-      },
-      {
-        key: 'DontUseYoutubeStyleCapitions',
-        toggleId: 'toggle-youtube-captions',
-        title: 'Use default captions menu instead of YouTube-style captions'
-      },
-      {
-        key: 'DontSaveSubtitleState',
-        toggleId: 'toggle-save-subtitle-state',
-        title: 'Dont save subtitle state and language across videos'
+        id: 'sec-captions',
+        title: 'Captions & Subtitles',
+        description: 'Manage caption styling and subtitle persistence across videos',
+        items: [
+          {
+            key: 'DontUseYoutubeStyleCapitions',
+            toggleId: 'toggle-youtube-captions',
+            title: 'Use default browser captions menu',
+            subtitle: 'Replace the custom YouTube-style caption overlay with the native player menu',
+            icon: '<svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 12h4v2H4v-2zm10 6H4v-2h10v2zm6 0h-4v-2h4v2zm0-4H10v-2h10v2z"/></svg>'
+          },
+          {
+            key: 'DontSaveSubtitleState',
+            toggleId: 'toggle-save-subtitle-state',
+            title: 'Don\'t save subtitle state across videos',
+            subtitle: 'Reset subtitle visibility and language selection whenever a new video loads',
+            icon: '<svg viewBox="0 0 24 24"><path d="M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7 1.62-4.33L19.12 17h-3.24z"/></svg>',
+            disabledWhen: {
+              key: 'DontUseYoutubeStyleCapitions',
+              value: true,
+              reason: 'Requires "Use default browser captions menu" to be off'
+            }
+          }
+        ]
       }
     ];
 
     const loader = document.getElementById('loader');
-    const settingsList = document.getElementById('settings-list');
+    const container = document.getElementById('settings-container');
+    const navPills = document.querySelectorAll('.nav-pill');
 
-    function syncSettings() {
-      settings.forEach(({ key, toggleId }) => {
-        const toggle = document.getElementById(toggleId);
-        if (toggle) {
-          const isChecked = localStorage.getItem(key) === 'true';
-          if (toggle.checked !== isChecked) {
-            toggle.checked = isChecked;
-          }
+    navPills.forEach(pill => {
+      pill.addEventListener('click', () => {
+        navPills.forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        const target = document.getElementById(pill.dataset.target);
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
       });
+    });
+
+    function updateDependencies() {
+      sections.forEach(section => {
+        section.items.forEach(({ toggleId, disabledWhen }) => {
+          if (!disabledWhen) return;
+          const toggle = document.getElementById(toggleId);
+          if (!toggle) return;
+
+          const card = toggle.closest('.setting-card');
+          const parentVal = localStorage.getItem(disabledWhen.key) === 'true';
+          const shouldDisable = parentVal === disabledWhen.value;
+
+          toggle.disabled = shouldDisable;
+          card.classList.toggle('is-disabled', shouldDisable);
+        });
+      });
+    }
+
+    function syncSettings() {
+      sections.forEach(section => {
+        section.items.forEach(({ key, toggleId }) => {
+          const toggle = document.getElementById(toggleId);
+          if (toggle) {
+            const isChecked = localStorage.getItem(key) === 'true';
+            if (toggle.checked !== isChecked) {
+              toggle.checked = isChecked;
+            }
+          }
+        });
+      });
+      updateDependencies();
     }
 
     setTimeout(() => {
       loader.style.display = 'none';
 
-      settings.forEach(({ key, toggleId, title }) => {
-        const row = document.createElement('div');
-        row.className = 'setting-row';
+      sections.forEach(section => {
+        const secEl = document.createElement('section');
+        secEl.className = 'section';
+        secEl.id = section.id;
 
-        const labelGroup = document.createElement('div');
-        labelGroup.className = 'label-group';
+        const h2 = document.createElement('h2');
+        h2.className = 'section-title';
+        h2.textContent = section.title;
 
-        const titleSpan = document.createElement('span');
-        titleSpan.className = 'setting-title';
-        titleSpan.textContent = title;
+        const desc = document.createElement('p');
+        desc.className = 'section-desc';
+        desc.textContent = section.description;
 
-        labelGroup.appendChild(titleSpan);
+        const cardGroup = document.createElement('div');
+        cardGroup.className = 'card-group';
 
-        const switchLabel = document.createElement('label');
-        switchLabel.className = 'switch';
+        section.items.forEach(({ key, toggleId, title, subtitle, icon, disabledWhen }) => {
+          const card = document.createElement('div');
+          card.className = 'setting-card';
 
-        const toggle = document.createElement('input');
-        toggle.type = 'checkbox';
-        toggle.id = toggleId;
+          const cardLeft = document.createElement('div');
+          cardLeft.className = 'card-left';
 
-        const slider = document.createElement('span');
-        slider.className = 'slider';
+          const iconWrap = document.createElement('div');
+          iconWrap.className = 'card-icon';
+          iconWrap.innerHTML = icon;
 
-        switchLabel.appendChild(toggle);
-        switchLabel.appendChild(slider);
+          const info = document.createElement('div');
+          info.className = 'setting-info';
 
-        row.appendChild(labelGroup);
-        row.appendChild(switchLabel);
-        settingsList.appendChild(row);
+          const titleSpan = document.createElement('span');
+          titleSpan.className = 'setting-title';
+          titleSpan.textContent = title;
 
-        if (localStorage.getItem(key) === null) {
-          localStorage.setItem(key, 'false');
-        }
+          const subSpan = document.createElement('span');
+          subSpan.className = 'setting-subtitle';
+          subSpan.textContent = subtitle;
 
-        toggle.checked = localStorage.getItem(key) === 'true';
+          info.appendChild(titleSpan);
+          info.appendChild(subSpan);
 
-        toggle.addEventListener('change', () => {
-          localStorage.setItem(key, String(toggle.checked));
+          if (disabledWhen) {
+            const noteSpan = document.createElement('span');
+            noteSpan.className = 'dependency-note';
+            noteSpan.textContent = disabledWhen.reason;
+            info.appendChild(noteSpan);
+          }
+
+          cardLeft.appendChild(iconWrap);
+          cardLeft.appendChild(info);
+
+          const switchLabel = document.createElement('label');
+          switchLabel.className = 'switch';
+
+          const toggle = document.createElement('input');
+          toggle.type = 'checkbox';
+          toggle.id = toggleId;
+
+          const slider = document.createElement('span');
+          slider.className = 'slider';
+
+          switchLabel.appendChild(toggle);
+          switchLabel.appendChild(slider);
+
+          card.appendChild(cardLeft);
+          card.appendChild(switchLabel);
+          cardGroup.appendChild(card);
+
+          if (localStorage.getItem(key) === null) {
+            localStorage.setItem(key, 'false');
+          }
+
+          toggle.checked = localStorage.getItem(key) === 'true';
+
+          toggle.addEventListener('change', () => {
+            localStorage.setItem(key, String(toggle.checked));
+            updateDependencies();
+          });
         });
+
+        secEl.appendChild(h2);
+        secEl.appendChild(desc);
+        secEl.appendChild(cardGroup);
+        container.appendChild(secEl);
       });
+
+      updateDependencies();
 
       window.addEventListener('storage', syncSettings);
       window.addEventListener('focus', syncSettings);
@@ -278,6 +643,5 @@ settings require javascript to work :p
     }, 400);
     // @license-end
   </script>
-
 </body>
 </html>
