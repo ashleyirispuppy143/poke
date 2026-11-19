@@ -43,9 +43,15 @@ function detectOS() {
   return os;
 }
 
-if (isMobileDevice()) {
-  document.body.classList.add('is-mobile');
-} else {
+function getAlabasterVersion() {
+  const v = window.AlabasterVersion || localStorage.getItem('AlabasterVersion');
+  if (!v || String(v).trim() === '' || String(v).trim().toLowerCase() === 'unknown') {
+    return null;
+  }
+  return String(v).trim();
+}
+
+function initSettingsApp() {
   const KEYBINDS_STORAGE_KEY = 'AlabasterCustomKeybinds';
 
   const DEFAULT_KEYBINDS = {
@@ -188,28 +194,33 @@ if (isMobileDevice()) {
           }
         }
       ]
-    },
-    {
-      id: 'sec-experiments',
-      title: 'Experiments',
-      description: 'Experimental player features that may change or be removed in future updates',
-      items: [
-        {
-          key: 'AlabasterEnableAutoSubtitle',
-          title: 'Auto-enable subtitles in device language',
-          subtitle: 'Automatically turn on subtitles when a track matches your device language; does nothing if no matching track exists',
-          icon: '<svg viewBox="0 0 24 24"><path d="M19 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v1c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1zm7 0h-1.5v-.5h-2v3h2V13H18v1c0 .55-.45 1-1 1h-3c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1z"/></svg>',
-          disabledWhen: {
-            key: 'DontUseYoutubeStyleCapitions',
-            value: true,
-            reason: 'Requires "Use default browser captions menu" to be off'
-          }
-        }
-      ]
     }
   ];
 
-  const allItems = mainSections.flatMap(section => section.items);
+  const experimentsSection = {
+    id: 'sec-experiments',
+    title: 'Experiments',
+    description: 'Experimental player features that may change or be removed in future updates',
+    items: [
+      {
+        key: 'AlabasterEnableAutoSubtitle',
+        title: 'Auto-enable subtitles in device language',
+        subtitle: 'Automatically turn on subtitles when a track matches your device language; does nothing if no matching track exists',
+        icon: '<svg viewBox="0 0 24 24"><path d="M19 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v1c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1zm7 0h-1.5v-.5h-2v3h2V13H18v1c0 .55-.45 1-1 1h-3c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1z"/></svg>',
+        disabledWhen: {
+          key: 'DontUseYoutubeStyleCapitions',
+          value: true,
+          reason: 'Requires "Use default browser captions menu" to be off'
+        }
+      }
+    ]
+  };
+
+  const allItems = [
+    ...mainSections.flatMap(section => section.items),
+    ...experimentsSection.items
+  ];
+
   const paritySection = {
     id: 'sec-parity',
     title: 'YouTube Parity',
@@ -217,16 +228,15 @@ if (isMobileDevice()) {
     items: allItems.filter(item => item.parity)
   };
 
-  const captionsPill = document.querySelector('.nav-pill[data-target="sec-captions"]');
-  if (captionsPill && !document.querySelector('.nav-pill[data-target="sec-experiments"]')) {
+  const parityPill = document.querySelector('.nav-pill[data-view="parity"]');
+  if (parityPill && !document.querySelector('.nav-pill[data-view="experiments"]')) {
     const expPill = document.createElement('button');
     expPill.className = 'nav-pill';
-    expPill.dataset.view = 'main';
-    expPill.dataset.target = 'sec-experiments';
+    expPill.dataset.view = 'experiments';
     expPill.innerHTML =
       '<svg viewBox="0 0 24 24"><path d="M7 2v2h1v6.29L3.3 17.6A2.5 2.5 0 0 0 5.42 21h13.16a2.5 2.5 0 0 0 2.12-3.4L16 10.29V4h1V2H7zm3 2h4v6.84l3.82 6.01A.5.5 0 0 1 17.4 18H6.6a.5.5 0 0 1-.42-.77L10 10.84V4z"/></svg>' +
       '<span>Experiments</span>';
-    captionsPill.insertAdjacentElement('afterend', expPill);
+    parityPill.insertAdjacentElement('afterend', expPill);
   }
 
   const loader = document.getElementById('loader');
@@ -234,6 +244,15 @@ if (isMobileDevice()) {
   const keybindsView = document.getElementById('keybinds-view');
   const parityView = document.getElementById('parity-view');
   const aboutView = document.getElementById('about-view');
+
+  let experimentsView = document.getElementById('experiments-view');
+  if (!experimentsView && parityView) {
+    experimentsView = document.createElement('div');
+    experimentsView.id = 'experiments-view';
+    experimentsView.className = 'view-hidden';
+    parityView.insertAdjacentElement('afterend', experimentsView);
+  }
+
   const comingSoon = document.getElementById('coming-soon');
   const navPills = document.querySelectorAll('.nav-pill');
   const exportBtn = document.getElementById('export-settings-btn');
@@ -449,8 +468,11 @@ if (isMobileDevice()) {
       mainView.classList.toggle('view-hidden', view !== 'main');
       keybindsView.classList.toggle('view-hidden', view !== 'keybinds');
       parityView.classList.toggle('view-hidden', view !== 'parity');
+      if (experimentsView) {
+        experimentsView.classList.toggle('view-hidden', view !== 'experiments');
+      }
       aboutView.classList.toggle('view-hidden', view !== 'about');
-      comingSoon.classList.toggle('view-hidden', view === 'keybinds' || view === 'about');
+      comingSoon.classList.toggle('view-hidden', view === 'keybinds' || view === 'about' || view === 'experiments');
 
       if (view === 'about') {
         updateAboutConfig();
@@ -712,7 +734,7 @@ if (isMobileDevice()) {
 
     header.appendChild(h2);
 
-    const version = window.AlabasterVersion || localStorage.getItem('AlabasterVersion') || 'Unknown';
+    const version = getAlabasterVersion() || 'Unknown';
     const userId = localStorage.getItem('UserID');
 
     const infoRows = [
@@ -791,6 +813,9 @@ if (isMobileDevice()) {
 
     keybindsView.appendChild(buildKeybindsSection());
     parityView.appendChild(buildSection(paritySection));
+    if (experimentsView) {
+      experimentsView.appendChild(buildSection(experimentsSection));
+    }
     aboutView.appendChild(buildAboutSection());
 
     updateDependencies();
@@ -803,4 +828,43 @@ if (isMobileDevice()) {
     });
     setInterval(syncSettings, 2000);
   }, 400);
+}
+
+if (isMobileDevice()) {
+  document.body.classList.add('is-mobile');
+} else if (!getAlabasterVersion()) {
+  const layoutEl = document.querySelector('.layout');
+  if (layoutEl) layoutEl.style.display = 'none';
+
+  const lockNotice = document.createElement('div');
+  lockNotice.setAttribute('role', 'status');
+  Object.assign(lockNotice.style, {
+    display: 'flex',
+    flex: '1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    textAlign: 'center',
+    padding: '32px 24px',
+    color: 'var(--text-secondary)',
+    fontSize: '16px',
+    lineHeight: '1.5'
+  });
+  lockNotice.textContent = 'you must watch a video before configuring the player';
+  document.body.appendChild(lockNotice);
+
+  let versionCheckInterval = 0;
+  const checkVersionUnlock = () => {
+    if (getAlabasterVersion()) {
+      clearInterval(versionCheckInterval);
+      window.removeEventListener('storage', checkVersionUnlock);
+      lockNotice.remove();
+      if (layoutEl) layoutEl.style.display = '';
+      initSettingsApp();
+    }
+  };
+
+  window.addEventListener('storage', checkVersionUnlock);
+  versionCheckInterval = setInterval(checkVersionUnlock, 10000);
+} else {
+  initSettingsApp();
 }
