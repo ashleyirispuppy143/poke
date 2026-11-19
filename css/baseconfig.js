@@ -739,7 +739,7 @@ function initSettingsApp() {
 
     const infoRows = [
       { label: 'AlabasterVersion', value: version },
-      { label: 'Video.js Version', value: '8.23.4' },
+      { label: 'Video.js Version', value: 'Loading...', id: 'about-vjs-version' },
       { label: 'YouTube Player ID', value: 'Loading...', id: 'about-yt-player-id' },
       { label: 'Hostname', value: window.location.hostname || 'localhost' },
       { label: 'OS', value: detectOS() },
@@ -770,6 +770,24 @@ function initSettingsApp() {
       card.appendChild(valSpan);
       infoGroup.appendChild(card);
     });
+
+    fetch('/static/vjs.min.js')
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to fetch vjs.min.js');
+        return res.text();
+      })
+      .then(text => {
+        const valEl = document.getElementById('about-vjs-version');
+        if (!valEl) return;
+        const head = text.slice(0, 2000);
+        const match = head.match(/function\(\)\{var\s+\w+="(\d+\.\d+\.\d+[^"]*)"/) ||
+          head.match(/var\s+\w+="(\d+\.\d+\.\d+[^"]*)"/);
+        valEl.textContent = match ? match[1] : 'Unknown';
+      })
+      .catch(() => {
+        const valEl = document.getElementById('about-vjs-version');
+        if (valEl) valEl.textContent = 'Unknown';
+      });
 
     fetch('/api/latestplayer')
       .then(res => {
