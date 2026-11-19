@@ -8423,7 +8423,15 @@ window.SyncLevel = SyncLevel;
   }
 
   function togglePlay(player) {
-    player.paused() ? player.play() : player.pause();
+    if (document.activeElement && document.activeElement !== document.body) {
+      document.activeElement.blur();
+    }
+    if (player.paused()) {
+      const p = player.play();
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    } else {
+      player.pause();
+    }
   }
 
   function toggleFullscreen(player) {
@@ -8435,14 +8443,10 @@ window.SyncLevel = SyncLevel;
   }
 
   const ACTIONS = {
-    playPause: (p) => { togglePlay(p); return true; },
-    playPauseAlt: (p) => {
-      if (document.activeElement) document.activeElement.blur();
-      togglePlay(p);
-      return true;
-    },
-    fullscreen: (p) => { toggleFullscreen(p); return true; },
-    mute: (p) => { toggleMute(p); return true; },
+    playPause: (p, e) => { if (e.repeat) return true; togglePlay(p); return true; },
+    playPauseAlt: (p, e) => { if (e.repeat) return true; togglePlay(p); return true; },
+    fullscreen: (p, e) => { if (e.repeat) return true; toggleFullscreen(p); return true; },
+    mute: (p, e) => { if (e.repeat) return true; toggleMute(p); return true; },
     seekForward: (p) => { seekBy(p, SEEK_STEP); return true; },
     seekBackward: (p) => { seekBy(p, -SEEK_STEP); return true; },
     seekForwardAlt: (p) => { seekBy(p, SEEK_STEP); return true; },
@@ -8484,6 +8488,7 @@ window.SyncLevel = SyncLevel;
     if (handler && handler(player, e)) {
       e.preventDefault();
       e.stopPropagation();
+      e.stopImmediatePropagation();
       return;
     }
 
@@ -8491,9 +8496,11 @@ window.SyncLevel = SyncLevel;
       seekToPercent(player, Number(raw) * 10);
       e.preventDefault();
       e.stopPropagation();
+      e.stopImmediatePropagation();
     }
   }, true);
 })();
+
 
 // https://codeberg.org/ashleyirispuppy/poke/src/branch/main/src/libpoketube/libpoketube-youtubei-objects.json
 
