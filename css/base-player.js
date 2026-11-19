@@ -24,7 +24,6 @@
  * "It takes a lot of hard work to make something simple." ~ Steve Jobs 
  */
 
-
 const SyncLevel = {
   driftSeconds: 0,
   driftMs: 0,
@@ -60,6 +59,8 @@ window.SyncLevel = SyncLevel;
   const DISABLE_FS_DISCOVER_KEY = 'CloseFullScreenDiscover';
   const SHOW_DISLIKES_FS_DESC_KEY = 'ShowDislikesOnFullScreenDesc';
   const HIDE_VERIFY_BADGE_FS_DESC_KEY = 'DontShowVerifiedBadgeOnPopUpDescription';
+  const DISABLE_REC_SHORTCUT_KEY = 'AlabasterDontUseYoutubeStyleReccomendationsShorcut';
+  const DISABLE_YT_CAPTIONS_KEY = 'DontUseYoutubeStyleCapitions';
 
   function isStorageFlagEnabled(key) {
     try {
@@ -931,6 +932,32 @@ window.SyncLevel = SyncLevel;
       '  color:#ffffff!important;',
       '  padding:0!important;',
       '}',
+      '.video-js.alabaster-yt-captions .vjs-subs-caps-button .vjs-menu,',
+      '.video-js.alabaster-yt-captions .vjs-captions-button .vjs-menu,',
+      '.video-js.alabaster-yt-captions .vjs-subtitles-button .vjs-menu {',
+      '  display: none !important;',
+      '}',
+      '.video-js.alabaster-yt-captions button.vjs-subs-caps-button,',
+      '.video-js.alabaster-yt-captions button.vjs-captions-button,',
+      '.video-js.alabaster-yt-captions button.vjs-subtitles-button {',
+      '  position: relative !important;',
+      '}',
+      '.video-js.alabaster-yt-captions .alabaster-cc-active::after {',
+      '  content: "" !important;',
+      '  position: absolute !important;',
+      '  left: 50% !important;',
+      '  bottom: 5px !important;',
+      '  transform: translateX(-50%) !important;',
+      '  width: 16px !important;',
+      '  height: 2.5px !important;',
+      '  border-radius: 999px !important;',
+      '  background: #ff2a55 !important;',
+      '  pointer-events: none !important;',
+      '}',
+      '.video-js .alabaster-subtitles-settings-row, .alabaster-subtitles-settings-row {',
+      '  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;',
+      '  margin-bottom: 4px !important;',
+      '}',
       '.video-js .alabaster-fs-settings-popup, .alabaster-fs-settings-popup {',
       '  position: absolute !important;',
       '  right: 18px !important;',
@@ -1730,6 +1757,7 @@ window.SyncLevel = SyncLevel;
       var fsSettingsPopup = null;
       var isFsSettingsOpen = false;
       var setSettingsPopupState = null;
+      var syncYoutubeCaptionsUI = null;
 
       var statsOverlayEl = null;
       var statsBodyEl = null;
@@ -2363,8 +2391,11 @@ window.SyncLevel = SyncLevel;
         var audioPanel = document.createElement('div');
         audioPanel.className = 'alabaster-settings-panel';
 
+        var subtitlesPanel = document.createElement('div');
+        subtitlesPanel.className = 'alabaster-settings-panel';
+
         var showSettingsPanel = function(targetPanel) {
-          [mainPanel, speedPanel, audioPanel].forEach(function(p) {
+          [mainPanel, speedPanel, audioPanel, subtitlesPanel].forEach(function(p) {
             if (p === targetPanel) p.classList.add('is-active');
             else p.classList.remove('is-active');
           });
@@ -2405,6 +2436,42 @@ window.SyncLevel = SyncLevel;
           if (st === 'whisper') return 'Whisper';
           if (st === 'normalize') return 'Normalize';
           return 'Off';
+        };
+
+        var lastSelectedCaptionTrack = null;
+
+        var getCaptionTracks = function() {
+          var list = typeof player.textTracks === 'function' ? player.textTracks() : null;
+          if (!list || !list.length) return [];
+          var out = [];
+          for (var i = 0; i < list.length; i++) {
+            var tr = list[i];
+            if (tr && (tr.kind === 'captions' || tr.kind === 'subtitles')) {
+              out.push(tr);
+            }
+          }
+          return out;
+        };
+
+        var getActiveCaptionTrack = function(tracks) {
+          var arr = tracks || getCaptionTracks();
+          for (var i = 0; i < arr.length; i++) {
+            if (arr[i].mode === 'showing') return arr[i];
+          }
+          return null;
+        };
+
+        var selectCaptionTrack = function(targetTrack) {
+          var tracks = getCaptionTracks();
+          for (var i = 0; i < tracks.length; i++) {
+            if (targetTrack && tracks[i] === targetTrack) {
+              tracks[i].mode = 'showing';
+              lastSelectedCaptionTrack = tracks[i];
+            } else {
+              tracks[i].mode = 'disabled';
+            }
+          }
+          if (typeof syncYoutubeCaptionsUI === 'function') syncYoutubeCaptionsUI();
         };
 
         var loopMenuRow = document.createElement('div');
@@ -2475,6 +2542,31 @@ window.SyncLevel = SyncLevel;
           '</div>'
         ].join('');
         audioMenuRow.appendChild(audioRightWrap);
+
+        var subtitlesMenuRow = document.createElement('div');
+        subtitlesMenuRow.className = 'alabaster-settings-item';
+        subtitlesMenuRow.setAttribute('role', 'button');
+        subtitlesMenuRow.tabIndex = 0;
+        var subtitlesValueLabel = document.createElement('span');
+        subtitlesValueLabel.textContent = 'Off';
+        subtitlesValueLabel.style.cssText = 'max-width:115px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        var subtitlesRightWrap = document.createElement('div');
+        subtitlesRightWrap.className = 'alabaster-settings-item-right';
+        subtitlesRightWrap.appendChild(subtitlesValueLabel);
+        subtitlesRightWrap.insertAdjacentHTML('beforeend', '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>');
+        subtitlesMenuRow.innerHTML = [
+          '<div class="alabaster-settings-item-left">',
+          '  <span class="alabaster-settings-icon">',
+          '    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
+          '      <rect x="2" y="4" width="20" height="16" rx="2"></rect>',
+          '      <path d="M10 9.5a2.5 2.5 0 1 0 0 5"></path>',
+          '      <path d="M17 9.5a2.5 2.5 0 1 0 0 5"></path>',
+          '    </svg>',
+          '  </span>',
+          '  <span class="alabaster-settings-label">Subtitles</span>',
+          '</div>'
+        ].join('');
+        subtitlesMenuRow.appendChild(subtitlesRightWrap);
 
         var snapshotMenuRow = document.createElement('div');
         snapshotMenuRow.className = 'alabaster-settings-item';
@@ -2569,6 +2661,7 @@ window.SyncLevel = SyncLevel;
         mainPanel.appendChild(loopMenuRow);
         mainPanel.appendChild(speedMenuRow);
         mainPanel.appendChild(audioMenuRow);
+        mainPanel.appendChild(subtitlesMenuRow);
         mainPanel.appendChild(snapshotMenuRow);
         mainPanel.appendChild(configPlayerRow);
         mainPanel.appendChild(reportProblemRow);
@@ -2928,9 +3021,129 @@ window.SyncLevel = SyncLevel;
           })(audioModes[aIdx]);
         }
 
+        var subtitlesHeader = document.createElement('div');
+        subtitlesHeader.className = 'alabaster-settings-subheader';
+        var subtitlesBackBtn = document.createElement('div');
+        subtitlesBackBtn.className = 'alabaster-settings-back-btn';
+        subtitlesBackBtn.setAttribute('role', 'button');
+        subtitlesBackBtn.tabIndex = 0;
+        subtitlesBackBtn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>';
+        var subtitlesSubTitle = document.createElement('span');
+        subtitlesSubTitle.className = 'alabaster-settings-subtitle';
+        subtitlesSubTitle.textContent = 'Subtitles';
+        subtitlesHeader.appendChild(subtitlesBackBtn);
+        subtitlesHeader.appendChild(subtitlesSubTitle);
+        subtitlesPanel.appendChild(subtitlesHeader);
+
+        var subtitlesSettingsRow = document.createElement('div');
+        subtitlesSettingsRow.className = 'alabaster-settings-item alabaster-subtitles-settings-row';
+        subtitlesSettingsRow.setAttribute('role', 'button');
+        subtitlesSettingsRow.tabIndex = 0;
+        subtitlesSettingsRow.innerHTML = [
+          '<div class="alabaster-settings-item-left">',
+          '  <span class="alabaster-settings-icon">',
+          '    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
+          '      <line x1="4" y1="21" x2="4" y2="14"></line>',
+          '      <line x1="4" y1="10" x2="4" y2="3"></line>',
+          '      <line x1="12" y1="21" x2="12" y2="12"></line>',
+          '      <line x1="12" y1="8" x2="12" y2="3"></line>',
+          '      <line x1="20" y1="21" x2="20" y2="16"></line>',
+          '      <line x1="20" y1="12" x2="20" y2="3"></line>',
+          '      <line x1="1" y1="14" x2="7" y2="14"></line>',
+          '      <line x1="9" y1="8" x2="15" y2="8"></line>',
+          '      <line x1="17" y1="16" x2="23" y2="16"></line>',
+          '    </svg>',
+          '  </span>',
+          '  <span class="alabaster-settings-label">Subtitle settings</span>',
+          '</div>',
+          '<div class="alabaster-settings-item-right">',
+          '  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>',
+          '</div>'
+        ].join('');
+        subtitlesPanel.appendChild(subtitlesSettingsRow);
+
+        var subtitlesListWrap = document.createElement('div');
+        subtitlesPanel.appendChild(subtitlesListWrap);
+
+        var rebuildSubtitlesList = function() {
+          var tracks = getCaptionTracks();
+          var activeTrack = getActiveCaptionTrack(tracks);
+          subtitlesListWrap.innerHTML = '';
+
+          var makeOptRow = function(labelText, isSelected, onChoose) {
+            var row = document.createElement('div');
+            row.className = 'alabaster-audio-option-item' + (isSelected ? ' is-selected' : '');
+            row.setAttribute('role', 'button');
+            row.tabIndex = 0;
+            var checkSpan = document.createElement('span');
+            checkSpan.className = 'alabaster-audio-check';
+            checkSpan.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#9e9e9e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+            var lblSpan = document.createElement('span');
+            lblSpan.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;';
+            lblSpan.textContent = labelText;
+            row.appendChild(checkSpan);
+            row.appendChild(lblSpan);
+            row.addEventListener('click', function(evt) {
+              evt.preventDefault();
+              evt.stopPropagation();
+              onChoose();
+            });
+            subtitlesListWrap.appendChild(row);
+          };
+
+          makeOptRow('Off', !activeTrack, function() {
+            selectCaptionTrack(null);
+          });
+
+          for (var i = 0; i < tracks.length; i++) {
+            (function(tr, idx) {
+              var trLabel = tr.label || tr.language || ('Subtitle ' + (idx + 1));
+              makeOptRow(trLabel, tr === activeTrack, function() {
+                selectCaptionTrack(tr);
+              });
+            })(tracks[i], i);
+          }
+        };
+
+        syncYoutubeCaptionsUI = function() {
+          var ytCapsEnabled = !isStorageFlagEnabled(DISABLE_YT_CAPTIONS_KEY);
+          if (rootEl) {
+            rootEl.classList.toggle('alabaster-yt-captions', ytCapsEnabled);
+          }
+          var tracks = getCaptionTracks();
+          var activeTrack = getActiveCaptionTrack(tracks);
+          if (activeTrack) {
+            lastSelectedCaptionTrack = activeTrack;
+          }
+
+          if (ytCapsEnabled && tracks.length > 0) {
+            subtitlesMenuRow.style.removeProperty('display');
+          } else {
+            subtitlesMenuRow.style.setProperty('display', 'none', 'important');
+            if (subtitlesPanel.classList.contains('is-active')) {
+              showSettingsPanel(mainPanel);
+            }
+          }
+
+          subtitlesValueLabel.textContent = activeTrack ? (activeTrack.label || activeTrack.language || 'On') : 'Off';
+
+          var barNode = player.controlBar && player.controlBar.el && player.controlBar.el();
+          if (barNode) {
+            var ccButtons = barNode.querySelectorAll('button.vjs-subs-caps-button, button.vjs-captions-button, button.vjs-subtitles-button');
+            for (var i = 0; i < ccButtons.length; i++) {
+              ccButtons[i].classList.toggle('alabaster-cc-active', Boolean(ytCapsEnabled && activeTrack));
+            }
+          }
+
+          if (subtitlesPanel.classList.contains('is-active')) {
+            rebuildSubtitlesList();
+          }
+        };
+
         fsSettingsPopup.appendChild(mainPanel);
         fsSettingsPopup.appendChild(speedPanel);
         fsSettingsPopup.appendChild(audioPanel);
+        fsSettingsPopup.appendChild(subtitlesPanel);
         rootEl.appendChild(fsSettingsPopup);
 
         var getVideoElementNode = function() {
@@ -2997,6 +3210,8 @@ window.SyncLevel = SyncLevel;
             if (ab.key === curAudio) ab.btn.classList.add('is-selected');
             else ab.btn.classList.remove('is-selected');
           }
+
+          if (typeof syncYoutubeCaptionsUI === 'function') syncYoutubeCaptionsUI();
         };
 
         loopMenuRow.addEventListener('click', function(evt) {
@@ -3029,6 +3244,13 @@ window.SyncLevel = SyncLevel;
           showSettingsPanel(audioPanel);
         });
 
+        subtitlesMenuRow.addEventListener('click', function(evt) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          rebuildSubtitlesList();
+          showSettingsPanel(subtitlesPanel);
+        });
+
         speedBackBtn.addEventListener('click', function(evt) {
           evt.preventDefault();
           evt.stopPropagation();
@@ -3039,6 +3261,27 @@ window.SyncLevel = SyncLevel;
           evt.preventDefault();
           evt.stopPropagation();
           showSettingsPanel(mainPanel);
+        });
+
+        subtitlesBackBtn.addEventListener('click', function(evt) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          showSettingsPanel(mainPanel);
+        });
+
+        subtitlesSettingsRow.addEventListener('click', function(evt) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          setSettingsPopupState(false);
+          var ttSettings = typeof player.getChild === 'function'
+            ? (player.getChild('textTrackSettings') || player.getChild('TextTrackSettings'))
+            : null;
+          if (ttSettings && typeof ttSettings.open === 'function') {
+            ttSettings.open();
+          } else {
+            var fallbackBtn = rootEl && rootEl.querySelector('.vjs-texttrack-settings');
+            if (fallbackBtn) fallbackBtn.click();
+          }
         });
 
         speedMinusBtn.addEventListener('click', function(evt) {
@@ -3162,6 +3405,48 @@ window.SyncLevel = SyncLevel;
         player.on('ratechange', refreshSettingsUI);
 
         var cBarForSettings = player.controlBar && player.controlBar.el && player.controlBar.el();
+        if (cBarForSettings && !cBarForSettings._alabasterYtCapsBound) {
+          cBarForSettings._alabasterYtCapsBound = true;
+          cBarForSettings.addEventListener('click', function(evt) {
+            if (isStorageFlagEnabled(DISABLE_YT_CAPTIONS_KEY)) return;
+            var target = evt.target;
+            if (!target || !target.closest) return;
+            if (target.closest('.vjs-menu')) return;
+            var ccBtn = target.closest('.vjs-subs-caps-button, .vjs-captions-button, .vjs-subtitles-button');
+            if (!ccBtn) return;
+            var tracks = getCaptionTracks();
+            if (!tracks.length) return;
+            evt.preventDefault();
+            evt.stopPropagation();
+            evt.stopImmediatePropagation();
+            var menuEl = ccBtn.querySelector('.vjs-menu');
+            if (menuEl) menuEl.classList.remove('vjs-lock-showing');
+            var active = getActiveCaptionTrack(tracks);
+            if (active) {
+              selectCaptionTrack(null);
+            } else {
+              var nextTrack = (lastSelectedCaptionTrack && tracks.indexOf(lastSelectedCaptionTrack) !== -1) ? lastSelectedCaptionTrack : tracks[0];
+              selectCaptionTrack(nextTrack);
+            }
+          }, true);
+        }
+
+        var textTrackListRef = typeof player.textTracks === 'function' ? player.textTracks() : null;
+        if (textTrackListRef && typeof textTrackListRef.addEventListener === 'function') {
+          textTrackListRef.addEventListener('change', syncYoutubeCaptionsUI);
+          textTrackListRef.addEventListener('addtrack', syncYoutubeCaptionsUI);
+          textTrackListRef.addEventListener('removetrack', syncYoutubeCaptionsUI);
+        }
+        player.on('loadedmetadata', syncYoutubeCaptionsUI);
+        player.on('dispose', function() {
+          if (textTrackListRef && typeof textTrackListRef.removeEventListener === 'function') {
+            textTrackListRef.removeEventListener('change', syncYoutubeCaptionsUI);
+            textTrackListRef.removeEventListener('addtrack', syncYoutubeCaptionsUI);
+            textTrackListRef.removeEventListener('removetrack', syncYoutubeCaptionsUI);
+          }
+        });
+        syncYoutubeCaptionsUI();
+
         if (cBarForSettings && !cBarForSettings.querySelector('.vjs-alabaster-settings-btn')) {
           fsSettingsBtn = document.createElement('button');
           fsSettingsBtn.type = 'button';
@@ -3683,6 +3968,7 @@ window.SyncLevel = SyncLevel;
             if (isFsCommentsOpen && typeof setCommentsDrawerState === 'function') setCommentsDrawerState(false);
             if (isFsSettingsOpen && typeof setSettingsPopupState === 'function') setSettingsPopupState(false);
           } else if ((evt.key === 'v' || evt.key === 'V') && !evt.repeat && !evt.ctrlKey && !evt.altKey && !evt.metaKey) {
+            if (isStorageFlagEnabled(DISABLE_REC_SHORTCUT_KEY)) return;
             var activeEl = document.activeElement;
             var activeTag = activeEl && activeEl.tagName ? activeEl.tagName.toLowerCase() : '';
             var targetTag = evt.target && evt.target.tagName ? evt.target.tagName.toLowerCase() : '';
@@ -3866,6 +4152,9 @@ window.SyncLevel = SyncLevel;
 
         bindTitleClickHandlers();
         positionCustomButtons();
+        if (typeof syncYoutubeCaptionsUI === 'function') {
+          syncYoutubeCaptionsUI();
+        }
 
         var useLegacyDescButton = isStorageFlagEnabled(LEGACY_DESC_BTN_KEY);
         var hasDescriptionNode = Boolean(document.querySelector('.descriptionHtml'));
@@ -4676,6 +4965,7 @@ window.SyncLevel = SyncLevel;
         sequence: 0,
         lastCorrectionAt: 0,
         driftCount: 0,
+        avgDrift: 0,
         highDriftSince: 0,
         vStallSince: 0,
         aStallSince: 0,
@@ -4922,6 +5212,7 @@ window.SyncLevel = SyncLevel;
 
       function cancelVideoHold() {
         state.holdingVideoForSync = false;
+        state.avgDrift = 0;
         if (state.holdTimer) {
           clearTimeout(state.holdTimer);
           state.holdTimer = 0;
@@ -5221,14 +5512,14 @@ window.SyncLevel = SyncLevel;
 
         if (holdAudio) {
           if (nativeGetVPaused() || videoEl.seeking || videoEl.readyState < 2) return;
-          var aResumeComp = 0.010 * baseRate;
-          var aMinLead = Math.max(typeof customMinLead === 'number' ? customMinLead : 0.022, aResumeComp + 0.004);
+          var aResumeComp = 0.012 * baseRate;
+          var aMinLead = Math.max(typeof customMinLead === 'number' ? customMinLead : 0.018, aResumeComp + 0.004);
           var aLead = aCur - vTarget;
           if (aLead <= aMinLead || aLead > 0.45) return;
 
           state.holdingVideoForSync = true;
           var aHoldStart = compat.now();
-          var aMaxHoldMs = Math.min(500, Math.max(12, Math.round(((aLead - aResumeComp) / baseRate) * 1000) + 40));
+          var aMaxHoldMs = Math.min(500, Math.max(8, Math.round(((aLead - aResumeComp) / baseRate) * 1000) + 8));
 
           pauseAudioOnly();
 
@@ -5244,7 +5535,7 @@ window.SyncLevel = SyncLevel;
             if (vNow >= aNow - aResumeComp || elapsed >= aMaxHoldMs || nativeGetVPaused()) {
               cancelVideoHold();
               state.lastCorrectionAt = compat.now();
-              state.playGraceUntil = Math.max(state.playGraceUntil, compat.now() + 280);
+              state.playGraceUntil = Math.max(state.playGraceUntil, compat.now() + 260);
               if (state.wantPlaying && !state.userSeeking && !state.buffering && nativeGetAPaused() && !audioEl.ended) {
                 runInternal(function() { compat.safePlay(nativeAudioPlay); });
                 state.steadyPlaybackSince = compat.now() + 120;
@@ -5259,14 +5550,14 @@ window.SyncLevel = SyncLevel;
         }
 
         if (nativeGetAPaused() || audioEl.seeking || audioEl.readyState < 2) return;
-        var resumeCompSec = 0.014 * baseRate;
-        var minLead = Math.max(typeof customMinLead === 'number' ? customMinLead : 0.022, resumeCompSec + 0.004);
+        var resumeCompSec = 0.015 * baseRate;
+        var minLead = Math.max(typeof customMinLead === 'number' ? customMinLead : 0.018, resumeCompSec + 0.004);
         var lead = vTarget - aCur;
         if (lead <= minLead || lead > 0.45) return;
 
         state.holdingVideoForSync = true;
         var holdStart = compat.now();
-        var maxHoldMs = Math.min(500, Math.max(12, Math.round(((lead - resumeCompSec) / baseRate) * 1000) + 40));
+        var maxHoldMs = Math.min(500, Math.max(8, Math.round(((lead - resumeCompSec) / baseRate) * 1000) + 8));
 
         pauseVideoOnly();
 
@@ -5282,7 +5573,7 @@ window.SyncLevel = SyncLevel;
           if (aNow >= vNow - resumeCompSec || elapsed >= maxHoldMs || nativeGetAPaused()) {
             cancelVideoHold();
             state.lastCorrectionAt = compat.now();
-            state.playGraceUntil = Math.max(state.playGraceUntil, compat.now() + 280);
+            state.playGraceUntil = Math.max(state.playGraceUntil, compat.now() + 260);
             if (state.wantPlaying && !state.userSeeking && !state.buffering && !isVideoBypassed() && nativeGetVPaused() && !nativeGetVEnded()) {
               runInternal(function() { compat.safePlay(nativeVideoPlay); });
               state.steadyPlaybackSince = compat.now() + 120;
@@ -5595,6 +5886,7 @@ window.SyncLevel = SyncLevel;
         state.vStallSince = 0;
         state.aStallSince = 0;
         state.endStallSince = 0;
+        state.avgDrift = 0;
         state.starveTicks = 0;
         clearPendingWait();
 
@@ -5820,6 +6112,7 @@ window.SyncLevel = SyncLevel;
         state.playGraceUntil = Math.max(state.playGraceUntil, now + 550);
         state.lastCorrectionAt = now;
         state.driftCount = 0;
+        state.avgDrift = 0;
         try {
           var ctx = window.audioCtx || window.audioContext || window._alabasterAudioCtx || (window.Alabaster && window.Alabaster.audioCtx);
           if (ctx && ctx.state === 'suspended' && typeof ctx.resume === 'function') {
@@ -6139,6 +6432,7 @@ window.SyncLevel = SyncLevel;
               clearWatchdog();
               state.lastCorrectionAt = compat.now();
               state.driftCount = 0;
+              state.avgDrift = 0;
               state.highDriftSince = 0;
               state.vStallSince = 0;
               state.aStallSince = 0;
@@ -6173,8 +6467,8 @@ window.SyncLevel = SyncLevel;
               }
 
               var curRate = (typeof window.Alabaster._targetPlaybackRate === 'number' && window.Alabaster._targetPlaybackRate > 0) ? window.Alabaster._targetPlaybackRate : (videoEl.playbackRate || baseRate || 1);
-              var vResumeLead = 0.014 * curRate;
-              var aResumeLead = 0.010 * curRate;
+              var vResumeLead = 0.015 * curRate;
+              var aResumeLead = 0.012 * curRate;
               var signed = vNow - aNow;
 
               if (vHeld) {
@@ -6199,7 +6493,7 @@ window.SyncLevel = SyncLevel;
                 return;
               }
 
-              if (vResolved && !vHeldOnce && signed > 0.008 && signed <= 0.45 && (!aStarted || signed > Math.max(0.022, vResumeLead + 0.006))) {
+              if (vResolved && !vHeldOnce && signed > 0.008 && signed <= 0.45 && (!aStarted || signed > Math.max(0.018, vResumeLead + 0.004))) {
                 vHeld = true;
                 settledAt = 0;
                 pauseVideoOnly();
@@ -6207,7 +6501,7 @@ window.SyncLevel = SyncLevel;
                 return;
               }
 
-              if (aResolved && !aHeldOnce && signed < -0.008 && signed >= -0.45 && (!vStarted || -signed > Math.max(0.022, aResumeLead + 0.006))) {
+              if (aResolved && !aHeldOnce && signed < -0.008 && signed >= -0.45 && (!vStarted || -signed > Math.max(0.018, aResumeLead + 0.004))) {
                 aHeld = true;
                 settledAt = 0;
                 pauseAudioOnly();
@@ -6220,18 +6514,18 @@ window.SyncLevel = SyncLevel;
                   settledAt = now + 45;
                 }
                 if (now >= settledAt || elapsed > 800) {
-                  if (Math.abs(signed) <= 0.024 || (vHeldOnce && aHeldOnce) || elapsed > 800) {
+                  if (Math.abs(signed) <= 0.015 || (vHeldOnce && aHeldOnce) || elapsed > 800) {
                     finishLaunch();
                     return;
                   }
-                  if (signed > 0.024 && signed <= 0.45 && !vHeldOnce) {
+                  if (signed > 0.015 && signed <= 0.45 && !vHeldOnce) {
                     vHeld = true;
                     settledAt = 0;
                     pauseVideoOnly();
                     state.launchPollTimer = setTimeout(pollLaunchSync, 4);
                     return;
                   }
-                  if (signed < -0.024 && signed >= -0.45 && !aHeldOnce) {
+                  if (signed < -0.015 && signed >= -0.45 && !aHeldOnce) {
                     aHeld = true;
                     settledAt = 0;
                     pauseAudioOnly();
@@ -6571,6 +6865,7 @@ window.SyncLevel = SyncLevel;
         state.internalVideoSeeking = false;
         state.internalAudioSeeking = false;
         state.driftCount = 0;
+        state.avgDrift = 0;
         state.highDriftSince = 0;
         state.vStallSince = 0;
         state.aStallSince = 0;
@@ -6600,6 +6895,7 @@ window.SyncLevel = SyncLevel;
         state.frozenDisplayTime = 0;
         state.alignedForAnchor = null;
         state.driftCount = 0;
+        state.avgDrift = 0;
         state.highDriftSince = 0;
         state.vStallSince = 0;
         state.aStallSince = 0;
@@ -7044,6 +7340,7 @@ window.SyncLevel = SyncLevel;
         updateMediaSessionPosition();
         state.playGraceUntil = Math.max(state.playGraceUntil, compat.now() + 180);
         state.driftCount = 0;
+        state.avgDrift = 0;
       });
 
       var onStreamEnded = function(evt) {
@@ -7166,6 +7463,7 @@ window.SyncLevel = SyncLevel;
         state.vStallSince = 0;
         state.aStallSince = 0;
         state.driftCount = 0;
+        state.avgDrift = 0;
         state.highDriftSince = 0;
         state.starveTicks = 0;
         state.alignedForAnchor = null;
@@ -7376,6 +7674,7 @@ window.SyncLevel = SyncLevel;
 
         if (state.userSeeking) {
           state.driftCount = 0;
+          state.avgDrift = 0;
           state.highDriftSince = 0;
           state.starveTicks = 0;
           state.endStallSince = 0;
@@ -7389,6 +7688,7 @@ window.SyncLevel = SyncLevel;
 
         if (!state.wantPlaying) {
           state.driftCount = 0;
+          state.avgDrift = 0;
           state.highDriftSince = 0;
           state.starveTicks = 0;
           state.endStallSince = 0;
@@ -7483,6 +7783,7 @@ window.SyncLevel = SyncLevel;
 
         if (isTabWaking()) {
           state.driftCount = 0;
+          state.avgDrift = 0;
           state.highDriftSince = 0;
           state.starveTicks = 0;
           if (!aPaused) {
@@ -7531,6 +7832,7 @@ window.SyncLevel = SyncLevel;
 
         if (isVideoBypassed()) {
           state.driftCount = 0;
+          state.avgDrift = 0;
           state.highDriftSince = 0;
           state.starveTicks = 0;
           if (aPaused && !aEndedNative && !audioEl.seeking && audioEl.readyState >= 2) {
@@ -7542,6 +7844,7 @@ window.SyncLevel = SyncLevel;
 
         if (state.hidden) {
           state.driftCount = 0;
+          state.avgDrift = 0;
           state.highDriftSince = 0;
           state.starveTicks = 0;
           if (state.buffering) {
@@ -7564,6 +7867,7 @@ window.SyncLevel = SyncLevel;
 
         if (state.buffering) {
           state.driftCount = 0;
+          state.avgDrift = 0;
           state.highDriftSince = 0;
           state.starveTicks = 0;
           if (!aPaused || !vPaused) freezeBothStreams();
@@ -7586,6 +7890,7 @@ window.SyncLevel = SyncLevel;
           if (videoEl.seeking || audioEl.seeking || state.starveTicks >= 3) {
             state.starveTicks = 0;
             state.driftCount = 0;
+            state.avgDrift = 0;
             state.highDriftSince = 0;
             setBufferSpinner(true);
             if (!aPaused || !vPaused) freezeBothStreams();
@@ -7597,6 +7902,7 @@ window.SyncLevel = SyncLevel;
 
         if (vPaused || aPaused) {
           state.driftCount = 0;
+          state.avgDrift = 0;
           state.highDriftSince = 0;
           if (!isInPlayGrace() && !isTabWaking() && !vNearEndNow && !aNearEndNow) {
             if (!aPaused) pauseAudioOnly();
@@ -7635,6 +7941,7 @@ window.SyncLevel = SyncLevel;
             state.vStallSince = 0;
             state.aStallSince = 0;
             state.driftCount = 0;
+            state.avgDrift = 0;
             state.highDriftSince = 0;
             setBufferSpinner(true);
             freezeBothStreams();
@@ -7648,6 +7955,7 @@ window.SyncLevel = SyncLevel;
             state.vStallSince = 0;
             state.aStallSince = 0;
             state.driftCount = 0;
+            state.avgDrift = 0;
             state.highDriftSince = 0;
             setBufferSpinner(true);
             freezeBothStreams();
@@ -7666,6 +7974,7 @@ window.SyncLevel = SyncLevel;
 
         if (vEndedNative || aEndedNative || vNearEndNow || aNearEndNow) {
           state.driftCount = 0;
+          state.avgDrift = 0;
           state.highDriftSince = 0;
           if (player.hasClass && (player.hasClass('vjs-waiting') || player.hasClass('vjs-seeking'))) {
             player.removeClass('vjs-waiting');
@@ -7689,24 +7998,26 @@ window.SyncLevel = SyncLevel;
 
         if (inGrace || now < (window.Alabaster._rateChangeGraceUntil || 0)) {
           state.driftCount = 0;
+          state.avgDrift = 0;
           state.highDriftSince = 0;
           return;
         }
 
         var signedDrift = vNow - aNow;
         var rawDrift = Math.abs(signedDrift);
-
-        if (rawDrift <= 0.035) {
-          state.driftCount = 0;
-          state.highDriftSince = 0;
-          return;
-        }
+        state.avgDrift = state.avgDrift === 0 ? signedDrift : (state.avgDrift * 0.78 + signedDrift * 0.22);
+        var smoothDrift = state.avgDrift;
+        var curRateNow = (typeof window.Alabaster._targetPlaybackRate === 'number' && window.Alabaster._targetPlaybackRate > 0) ? window.Alabaster._targetPlaybackRate : (videoEl.playbackRate || 1);
+        var rateScale = Math.max(1, curRateNow);
+        var vHoldThresh = 0.024 * rateScale;
+        var aHoldThresh = 0.026 * rateScale;
 
         if (rawDrift > 0.35) {
           if (!state.highDriftSince) state.highDriftSince = now;
           if (now - state.highDriftSince >= 1800) {
             state.highDriftSince = 0;
             state.driftCount = 0;
+            state.avgDrift = 0;
             state.lastCorrectionAt = now;
             state.alignedForAnchor = null;
             freezeBothStreams();
@@ -7720,17 +8031,19 @@ window.SyncLevel = SyncLevel;
           state.highDriftSince = 0;
         }
 
-        if (signedDrift > 0.055 && signedDrift <= 0.35) {
+        if (smoothDrift > vHoldThresh && signedDrift > (0.020 * rateScale) && signedDrift <= 0.35) {
           state.driftCount = state.driftCount > 0 ? state.driftCount + 1 : 1;
-          if (state.driftCount >= 10 && (now - state.lastCorrectionAt) > 2000) {
+          if (state.driftCount >= 8 && (now - state.lastCorrectionAt) > 1200) {
             state.driftCount = 0;
-            holdVideoUntilAudioCatchesUp(0.050, false);
+            state.avgDrift = 0;
+            holdVideoUntilAudioCatchesUp(0.018 * rateScale, false);
           }
-        } else if (signedDrift < -0.070 && signedDrift >= -0.35) {
+        } else if (smoothDrift < -aHoldThresh && signedDrift < -(0.020 * rateScale) && signedDrift >= -0.35) {
           state.driftCount = state.driftCount < 0 ? state.driftCount - 1 : -1;
-          if (state.driftCount <= -14 && (now - state.lastCorrectionAt) > 2500) {
+          if (state.driftCount <= -10 && (now - state.lastCorrectionAt) > 1500) {
             state.driftCount = 0;
-            holdVideoUntilAudioCatchesUp(0.065, true);
+            state.avgDrift = 0;
+            holdVideoUntilAudioCatchesUp(0.020 * rateScale, true);
           }
         } else {
           state.driftCount = 0;
@@ -7808,8 +8121,6 @@ window.SyncLevel = SyncLevel;
     initAlabasterPlayer();
   }
 })();
- 
-
 
 (function () {
   'use strict';
