@@ -3015,42 +3015,42 @@ if (/[?&]autoplay=/.test(location.search)) {
  
 </script>
      <script>
+var lastTheaterMode = null;
+
+function applyTheaterMode(isTheaterMode) {
+  var videoPlayerContainer = document.querySelector('.video-player-container');
+  var watchPage = document.querySelector('.watch-page');
+
+  if (!videoPlayerContainer || !watchPage) return;
+
+  videoPlayerContainer.classList.toggle('theatermodeon', isTheaterMode);
+  watchPage.style.display = isTheaterMode ? 'grid' : 'flex';
+  lastTheaterMode = isTheaterMode;
+}
+
 function toggleTheaterMode() {
-    var videoPlayerContainer = document.querySelector('.video-player-container');
-    var watchPage = document.querySelector('.watch-page');
+  var videoPlayerContainer = document.querySelector('.video-player-container');
+  if (!videoPlayerContainer) return;
 
-    if (!videoPlayerContainer || !watchPage) return; 
-
-    var isTheaterMode = videoPlayerContainer.classList.toggle('theatermodeon');
-
-    // Update the display style based on the new state
-    if (isTheaterMode) {
-        watchPage.style.display = 'grid';
-    } else {
-        watchPage.style.display = 'flex';
-    }
-
-    localStorage.setItem('theaterMode', isTheaterMode);
+  var isTheaterMode = !videoPlayerContainer.classList.contains('theatermodeon');
+  localStorage.setItem('theaterMode', String(isTheaterMode));
+  applyTheaterMode(isTheaterMode);
 }
 
 function checkTheaterMode() {
-    var isTheaterMode = localStorage.getItem('theaterMode') === 'true';
-    var videoPlayerContainer = document.querySelector('.video-player-container');
-    var watchPage = document.querySelector('.watch-page');
-
-    if (!videoPlayerContainer || !watchPage) return;
-
-    if (isTheaterMode) {
-        videoPlayerContainer.classList.add('theatermodeon');
-        watchPage.style.display = 'grid';
-    } else {
-        videoPlayerContainer.classList.remove('theatermodeon');
-        watchPage.style.display = 'flex';
-    }
+  var isTheaterMode = localStorage.getItem('theaterMode') === 'true';
+  if (isTheaterMode !== lastTheaterMode) {
+    applyTheaterMode(isTheaterMode);
+  }
 }
 
-document.addEventListener('DOMContentLoaded', checkTheaterMode);
+document.addEventListener('DOMContentLoaded', function () {
+  checkTheaterMode();
+  window.addEventListener('storage', checkTheaterMode);
+  setInterval(checkTheaterMode, 1000);
+});
 
+ 
 	const languageCode = localStorage.getItem("Language");
 	const regionCode = localStorage.getItem("Region");
 	const currentURL = location.href;
@@ -3129,8 +3129,9 @@ let ambientEnabled = localStorage.getItem("ambientState") !== "false";
 let isVisible = true;
 let running = false;
 let rafId = 0;
-let rvfcId = 0;  
+let rvfcId = 0;
 let lastDrawTime = 0;
+let ambientSyncInterval = 0;
 
 const observer = new IntersectionObserver(
   (entries) => {
@@ -3172,10 +3173,10 @@ const drawStart = () => {
 
   lastDrawTime = performance.now();
   if (hasRVFC) {
-    if (rvfcId) AMvideo.cancelVideoFrameCallback(rvfcId);  
+    if (rvfcId) AMvideo.cancelVideoFrameCallback(rvfcId);
     rvfcId = AMvideo.requestVideoFrameCallback(loop);
   } else {
-    if (rafId) cancelAnimationFrame(rafId);  
+    if (rafId) cancelAnimationFrame(rafId);
     rafId = requestAnimationFrame(loop);
   }
 };
@@ -3183,7 +3184,7 @@ const drawStart = () => {
 const drawPause = () => {
   running = false;
   if (hasRVFC && rvfcId) {
-    AMvideo.cancelVideoFrameCallback(rvfcId); // FIX: Properly cancel rVFC
+    AMvideo.cancelVideoFrameCallback(rvfcId);
     rvfcId = 0;
   } else if (!hasRVFC && rafId) {
     cancelAnimationFrame(rafId);
@@ -3191,11 +3192,10 @@ const drawPause = () => {
   }
 };
 
- const watchdog = () => {
-  // If video is playing but loop hasn't run in 500ms, reboot it automatically
+const watchdog = () => {
   if (canRun() && (!running || performance.now() - lastDrawTime > 500)) {
     running = false;
-    drawStart(); 
+    drawStart();
   }
 };
 
@@ -3203,7 +3203,8 @@ const handleVisibilityChange = () => {
   if (document.hidden) {
     drawPause();
   } else {
-     requestAnimationFrame(() => drawStart());
+    syncAmbientFromStorage();
+    requestAnimationFrame(() => drawStart());
   }
 };
 
@@ -3221,7 +3222,7 @@ const pauseHandler = (el) => {
       if (isPlayPending) return;
       return origPause.apply(this, arguments);
     };
-  } catch { }
+  } catch {}
 };
 
 const hasSD360 = !!AMvideo.querySelector('source[label="sd360"]');
@@ -3233,10 +3234,10 @@ if (!hasSD360) {
 const isMediaPlaying = (el) => {
   return (
     el &&
-    el.currentTime > 0 &&      
-    !el.paused &&              
-    !el.ended &&               
-    el.readyState > 2          
+    el.currentTime > 0 &&
+    !el.paused &&
+    !el.ended &&
+    el.readyState > 2
   );
 };
 
@@ -3244,22 +3245,22 @@ const forcePlay = async () => {
   if (!pageFullyLoaded || isPlayPending) return;
   const videoNeedsPlay = AMvideo && !isMediaPlaying(AMvideo);
   const audioNeedsPlay = AMaudio && !isMediaPlaying(AMaudio);
-  
+
   if (!videoNeedsPlay && !audioNeedsPlay) return;
   isPlayPending = true;
-  
+
   if (videoNeedsPlay && AMvideo.currentTime < 0.5) {
     AMvideo.currentTime = 0;
   }
   if (audioNeedsPlay && AMaudio.currentTime < 0.5) {
     AMaudio.currentTime = 0;
   }
-  
+
   try {
     const promises = [];
     if (videoNeedsPlay) promises.push(AMvideo.play());
     if (audioNeedsPlay) promises.push(AMaudio.play());
-    
+
     if (promises.length > 0) {
       await Promise.all(promises);
     }
@@ -3274,36 +3275,53 @@ const handleFullscreen = () => {
     document.fullscreenElement || !ambientEnabled ? "none" : "block";
 };
 
+const applyAmbientState = () => {
+  const toggleBtn = document.querySelector(
+    'a[title*="Ambient light mode uses a very cool ahh effect"]'
+  );
+  if (ambientEnabled) {
+    if (toggleBtn) {
+      toggleBtn.innerHTML = `<i class="fa-light fa-lightbulb-on"></i> Ambient Mode • on`;
+    }
+    canvas1.style.display = document.fullscreenElement ? "none" : "block";
+    drawStart();
+  } else {
+    if (toggleBtn) {
+      toggleBtn.innerHTML = `<i class="fa-light fa-lightbulb" style="width: 1em;margin-left: 4px;"></i> Ambient Mode • off`;
+    }
+    canvas1.style.display = "none";
+    ctx.fillRect(0, 0, CONFIG.internalWidth, CONFIG.internalHeight);
+    drawPause();
+  }
+};
+
+const syncAmbientFromStorage = () => {
+  const stored = localStorage.getItem("ambientState") !== "false";
+  if (stored !== ambientEnabled) {
+    ambientEnabled = stored;
+    applyAmbientState();
+  }
+};
+
 const setupAmbientToggle = () => {
   const toggleBtn = document.querySelector(
     'a[title*="Ambient light mode uses a very cool ahh effect"]'
   );
-  if (!toggleBtn) return;
-  const syncUI = () => {
-    if (ambientEnabled) {
-      toggleBtn.innerHTML = `<i class="fa-light fa-lightbulb-on"></i> Ambient Mode • on`;
-      canvas1.style.display = document.fullscreenElement ? "none" : "block";
-      drawStart();
-    } else {
-      toggleBtn.innerHTML = `<i class="fa-light fa-lightbulb" style="width: 1em;margin-left: 4px;"></i> Ambient Mode • off`;
-      canvas1.style.display = "none";
-      ctx.fillRect(0, 0, CONFIG.internalWidth, CONFIG.internalHeight);
-      drawPause();
-    }
-  };
-  toggleBtn.addEventListener("click", (e) => {
-    e.preventDefault();
-    ambientEnabled = !ambientEnabled;
-    localStorage.setItem("ambientState", ambientEnabled ? "true" : "false");
-    syncUI();
-  });
-  syncUI();
+  if (toggleBtn) {
+    toggleBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      ambientEnabled = !ambientEnabled;
+      localStorage.setItem("ambientState", ambientEnabled ? "true" : "false");
+      applyAmbientState();
+    });
+  }
+  applyAmbientState();
 };
 
 const init = () => {
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  
-   AMvideo.addEventListener("timeupdate", watchdog, { passive: true });
+
+  AMvideo.addEventListener("timeupdate", watchdog, { passive: true });
   AMvideo.addEventListener("play", drawStart, { passive: true });
   AMvideo.addEventListener("pause", drawPause, { passive: true });
   AMvideo.addEventListener("ended", drawPause, { passive: true });
@@ -3318,16 +3336,20 @@ const init = () => {
     { once: true }
   );
   setupAmbientToggle();
+  window.addEventListener("storage", syncAmbientFromStorage);
+  ambientSyncInterval = setInterval(syncAmbientFromStorage, 1000);
   forcePlay();
 };
 
 const cleanup = () => {
-  AMvideo.removeEventListener("timeupdate", watchdog); 
+  AMvideo.removeEventListener("timeupdate", watchdog);
   AMvideo.removeEventListener("play", drawStart);
   AMvideo.removeEventListener("pause", drawPause);
   AMvideo.removeEventListener("ended", drawPause);
   document.removeEventListener("fullscreenchange", handleFullscreen);
   document.removeEventListener("visibilitychange", handleVisibilityChange);
+  window.removeEventListener("storage", syncAmbientFromStorage);
+  clearInterval(ambientSyncInterval);
   observer.disconnect();
   drawPause();
 };
