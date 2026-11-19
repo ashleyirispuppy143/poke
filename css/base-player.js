@@ -6760,7 +6760,7 @@ window.SyncLevel = SyncLevel;
             var launchStart = compat.now();
             var baseRate = (typeof window.Alabaster._targetPlaybackRate === 'number' && window.Alabaster._targetPlaybackRate > 0) ? window.Alabaster._targetPlaybackRate : (videoEl.playbackRate || player.playbackRate() || 1);
             var audioAlreadyRunning = !nativeGetAPaused();
-            var videoLeadsAudio = v0 > a0 + 0.015;
+            var videoLeadsAudio = v0 > a0 + 0.08;
             var audioFirstMode = audioAlreadyRunning || videoLeadsAudio;
             var vPlayCalled = false;
             var aPlayCalled = false;
@@ -6769,13 +6769,8 @@ window.SyncLevel = SyncLevel;
             var vStarted = false;
             var aStarted = false;
             var vFramePainted = false;
-            var vHeld = false;
-            var vResuming = false;
-            var vHeldOnce = false;
-            var vAtAudioCall = 0;
             var audioCalledAt = 0;
             var videoCalledAt = 0;
-            var settledAt = 0;
             var finished = false;
             var uiMarked = false;
 
@@ -6837,6 +6832,8 @@ window.SyncLevel = SyncLevel;
               state.highDriftSince = 0;
               state.vStallSince = 0;
               state.aStallSince = 0;
+              state.prevVideoTime = -1;
+              state.prevAudioTime = -1;
               shield.activate();
               markStartedOnce();
             };
@@ -6849,7 +6846,7 @@ window.SyncLevel = SyncLevel;
               if (!pV || typeof pV.then !== 'function') pV = Promise.resolve();
               pV.then(function() {
                 if (finished || currentSeq !== state.sequence || !state.wantPlaying || state.userSeeking) return;
-                if (nativeGetVPaused() && !vHeld) {
+                if (nativeGetVPaused()) {
                   finished = true;
                   clearTimeout(launchTimer);
                   clearLaunchPoll();
@@ -6888,11 +6885,18 @@ window.SyncLevel = SyncLevel;
               if (aPlayCalled || finished || currentSeq !== state.sequence) return;
               aPlayCalled = true;
               audioCalledAt = compat.now();
-              vAtAudioCall = nativeGetVTime();
               var pA = nativeGetAPaused() ? runInternal(nativeAudioPlay) : Promise.resolve();
               if (!pA || typeof pA.then !== 'function') pA = Promise.resolve();
               pA.then(function() {
                 if (finished || currentSeq !== state.sequence || !state.wantPlaying || state.userSeeking) return;
+                if (audioEl.ended && isPlaybackCompleted()) {
+                  finished = true;
+                  clearTimeout(launchTimer);
+                  clearLaunchPoll();
+                  state.launchingPlay = false;
+                  onStreamEnded();
+                  return;
+                }
                 if (nativeGetAPaused()) {
                   finished = true;
                   clearTimeout(launchTimer);
@@ -6950,26 +6954,7 @@ window.SyncLevel = SyncLevel;
 
               var curRate = (typeof window.Alabaster._targetPlaybackRate === 'number' && window.Alabaster._targetPlaybackRate > 0) ? window.Alabaster._targetPlaybackRate : (videoEl.playbackRate || baseRate || 1);
               var vResumeLead = state.vResumeLatency * curRate + 0.003;
-              var aResumeLead = state.aResumeLatency * curRate;
               var catchupBudgetMs = Math.max(850, Math.round((Math.max(0, v0 - a0) / curRate) * 1000) + 550);
-
-              if (!audioFirstMode && !aPlayCalled) {
-                if (vStarted && (vNow >= a0 - aResumeLead || elapsed > 500)) {
-                  startAudioStream();
-                }
-                if (elapsed > 850 && !aPlayCalled) {
-                  finished = true;
-                  clearTimeout(launchTimer);
-                  clearLaunchPoll();
-                  state.launchingPlay = false;
-                  setBufferSpinner(true);
-                  freezeBothStreams();
-                  armNetworkWatchdog();
-                  return;
-                }
-                state.launchPollTimer = setTimeout(pollLaunchSync, 4);
-                return;
-              }
 
               if (audioFirstMode && !vPlayCalled) {
                 if (aStarted && aNow >= v0 - vResumeLead) {
@@ -6989,71 +6974,16 @@ window.SyncLevel = SyncLevel;
                 return;
               }
 
-              var signed = vNow - aNow;
-
-              if (!audioFirstMode && aPlayCalled && vStarted && !vHeld && !vHeldOnce && ((!aStarted && signed > 0.035) || (!(vResolved && aResolved) && signed > 0.07))) {
-                vHeld = true;
-                settledAt = 0;
-                pauseVideoOnly();
-                state.launchPollTimer = setTimeout(pollLaunchSync, 4);
-                return;
-              }
-
-              if (vHeld) {
-                if (aStarted && aNow >= vNow - vResumeLead) {
-                  vHeld = false;
-                  vHeldOnce = true;
-                  vResuming = true;
-                  settledAt = now + 70;
-                  var pResumeLaunch = null;
-                  runInternal(function() { pResumeLaunch = compat.safePlay(nativeVideoPlay); });
-                  if (pResumeLaunch && typeof pResumeLaunch.then === 'function') {
-                    pResumeLaunch.then(function() { vResuming = false; }, function() { vResuming = false; });
-                  } else {
-                    vResuming = false;
+              if (vResolved && aResolved && !nativeGetVPaused() && !nativeGetAPaused()) {
+                if (audioFirstMode && vStarted && aStarted) {
+                  var signedCal = vNow - aNow;
+                  if (Math.abs(signedCal) < 0.12) {
+                    state.vResumeLatency = Math.max(0.004, Math.min(0.048, state.vResumeLatency - ((signedCal - 0.003) / curRate) * 0.55));
                   }
-                } else if (elapsed > Math.max(950, catchupBudgetMs)) {
-                  finished = true;
-                  clearTimeout(launchTimer);
-                  clearLaunchPoll();
-                  state.launchingPlay = false;
-                  setBufferSpinner(true);
-                  freezeBothStreams();
-                  armNetworkWatchdog();
+                  finishLaunch();
                   return;
                 }
-                state.launchPollTimer = setTimeout(pollLaunchSync, 4);
-                return;
-              }
-
-              if (vResuming) {
-                if (!nativeGetVPaused() || elapsed > Math.max(1050, catchupBudgetMs + 150)) {
-                  vResuming = false;
-                }
-                state.launchPollTimer = setTimeout(pollLaunchSync, 4);
-                return;
-              }
-
-              if (vResolved && aResolved && vStarted && aStarted && !nativeGetVPaused() && !nativeGetAPaused()) {
-                if (!settledAt) {
-                  settledAt = now + 55;
-                }
-                if (now >= settledAt || elapsed > Math.max(1050, catchupBudgetMs + 150)) {
-                  if (!audioFirstMode && !vHeldOnce && audioCalledAt > 0) {
-                    var estALat = (signed - (vAtAudioCall - a0)) / curRate;
-                    if (estALat > 0 && estALat < 0.12) {
-                      state.aResumeLatency = Math.max(0.004, Math.min(0.048, state.aResumeLatency * 0.5 + estALat * 0.5));
-                    }
-                  } else if (vHeldOnce && Math.abs(signed) < 0.12) {
-                    state.vResumeLatency = Math.max(0.004, Math.min(0.048, state.vResumeLatency - ((signed - 0.003) / curRate) * 0.55));
-                  }
-                  if (signed > 0.045 && signed <= 5.0 && !vHeldOnce && elapsed <= Math.max(900, catchupBudgetMs)) {
-                    vHeld = true;
-                    settledAt = 0;
-                    pauseVideoOnly();
-                    state.launchPollTimer = setTimeout(pollLaunchSync, 4);
-                    return;
-                  }
+                if (!audioFirstMode && ((vStarted && aStarted) || elapsed >= 220)) {
                   finishLaunch();
                   return;
                 }
@@ -7061,7 +6991,7 @@ window.SyncLevel = SyncLevel;
 
               var maxLaunchWait = Math.max(1100, catchupBudgetMs + 250, (audioCalledAt ? (audioCalledAt - launchStart + 450) : 0), (videoCalledAt ? (videoCalledAt - launchStart + 450) : 0));
               if (elapsed > maxLaunchWait) {
-                if (vResolved && aResolved && !nativeGetVPaused() && !nativeGetAPaused() && vStarted && aStarted) {
+                if (vResolved && aResolved && !nativeGetVPaused() && !nativeGetAPaused()) {
                   finishLaunch();
                 } else {
                   finished = true;
@@ -7097,6 +7027,7 @@ window.SyncLevel = SyncLevel;
             if (audioFirstMode) {
               startAudioStream();
             } else {
+              startAudioStream();
               startVideoStream();
             }
           });
@@ -7105,7 +7036,7 @@ window.SyncLevel = SyncLevel;
         fireSimultaneousPlay();
       }
 
-      function syncPlaybackState() {
+      function syncPlaybackState(fromSeek) {
         if (state.syncingState) return;
         state.syncingState = true;
         try {
@@ -7142,7 +7073,7 @@ window.SyncLevel = SyncLevel;
           }
 
           var timeBuf = state.buffering ? (compat.now() - state.bufferStartTime) : 0;
-          var neededLead = state.buffering ? getMinResumeBuffer() : getMinPlayBuffer();
+          var neededLead = (state.buffering && !fromSeek) ? getMinResumeBuffer() : getMinPlayBuffer();
 
           if (isVideoBypassed()) {
             if (bufferMonitor.canPlayCleanly(audioEl, neededLead, timeBuf, nativeGetATime())) {
@@ -7345,7 +7276,7 @@ window.SyncLevel = SyncLevel;
           return;
         }
 
-        syncPlaybackState();
+        syncPlaybackState(true);
       }
 
       function restartLoopFromBeginning() {
@@ -8481,7 +8412,7 @@ window.SyncLevel = SyncLevel;
         var vStalledDur = state.vStallSince ? (now - state.vStallSince) : 0;
         var aStalledDur = state.aStallSince ? (now - state.aStallSince) : 0;
 
-        if (aNotMoving && !vNotMoving && aStalledDur >= 75 && (vNow - aNow) >= 0.022) {
+        if (!inGrace && aNotMoving && !vNotMoving && aStalledDur >= 75 && (vNow - aNow) >= 0.022) {
           state.prevVideoTime = vNow;
           state.prevAudioTime = aNow;
           holdVideoUntilAudioCatchesUp(0.016);
@@ -8673,7 +8604,6 @@ window.SyncLevel = SyncLevel;
     initAlabasterPlayer();
   }
 })();
-
 
 (function () {
   'use strict';
