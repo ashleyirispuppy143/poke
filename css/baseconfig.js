@@ -228,6 +228,11 @@ function initSettingsApp() {
     items: allItems.filter(item => item.parity)
   };
 
+  const aboutPillSpan = document.querySelector('.nav-pill[data-view="about"] span');
+  if (aboutPillSpan) {
+    aboutPillSpan.textContent = aboutPillSpan.textContent.replace(/Alabaster/i, 'PokePlayer');
+  }
+
   const parityPill = document.querySelector('.nav-pill[data-view="parity"]');
   if (parityPill && !document.querySelector('.nav-pill[data-view="experiments"]')) {
     const expPill = document.createElement('button');
