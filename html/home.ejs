@@ -758,6 +758,82 @@ button {
   color: var(--ptc-accent);
 }
 
+.quick-app-circles {
+  display: none;
+  justify-content: center;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-top: 24px;
+}
+
+html.no-js .quick-app-circles,
+html.layout-nodiscover .quick-app-circles {
+  display: flex;
+}
+
+.quick-app-item {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: var(--ptc-text-primary);
+  text-decoration: none;
+  transition: transform 0.15s ease;
+}
+
+.quick-app-item:hover {
+  transform: translateY(-3px);
+}
+
+.quick-app-circle {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+
+.quick-app-item:hover .quick-app-circle {
+  filter: brightness(1.1);
+}
+
+.quick-app-item:active .quick-app-circle {
+  transform: scale(0.94);
+}
+
+.quick-app-circle.app-weather {
+  background: #f59e0b;
+  color: #111111;
+}
+
+.quick-app-circle.app-translate {
+  background: #3b82f6;
+}
+
+.quick-app-circle.app-maps {
+  background: #10b981;
+}
+
+.quick-app-circle.app-gifs {
+  background: #ec4899;
+}
+
+.quick-app-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ptc-text-secondary);
+}
+
+.quick-app-item:hover .quick-app-label {
+  color: var(--ptc-text-primary);
+}
+
 .home-extras-wrapper {
   margin-top: 24px;
   width: 100%;
@@ -808,6 +884,7 @@ html.layout-nodiscover:not(.layout-mix):not(.layout-classic) .hero-settings-btn 
   display: inline-flex;
 }
 
+html.no-js body .page,
 html.layout-nodiscover body .page {
   display: flex;
   flex-direction: column;
@@ -818,6 +895,7 @@ html.layout-nodiscover body .page {
   max-width: var(--container);
 }
 
+html.no-js body .page .hero,
 html.layout-nodiscover body .page .hero {
   flex: 0 0 auto;
   width: 100%;
@@ -1661,6 +1739,7 @@ html.layout-mix body .hero {
   padding-top: 56px;
 }
 
+html.no-js body .discover-wrap,
 html.layout-nodiscover body .discover-wrap {
   display: none !important;
 }
@@ -1895,6 +1974,22 @@ html.layout-nodiscover body .discover-wrap {
   }
 
   .hero, .discover-header, .home-extras-wrapper, .header-tabs {
+    display: none !important;
+  }
+
+  html.no-js .hero,
+  html.layout-nodiscover .hero {
+    display: flex !important;
+    padding: 24px 16px;
+  }
+
+  html.no-js .home-extras-wrapper,
+  html.layout-nodiscover .home-extras-wrapper {
+    display: block !important;
+  }
+
+  html.no-js .chip-bar-wrapper.mobile-only,
+  html.layout-nodiscover .chip-bar-wrapper.mobile-only {
     display: none !important;
   }
 
@@ -2140,7 +2235,7 @@ html.layout-nodiscover body .discover-wrap {
   .library-dialog {
     align-self: center;
   }
-  
+
   html.layout-nodiscover:not(.layout-mix):not(.layout-classic) .hero-settings-btn {
     top: 6px;
     right: 16px;
@@ -2199,7 +2294,7 @@ html.layout-nodiscover body .discover-wrap {
       <a href="/video/upload" class="dropdown-item"><i class="fa-solid fa-arrow-up-from-bracket"></i> Upload Video <i class="fa-solid fa-arrow-up-right-from-square external-link-icon" aria-hidden="true"></i></a>
       <a href="/weather" class="dropdown-item"><i class="fa-solid fa-sun"></i> Weather</a>
       <a href="/map" class="dropdown-item"><i class="fa-solid fa-map-location-dot"></i> Maps</a>
-            <a href="/translate" class="dropdown-item"><i class="fa-solid fa-language"></i> Translate</a> 
+      <a href="/translate" class="dropdown-item"><i class="fa-solid fa-language"></i> Translate</a>
       <a href="/calendar" class="dropdown-item"><i class="fa-solid fa-calendar-days"></i> Calendar</a>
       <a href="/privacy" class="dropdown-item"><i class="fa-solid fa-shield-halved"></i> Privacy Policy</a>
     </div>
@@ -2276,9 +2371,9 @@ html.layout-nodiscover body .discover-wrap {
 
   <div class="hero">
     <div class="logo-wrap">
-     <a href="/pride">
-      <img src="/static/logo-poke.svg?v=45549" class="logo" alt="Poke Logo">
-       </a>
+      <a href="/pride">
+        <img src="/static/logo-poke.svg?v=45549" class="logo" alt="Poke Logo">
+      </a>
     </div>
 
     <div class="search-wrap">
@@ -2295,6 +2390,36 @@ html.layout-nodiscover body .discover-wrap {
           </div>
         </div>
       </form>
+
+      <div class="quick-app-circles" aria-label="Quick apps">
+        <a href="/weather" class="quick-app-item">
+          <span class="quick-app-circle app-weather">
+            <i class="fa-solid fa-sun" aria-hidden="true"></i>
+          </span>
+          <span class="quick-app-label">Weather</span>
+        </a>
+
+        <a href="/translate" class="quick-app-item">
+          <span class="quick-app-circle app-translate">
+            <i class="fa-solid fa-language" aria-hidden="true"></i>
+          </span>
+          <span class="quick-app-label">Translate</span>
+        </a>
+
+        <a href="/maps" class="quick-app-item">
+          <span class="quick-app-circle app-maps">
+            <i class="fa-solid fa-map-location-dot" aria-hidden="true"></i>
+          </span>
+          <span class="quick-app-label">Maps</span>
+        </a>
+
+        <a href="/gifs" class="quick-app-item">
+          <span class="quick-app-circle app-gifs">
+            <i class="fa-solid fa-images" aria-hidden="true"></i>
+          </span>
+          <span class="quick-app-label">Gifs</span>
+        </a>
+      </div>
 
       <div id="home-extras" class="home-extras-wrapper">
         <% if (Math.random() > 0.3) { %>
@@ -2393,12 +2518,12 @@ html.layout-nodiscover body .discover-wrap {
         Upload Video
         <i class="fa-solid fa-arrow-up-right-from-square external-link-icon" aria-hidden="true"></i>
       </a>
-      
+
       <a href="/translate" class="modal-action-btn">
         <i class="fa-solid fa-language"></i>
         Translate
       </a>
-      
+
       <a href="/weather" class="modal-action-btn">
         <i class="fa-solid fa-sun"></i>
         Weather
@@ -2429,12 +2554,12 @@ html.layout-nodiscover body .discover-wrap {
   <div class="settings-dialog">
     <label for="settings-modal-toggle" class="close-btn" style="position:absolute; top: 16px; right: 24px; z-index: 10;" aria-label="Close">&times;</label>
 
-<div class="settings-sidebar">
+    <div class="settings-sidebar">
       <div class="settings-sidebar-header">Settings</div>
       <div class="settings-tab active">Discover page</div>
       <a href="/player-settings" class="settings-tab">Player Options</a>
-</div>
-    
+    </div>
+
     <div class="settings-content">
       <h3 style="margin-top: 0; margin-bottom: 24px; font-size: 20px;">Discover page</h3>
 
