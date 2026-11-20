@@ -68,9 +68,14 @@
     return hrs > 0 ? `${hrs}:${pad(mins)}:${pad(secs)}` : `${mins}:${pad(secs)}`;
   }
 
+  const playlistId = hasPlaylist && playlist.playlistId ? playlist.playlistId : "";
   const playlistTitle = hasPlaylist && playlist.title ? playlist.title : "Playlist unavailable";
-  const playlistDescription = hasPlaylist && playlist.description ? playlist.description : "";
-  const playlistDescriptionHtml = hasPlaylist && playlist.descriptionHtml ? playlist.descriptionHtml : "";
+  const playlistDescription = hasPlaylist && typeof playlist.description === "string" ? playlist.description : "";
+  const playlistDescriptionHtml = hasPlaylist && typeof playlist.descriptionHtml === "string" ? playlist.descriptionHtml : "";
+  const hasDescriptionHtml = playlistDescriptionHtml.trim().length > 0;
+  const hasDescriptionText = playlistDescription.trim().length > 0;
+  const hasDescription = hasDescriptionHtml || hasDescriptionText;
+
   const playlistAuthor = hasPlaylist && playlist.author ? playlist.author : "Unknown";
   const playlistAuthorId = hasPlaylist && playlist.authorId ? playlist.authorId : "";
   const authorAvatarUrl = getAuthorAvatar(playlist);
@@ -95,10 +100,6 @@
     : hasPlaylist && playlist.playlistThumbnail
       ? proxyOnlyAllowedHost(playlist.playlistThumbnail)
       : "";
-
-  const hasDescription =
-    (playlistDescription && playlistDescription.trim().length > 0) ||
-    (playlistDescriptionHtml && playlistDescriptionHtml.trim().length > 0);
 
   const updatedText =
     hasPlaylist && playlist.updated
@@ -141,6 +142,8 @@
       :root {
         --poke-bg: #0f0f0f;
         --poke-surface: #181818;
+        --poke-menu-bg: #282828;
+        --poke-menu-hover: #3e3e3e;
         --poke-hover: rgba(255, 255, 255, 0.08);
         --poke-text-primary: #f1f1f1;
         --poke-text-secondary: #aaaaaa;
@@ -165,11 +168,26 @@
         color: inherit;
       }
 
+      nav .right {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 16px;
+      }
+
+      nav .right a {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none !important;
+        color: #fff;
+      }
+
       .poke-playlist-shell {
         display: flex;
         align-items: flex-start;
-        gap: 24px;
-        max-width: 1440px;
+        gap: 28px;
+        max-width: 1480px;
         margin: 0 auto;
         padding: 24px 24px 48px;
         box-sizing: border-box;
@@ -223,6 +241,7 @@
         display: flex;
         flex-direction: column;
         flex: 1;
+        min-height: 0;
       }
 
       .poke-hero-scroll::-webkit-scrollbar {
@@ -234,11 +253,13 @@
         display: block;
         width: 100%;
         aspect-ratio: 16 / 9;
+        flex-shrink: 0;
         border-radius: 12px;
         overflow: hidden;
         background-color: #202020;
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
         margin-bottom: 20px;
+        text-decoration: none !important;
       }
 
       .poke-hero-thumb-link img {
@@ -356,11 +377,14 @@
         align-items: center;
         gap: 8px;
         margin-top: 2px;
+        flex-shrink: 0;
       }
 
-      .poke-btn-play-first {
+      .poke-btn-play-first,
+      .poke-btn-play-first:hover,
+      .poke-btn-play-first:focus {
         flex: 1;
-        height: 36px;
+        height: 38px;
         padding: 0 20px;
         border-radius: 9999px;
         background: var(--poke-pill-bg);
@@ -375,6 +399,7 @@
         cursor: pointer;
         transition: background-color 0.15s ease;
         white-space: nowrap;
+        text-decoration: none !important;
       }
 
       .poke-btn-play-first:hover {
@@ -382,9 +407,11 @@
         color: var(--poke-pill-text);
       }
 
-      .poke-btn-circle {
-        width: 36px;
-        height: 36px;
+      .poke-btn-circle,
+      .poke-btn-circle:hover,
+      .poke-btn-circle:focus {
+        width: 38px;
+        height: 38px;
         border-radius: 50%;
         background: var(--poke-icon-btn-bg);
         color: #ffffff;
@@ -396,6 +423,7 @@
         font-size: 15px;
         flex-shrink: 0;
         transition: background-color 0.15s ease;
+        text-decoration: none !important;
       }
 
       .poke-btn-circle:hover {
@@ -407,13 +435,13 @@
         min-width: 0;
         display: flex;
         flex-direction: column;
-        gap: 2px;
+        gap: 6px;
       }
 
       .poke-video-row {
         display: flex;
         align-items: flex-start;
-        padding: 8px 10px;
+        padding: 10px 12px;
         border-radius: 12px;
         transition: background-color 0.15s ease;
         position: relative;
@@ -425,9 +453,10 @@
 
       .poke-video-thumb-wrap {
         position: relative;
-        width: 168px;
+        width: 210px;
+        min-width: 210px;
         aspect-ratio: 16 / 9;
-        border-radius: 8px;
+        border-radius: 10px;
         overflow: hidden;
         background: #202020;
         flex-shrink: 0;
@@ -443,14 +472,14 @@
 
       .poke-video-duration {
         position: absolute;
-        bottom: 4px;
-        right: 4px;
-        background: rgba(0, 0, 0, 0.82);
+        bottom: 6px;
+        right: 6px;
+        background: rgba(0, 0, 0, 0.84);
         color: #ffffff;
         font-size: 12px;
         font-weight: 500;
         line-height: 1;
-        padding: 3px 5px;
+        padding: 3px 6px;
         border-radius: 4px;
         letter-spacing: 0.2px;
       }
@@ -462,13 +491,13 @@
         padding-right: 12px;
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: 6px;
       }
 
       .poke-video-title,
       .poke-video-title:hover,
       .poke-video-title:focus {
-        font-size: 16px;
+        font-size: 17px;
         font-weight: 600;
         line-height: 1.35;
         color: var(--poke-text-primary);
@@ -485,7 +514,7 @@
         align-items: center;
         flex-wrap: wrap;
         gap: 6px;
-        font-size: 12px;
+        font-size: 13px;
         color: var(--poke-text-secondary);
         line-height: 1.4;
       }
@@ -502,7 +531,12 @@
         color: var(--poke-text-primary);
       }
 
-      .poke-video-share-btn {
+      .poke-video-menu-wrap {
+        position: relative;
+        flex-shrink: 0;
+      }
+
+      .poke-video-menu-btn {
         width: 36px;
         height: 36px;
         border-radius: 50%;
@@ -513,14 +547,55 @@
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        flex-shrink: 0;
-        opacity: 0.8;
+        opacity: 0.85;
         transition: background-color 0.15s ease, opacity 0.15s ease;
       }
 
-      .poke-video-share-btn:hover {
+      .poke-video-menu-btn:hover {
         background: rgba(255, 255, 255, 0.12);
         opacity: 1;
+      }
+
+      .poke-video-dropdown {
+        position: absolute;
+        top: 40px;
+        right: 0;
+        min-width: 156px;
+        background: var(--poke-menu-bg);
+        border-radius: 12px;
+        padding: 6px 0;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+        display: none;
+        flex-direction: column;
+        z-index: 200;
+      }
+
+      .poke-video-dropdown.open {
+        display: flex;
+      }
+
+      .poke-dropdown-item,
+      .poke-dropdown-item:hover,
+      .poke-dropdown-item:focus {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 10px 16px;
+        background: transparent;
+        border: none;
+        color: var(--poke-text-primary);
+        font-family: inherit;
+        font-size: 14px;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        cursor: pointer;
+        text-align: left;
+        text-decoration: none !important;
+      }
+
+      .poke-dropdown-item:hover {
+        background: var(--poke-menu-hover);
       }
 
       .poke-toast {
@@ -581,6 +656,7 @@
         color: #0f0f0f;
         font-weight: 600;
         font-size: 14px;
+        text-decoration: none !important;
       }
 
       @media (max-width: 1024px) {
@@ -598,6 +674,10 @@
           max-height: none;
         }
 
+        .poke-hero-scroll {
+          overflow-y: visible;
+        }
+
         .poke-playlist-videos {
           width: 100%;
         }
@@ -605,11 +685,12 @@
 
       @media (max-width: 600px) {
         .poke-video-thumb-wrap {
-          width: 136px;
+          width: 148px;
+          min-width: 148px;
         }
 
         .poke-video-title {
-          font-size: 14px;
+          font-size: 15px;
         }
 
         .poke-hero-title {
@@ -634,8 +715,13 @@
         </div>
       </div>
       <div class="right">
-        <a href="/privacy" style="text-decoration: none;" title="Privacy Policy">
-          <i style="display: block;margin-left: auto;margin-right: auto;" class="fa-light fa-shield"></i>
+        <% if (playlistId) { %>
+          <a href="https://www.youtube.com/playlist?list=<%= encodeURIComponent(playlistId) %>" target="_blank" rel="noopener noreferrer" title="Open playlist on YouTube">
+            <i class="fa-brands fa-youtube"></i>
+          </a>
+        <% } %>
+        <a href="/privacy" title="Privacy Policy">
+          <i class="fa-light fa-shield"></i>
         </a>
       </div>
     </nav>
@@ -683,8 +769,10 @@
         Playlist • <%= playlistVideoCount.toLocaleString() %> <%= playlistVideoCount === 1 ? "video" : "videos" %> • <%= playlistViewCountText %><% if (updatedText) { %> • Updated <%= updatedText %><% } %>
       </div>
 
-      <% if (hasDescription) { %>
-        <div class="poke-hero-description"><%- playlistDescriptionHtml ? playlistDescriptionHtml : playlistDescription %></div>
+      <% if (hasDescriptionHtml) { %>
+        <div class="poke-hero-description"><%- playlistDescriptionHtml %></div>
+      <% } else if (hasDescriptionText) { %>
+        <div class="poke-hero-description"><%= playlistDescription %></div>
       <% } else { %>
         <div class="poke-hero-description is-empty">No description provided for this playlist.</div>
       <% } %>
@@ -719,6 +807,7 @@
       const vidThumb = proxyImgUrl(vidId);
       const vidDuration = formatDuration(video && video.lengthSeconds);
       const vidWatchUrl = `/watch?v=${encodeURIComponent(vidId)}`;
+      const vidDownloadUrl = `/download?v=${encodeURIComponent(vidId)}`;
     %>
       <div class="poke-video-row">
         <a href="<%= vidWatchUrl %>" class="poke-video-thumb-wrap">
@@ -739,15 +828,27 @@
           </div>
         </div>
 
-        <button
-          type="button"
-          class="poke-video-share-btn"
-          title="Share video link"
-          data-copy-video="<%= vidWatchUrl %>"
-          aria-label="Share link to <%= vidTitle %>"
-        >
-          <i class="fa-solid fa-share"></i>
-        </button>
+        <div class="poke-video-menu-wrap">
+          <button
+            type="button"
+            class="poke-video-menu-btn"
+            title="More options"
+            aria-label="More options for <%= vidTitle %>"
+            aria-expanded="false"
+          >
+            <i class="fa-solid fa-ellipsis-vertical"></i>
+          </button>
+          <div class="poke-video-dropdown" role="menu">
+            <a href="<%= vidDownloadUrl %>" class="poke-dropdown-item" role="menuitem">
+              <i class="fa-solid fa-download"></i>
+              <span>Download</span>
+            </a>
+            <button type="button" class="poke-dropdown-item" role="menuitem" data-copy-video="<%= vidWatchUrl %>">
+              <i class="fa-solid fa-share"></i>
+              <span>Share</span>
+            </button>
+          </div>
+        </div>
       </div>
     <% }) %>
   </section>
@@ -782,6 +883,32 @@
       }
     }
 
+    function closeAllDropdowns() {
+      document.querySelectorAll(".poke-video-dropdown.open").forEach((menu) => {
+        menu.classList.remove("open");
+        const btn = menu.previousElementSibling;
+        if (btn) btn.setAttribute("aria-expanded", "false");
+      });
+    }
+
+    document.querySelectorAll(".poke-video-menu-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const menu = btn.nextElementSibling;
+        const isOpen = menu && menu.classList.contains("open");
+        closeAllDropdowns();
+        if (menu && !isOpen) {
+          menu.classList.add("open");
+          btn.setAttribute("aria-expanded", "true");
+        }
+      });
+    });
+
+    document.addEventListener("click", closeAllDropdowns);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeAllDropdowns();
+    });
+
     const shareBtn = document.getElementById("sharePlaylistBtn");
     if (shareBtn) {
       shareBtn.addEventListener("click", () => {
@@ -792,6 +919,7 @@
     document.querySelectorAll("[data-copy-video]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const rel = btn.getAttribute("data-copy-video");
+        closeAllDropdowns();
         if (!rel) return;
         copyText(window.location.origin + rel, "Video link copied to clipboard");
       });
