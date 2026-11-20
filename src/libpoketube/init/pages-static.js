@@ -622,7 +622,6 @@ app.get("/playlist", async function (req, res) {
   }
 
   if (!req.query.list) return res.redirect("/");
-  if (req.useragent && req.useragent.isMobile) return res.redirect("/");
 
   const mediaproxy = config.media_proxy;
 
@@ -695,7 +694,7 @@ app.get("/playlist", async function (req, res) {
     return res.status(500).send(htmlErrorPage);
   }
 
-  renderTemplate(res, req, "playlist.ejs", { p, mediaproxy });
+  renderTemplate(res, req, "playlist.ejs", { p, mediaproxy,	isMobile:req.useragent?.isMobile });
 });
 
 
