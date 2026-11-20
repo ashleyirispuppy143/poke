@@ -24,6 +24,13 @@
   const safeMediaProxy = typeof mediaproxy !== "undefined" && mediaproxy ? mediaproxy : "";
   const proxyBase = safeMediaProxy ? `${safeMediaProxy}/proxy?url=` : "/proxy?url=";
 
+  function proxyUrl(url) {
+    if (!url || typeof url !== "string") return "";
+    if (url.startsWith("//")) return `${proxyBase}https:${url}`;
+    if (url.startsWith("http://") || url.startsWith("https://")) return `${proxyBase}${url}`;
+    return url;
+  }
+
   function proxyImgUrl(videoId) {
     if (!videoId || typeof videoId !== "string") return "";
     return `${proxyBase}https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`;
@@ -38,6 +45,16 @@
         return `${proxyBase}${parsed.toString()}`;
       }
     } catch (_) {}
+    return "";
+  }
+
+  function getAuthorAvatar(pl) {
+    if (pl && Array.isArray(pl.authorThumbnails) && pl.authorThumbnails.length > 0) {
+      const preferred =
+        pl.authorThumbnails.find((t) => t && Number(t.width) >= 48 && Number(t.width) <= 176) ||
+        pl.authorThumbnails[pl.authorThumbnails.length - 1];
+      if (preferred && preferred.url) return proxyUrl(preferred.url);
+    }
     return "";
   }
 
@@ -56,6 +73,7 @@
   const playlistDescriptionHtml = hasPlaylist && playlist.descriptionHtml ? playlist.descriptionHtml : "";
   const playlistAuthor = hasPlaylist && playlist.author ? playlist.author : "Unknown";
   const playlistAuthorId = hasPlaylist && playlist.authorId ? playlist.authorId : "";
+  const authorAvatarUrl = getAuthorAvatar(playlist);
   const playlistVideoCount = hasPlaylist && typeof playlist.videoCount === "number" ? playlist.videoCount : 0;
   const playlistViewCountText =
     hasPlaylist && playlist.viewCountText
@@ -139,7 +157,7 @@
         margin: 0;
         padding: 0;
         overflow-x: hidden;
-        font-family: "Inter", "PokeTube Flex", -apple-system, BlinkMacSystemFont, sans-serif;
+        font-family: "PokeTube Flex", -apple-system, BlinkMacSystemFont, sans-serif;
       }
 
       a {
@@ -272,6 +290,15 @@
         gap: 10px;
         margin-bottom: 10px;
         width: fit-content;
+      }
+
+      .poke-hero-author-avatar {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        object-fit: cover;
+        background: rgba(255, 255, 255, 0.18);
+        flex-shrink: 0;
       }
 
       .poke-hero-author-fallback {
@@ -438,7 +465,9 @@
         gap: 4px;
       }
 
-      .poke-video-title {
+      .poke-video-title,
+      .poke-video-title:hover,
+      .poke-video-title:focus {
         font-size: 16px;
         font-weight: 600;
         line-height: 1.35;
@@ -448,6 +477,7 @@
         -webkit-box-orient: vertical;
         overflow: hidden;
         word-break: break-word;
+        text-decoration: none !important;
       }
 
       .poke-video-byline {
@@ -460,9 +490,12 @@
         line-height: 1.4;
       }
 
-      .poke-video-author {
+      .poke-video-author,
+      .poke-video-author:hover,
+      .poke-video-author:focus {
         color: var(--poke-text-secondary);
         transition: color 0.12s ease;
+        text-decoration: none !important;
       }
 
       .poke-video-author:hover {
@@ -588,14 +621,14 @@
 <body>
     <nav>
       <div class="left">
-        <a class="class" href="/143" style="font-family:Inter,sans-serif;color:#fff">
+        <a class="class" href="/143" style="color:#fff">
           <img style="transform: scale(1.3);padding-left:0.9em;width: 8.5em;display: block;margin-left: auto;margin-right: auto;" src="/css/logo.svg?v=5" alt="Poke">
         </a>
       </div>
       <div class="middle">
         <div class="search">
           <form action="/search">
-            <input class="search-bar" autocomplete="on" id="fname" name="query" placeholder="" style="color:#fff;font-family:Inter,sans-serif;border-radius: 8px;" data-ddg-inputtype="identities.firstName">
+            <input class="search-bar" autocomplete="on" id="fname" name="query" placeholder="" style="color:#fff;border-radius: 8px;" data-ddg-inputtype="identities.firstName">
             <button class="btn btn-success" type="submit"><i class="fa-light fa-search"></i></button>
           </form>
         </div>
@@ -628,12 +661,20 @@
 
       <% if (playlistAuthorId) { %>
         <a href="/channel?id=<%= encodeURIComponent(playlistAuthorId) %>" class="poke-hero-author">
-          <span class="poke-hero-author-fallback"><%= playlistAuthor.charAt(0).toUpperCase() %></span>
+          <% if (authorAvatarUrl) { %>
+            <img class="poke-hero-author-avatar" src="<%= authorAvatarUrl %>" alt="<%= playlistAuthor %>">
+          <% } else { %>
+            <span class="poke-hero-author-fallback"><%= playlistAuthor.charAt(0).toUpperCase() %></span>
+          <% } %>
           <span class="poke-hero-author-name"><%= playlistAuthor %></span>
         </a>
       <% } else { %>
         <div class="poke-hero-author">
-          <span class="poke-hero-author-fallback"><%= playlistAuthor.charAt(0).toUpperCase() %></span>
+          <% if (authorAvatarUrl) { %>
+            <img class="poke-hero-author-avatar" src="<%= authorAvatarUrl %>" alt="<%= playlistAuthor %>">
+          <% } else { %>
+            <span class="poke-hero-author-fallback"><%= playlistAuthor.charAt(0).toUpperCase() %></span>
+          <% } %>
           <span class="poke-hero-author-name"><%= playlistAuthor %></span>
         </div>
       <% } %>
