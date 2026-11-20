@@ -1,7 +1,7 @@
 <!--
 	    This Source Code Form is subject to the terms of the GNU General Public License:
 	   
-	    Copyright (C) 2021-2026 PokeTube Of Poke Project, a part of The Poke Project Initiative (initiative.poketube.fun) 
+	    Copyright (C) 2021-2025 PokeTube Of Poke Project, a part of The Poke Project Initiative (initiative.poketube.fun) 
 	    source code :https://codeberg.org/ashleyirispuppy/poke
 	
 	    This program is free software: you can redistribute it and/or modify
@@ -24,924 +24,326 @@
   const safeMediaProxy = typeof mediaproxy !== "undefined" && mediaproxy ? mediaproxy : "";
   const proxyBase = safeMediaProxy ? `${safeMediaProxy}/proxy?url=` : "/proxy?url=";
 
-  function proxyUrl(url) {
-    if (!url || typeof url !== "string") return "";
-    if (url.startsWith("//")) return `${proxyBase}https:${url}`;
-    if (url.startsWith("http://") || url.startsWith("https://")) return `${proxyBase}${url}`;
-    return url;
-  }
-
-  function proxyImgUrl(videoId) {
-    if (!videoId || typeof videoId !== "string") return "";
-    return `${proxyBase}https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`;
-  }
-
-  function proxyOnlyAllowedHost(url) {
-    if (!url || typeof url !== "string") return "";
-    try {
-      const normalized = url.startsWith("//") ? `https:${url}` : url;
-      const parsed = new URL(normalized);
-      if (parsed.hostname === "i.ytimg.com") {
-        return `${proxyBase}${parsed.toString()}`;
-      }
-    } catch (_) {}
-    return "";
-  }
-
-  function getAuthorAvatar(pl) {
-    if (pl && Array.isArray(pl.authorThumbnails) && pl.authorThumbnails.length > 0) {
-      const preferred =
-        pl.authorThumbnails.find((t) => t && Number(t.width) >= 48 && Number(t.width) <= 176) ||
-        pl.authorThumbnails[pl.authorThumbnails.length - 1];
-      if (preferred && preferred.url) return proxyUrl(preferred.url);
-    }
-    return "";
-  }
-
-  function formatDuration(seconds) {
-    const total = Number(seconds);
-    if (!Number.isFinite(total) || total <= 0) return "";
-    const hrs = Math.floor(total / 3600);
-    const mins = Math.floor((total % 3600) / 60);
-    const secs = Math.floor(total % 60);
-    const pad = (n) => String(n).padStart(2, "0");
-    return hrs > 0 ? `${hrs}:${pad(mins)}:${pad(secs)}` : `${mins}:${pad(secs)}`;
-  }
-
-  const playlistId = hasPlaylist && playlist.playlistId ? playlist.playlistId : "";
   const playlistTitle = hasPlaylist && playlist.title ? playlist.title : "Playlist unavailable";
-  const playlistDescription = hasPlaylist && typeof playlist.description === "string" ? playlist.description : "";
-  const playlistDescriptionHtml = hasPlaylist && typeof playlist.descriptionHtml === "string" ? playlist.descriptionHtml : "";
-  const trimmedDescriptionHtml = playlistDescriptionHtml.trim();
-  const strippedDescriptionHtml = trimmedDescriptionHtml.replace(/<[^>]*>/g, "").trim();
-  const hasDescriptionHtml =
-    trimmedDescriptionHtml.length > 0 &&
-    trimmedDescriptionHtml !== "<p></p>" &&
-    strippedDescriptionHtml.length > 0;
-  const hasDescriptionText = playlistDescription.trim().length > 0;
-  const hasDescription = hasDescriptionHtml || hasDescriptionText;
-
+  const playlistDescription = hasPlaylist && playlist.description ? playlist.description : "";
+  const playlistThumbnail = hasPlaylist && playlist.playlistThumbnail ? playlist.playlistThumbnail : "";
   const playlistAuthor = hasPlaylist && playlist.author ? playlist.author : "Unknown";
-  const playlistAuthorId = hasPlaylist && playlist.authorId ? playlist.authorId : "";
-  const authorAvatarUrl = getAuthorAvatar(playlist);
-  const playlistVideoCount = hasPlaylist && typeof playlist.videoCount === "number" ? playlist.videoCount : 0;
-  const playlistViewCountText =
-    hasPlaylist && playlist.viewCountText
-      ? playlist.viewCountText
-      : hasPlaylist && typeof playlist.viewCount === "number"
-        ? `${playlist.viewCount.toLocaleString()} views`
-        : "0 views";
+  const playlistVideoCount = hasPlaylist && playlist.videoCount ? playlist.videoCount : 0;
+  const playlistViewCount = hasPlaylist && typeof playlist.viewCount === "number" ? playlist.viewCount.toLocaleString() : "0";
+  const playlistMixId = hasPlaylist && playlist.mixId ? playlist.mixId : null;
   const playlistVideos = hasPlaylist && Array.isArray(playlist.videos) ? playlist.videos : [];
-  const firstVideo = playlistVideos.length > 0 ? playlistVideos[0] : null;
-  const firstVideoId = firstVideo && firstVideo.videoId ? firstVideo.videoId : null;
-  const validVideoIds = playlistVideos.map((v) => v && v.videoId).filter(Boolean);
-  const randomVideoId =
-    validVideoIds.length > 0
-      ? validVideoIds[Math.floor(Math.random() * validVideoIds.length)]
-      : null;
 
-  const heroThumbUrl = firstVideoId
-    ? proxyImgUrl(firstVideoId)
-    : hasPlaylist && playlist.playlistThumbnail
-      ? proxyOnlyAllowedHost(playlist.playlistThumbnail)
-      : "";
+  let firstVideoId = null;
 
-  const updatedText =
-    hasPlaylist && playlist.updated
-      ? new Date(playlist.updated * 1000).toLocaleDateString("en-US", {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-        })
-      : "";
+  if (playlistVideos && playlistVideos.length > 0 && playlistVideos[0].videoId) {
+    firstVideoId = playlistVideos[0].videoId;
+  } else if (playlistThumbnail && playlistThumbnail.includes("/vi/")) {
+    firstVideoId = playlistThumbnail.split("/vi/")[1].split("/")[0];
+  }
+
+  // Check if a valid description exists
+  const hasDescription = playlistDescription && playlistDescription.trim().length > 0;
 %>
 <!DOCTYPE html>
-<html lang="en" style="background:#0f0f0f">
+<html style="background:#000000">
 <head>
-    <meta charset="UTF-8">
-    <title>Poke | <%= playlistTitle %></title>
-    <link href="/css/yt-ukraine.svg?v=6" rel="icon">
+    <title>Poke | <%- playlistTitle %></title>
+    <link href="/css/yt-ukraine.svg?v=6" rel=icon>
     <link rel="manifest" href="/manifest.json">
-    <meta content="website" property="og:type">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta content="Poke - <%= playlistTitle %>" property="og:title">
-    <meta content="<%= playlistDescription %>" property="twitter:description">
-    <% if (heroThumbUrl) { %>
-    <meta content="<%= heroThumbUrl %>" property="og:image" />
+    <meta content=website property=og:type>
+    <meta name="viewport" content="width=device-1200px, initial-scale=1.0, shrink-to-fit=yes, viewport-fit=cover">
+    <meta content="Poke - <%- playlistTitle %>" property=og:title>
+    <meta content="<%- playlistDescription %>" property=twitter:description>
+    <% if (firstVideoId) { %>
+    <meta content="<%- proxyBase %>https://i.ytimg.com/vi/<%- firstVideoId %>/hqdefault.jpg" property="og:image" />
+    <% } else if (playlistThumbnail) { %>
+    <meta content="<%- proxyBase %><%- playlistThumbnail %>" property="og:image" />
     <% } %>
-    <meta content="summary_large_image" name="twitter:card">
-    <link href="/css/app-cdn.min.css?v=2" rel="stylesheet">
-    <link href="/css/app.main.css?v=44600" rel="stylesheet">
-    <link href="/css/watch.main.css?v=56" rel="stylesheet">
-    <link href="https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css" rel="stylesheet">
+    <meta content=summary_large_image name=twitter:card>
+    <link href="/css/app-cdn.min.css?v=2" rel=stylesheet>
+    <link href="/css/app.main.css?v=44600" rel=stylesheet>
+    <link href="/css/watch.main.css?v=56" rel=stylesheet>
+    <link href="https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css" rel=stylesheet>
+<style>
+   a.class:hover {
+    font-weight:bold
+}
+  summary{
+    color:gray;
+}
+summary:hover {
+    color:white;
+}
 
-    <style>
-      @font-face {
-        src: url("/static/robotoflex.ttf");
-        font-family: "PokeTube Flex";
-        font-style: normal;
-        font-stretch: 1% 800%;
-        font-display: swap;
-      }
-
-      :root {
-        --poke-bg: #0f0f0f;
-        --poke-surface: #181818;
-        --poke-menu-bg: #282828;
-        --poke-menu-hover: #3e3e3e;
-        --poke-hover: rgba(255, 255, 255, 0.08);
-        --poke-text-primary: #f1f1f1;
-        --poke-text-secondary: #aaaaaa;
-        --poke-pill-bg: #ffffff;
-        --poke-pill-text: #0f0f0f;
-        --poke-pill-hover: #d9d9d9;
-        --poke-icon-btn-bg: rgba(255, 255, 255, 0.14);
-        --poke-icon-btn-hover: rgba(255, 255, 255, 0.24);
-      }
-
-      html, body {
-        background-color: var(--poke-bg) !important;
-        color: var(--poke-text-primary) !important;
-        margin: 0;
-        padding: 0;
+</style>
+   <style>
+    body{
         overflow-x: hidden;
-        font-family: "PokeTube Flex", -apple-system, BlinkMacSystemFont, sans-serif;
-      }
+        color:#111111;
+    }
 
-      a {
-        text-decoration: none;
-        color: inherit;
-      }
+    @font-face {
+   src: url("/static/robotoflex.ttf");
+       font-family: "PokeTube Flex";
+      font-style: normal;
+      font-stretch: 1% 800%;
+      font-display: swap;
+    }
+    
+    :root {
+    --text-primary: #fff;
+    --text-secondary: #fff;
+    --text-link: #3ea6ff;
 
-      nav .right {
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        gap: 16px;
-      }
+    --app-background: #111111;
+    --context-menu-background: #333;
+    --border-color: #444;
+    --item-hover-background: #373737;
+    --item-active-background: #383838;
 
-      nav .right a {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        text-decoration: none !important;
-        color: #fff;
-      }
+    --top-bar-background: #202020;
+    --guide-background: #212121;
 
-      .poke-playlist-shell {
-        display: flex;
-        align-items: flex-start;
-        gap: 28px;
-        max-width: 1480px;
-        margin: 0 auto;
-        padding: 24px 24px 48px;
-        box-sizing: border-box;
-      }
+    --thumbnail-background: #252525;
 
-      .poke-playlist-hero {
-        position: sticky;
-        top: 76px;
-        width: 360px;
-        flex-shrink: 0;
-        min-height: calc(100vh - 104px);
-        max-height: calc(100vh - 104px);
-        border-radius: 16px;
-        overflow: hidden;
-        background: #141414;
-        display: flex;
-        flex-direction: column;
-        box-sizing: border-box;
-        isolation: isolate;
-      }
+    --channel-info-background: #181818;
+    --channel-contents-background: #0f0f0f;
+}
 
-      .poke-playlist-hero::before {
-        content: "";
-        position: absolute;
-        inset: -40px;
-        background-image: var(--hero-bg);
-        background-size: cover;
-        background-position: center top;
-        filter: blur(64px) saturate(2) brightness(0.85);
-        z-index: -2;
-        transform: scale(1.25);
-      }
+.alert {
+  padding: 20px;
+  background-color: #f44336;
+  color: white;
+  opacity: 1;
+  transition: opacity 0.6s;
+  margin-bottom: 15px;
+}
 
-      .poke-playlist-hero::after {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background: linear-gradient(
-          180deg,
-          rgba(15, 15, 15, 0.12) 0%,
-          rgba(15, 15, 15, 0.48) 50%,
-          rgba(15, 15, 15, 0.94) 100%
-        );
-        z-index: -1;
-      }
+.alert.success {background-color: #04AA6D;}
+.alert.info {background-color: #2196F3;}
+.alert.warning {background-color: #ff9800;}
 
-      .poke-hero-scroll {
-        padding: 24px;
-        overflow-y: auto;
-        scrollbar-width: none;
-        display: flex;
-        flex-direction: column;
-        flex: 1;
-        min-height: 0;
-      }
+.closebtn {
+  margin-left: 15px;
+  color: white;
+  font-weight: bold;
+  float: right;
+  font-size: 22px;
+  line-height: 20px;
+  cursor: pointer;
+  transition: 0.3s;
+}
+a{
+border-radius:9.5px
+}
+    
+.video-list > p {
+font-family:Ubuntu
+}
+.closebtn:hover {
+  color: black;
+}
+.thumbnail {
+  position: relative;
+  display: inline-block;
+}
 
-      .poke-hero-scroll::-webkit-scrollbar {
-        display: none;
-      }
+.thumbnail .hover-text {
+    display: none;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 24px;
+  font-weight: bold;
+  background-color: rgba(0, 0, 0, 0.5);  
+  padding: 5px 10px;
+  border-radius: 5px;
+  z-index: 2;
+}
 
-      .poke-hero-thumb-link {
-        position: relative;
-        display: block;
-        width: 100%;
-        aspect-ratio: 16 / 9;
-        flex-shrink: 0;
-        border-radius: 12px;
-        overflow: hidden;
-        background-color: #202020;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-        margin-bottom: 20px;
-        text-decoration: none !important;
-      }
+.thumbnail:hover .hover-text {
+  display: block;
+}
 
-      .poke-hero-thumb-link img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        display: block;
-        transition: transform 0.2s ease;
-      }
+.thumbnail .video-length {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  z-index: 1;
+}
 
-      .poke-hero-thumb-link:hover img {
-        transform: scale(1.02);
-      }
+.thumbnail:hover .video-length {
+  display: none;
+}
+.playlist-video > .info > .title {
+    border-radius:0em;
+    max-height: 1.9em;
+}
 
-      .poke-hero-thumb-overlay {
-        position: absolute;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.55);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        color: #fff;
-        font-size: 16px;
-        font-weight: 700;
-        letter-spacing: 0.3px;
-        opacity: 0;
-        transition: opacity 0.18s ease;
-      }
+.playlist-info>.title {
+  font-family: "PokeTube flex";
+  font-stretch: ultra-expanded;
+  font-weight: 600;
+}
 
-      .poke-hero-thumb-link:hover .poke-hero-thumb-overlay,
-      .poke-hero-thumb-link:active .poke-hero-thumb-overlay,
-      .poke-hero-thumb-link:focus-visible .poke-hero-thumb-overlay {
-        opacity: 1;
-      }
+.playlist-info{
+  position: sticky;
+  top:0;
+}
 
-      .poke-hero-title {
-        margin: 0 0 14px 0;
-        font-size: 28px;
-        font-weight: 700;
-        line-height: 1.25;
-        color: #ffffff;
-        word-break: break-word;
-       font-stretch: ultra-expanded;
-      }
+<% if (firstVideoId) { %>
+.playlist-info::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 13em;
+  height: 447px;
+  background-size: cover;
+  filter: blur(53px);
+  backdrop-filter: blur(157px);
+  z-index: -1;
+  background-image: url('<%- proxyBase %>https://i.ytimg.com/vi/<%- firstVideoId %>/hqdefault.jpg');
+  margin-left: 82px;
+}
+<% } else if (playlistThumbnail) { %>
+.playlist-info::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 13em;
+  height: 447px;
+  background-size: cover;
+  filter: blur(53px);
+  backdrop-filter: blur(157px);
+  z-index: -1;
+  background-image: url('<%- proxyBase %><%- playlistThumbnail %>');
+  margin-left: 82px;
+}
+<% } %>
 
-      .poke-hero-author {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 10px;
-        width: fit-content;
-      }
+.playlist-error {
+  margin-left: auto;
+  margin-right: auto;
+  width: 56em;
+  color: white;
+  font-family: Inter, sans-serif;
+  padding-top: 7em;
+}
 
-      .poke-hero-author-avatar {
-        width: 24px;
-        height: 24px;
-        border-radius: 50%;
-        object-fit: cover;
-        background: rgba(255, 255, 255, 0.18);
-        flex-shrink: 0;
-      }
+.playlist-error-box {
+  background: #181818;
+  border: 1px solid #333;
+  border-radius: 1em;
+  padding: 2em;
+}
 
-      .poke-hero-author-fallback {
-        width: 24px;
-        height: 24px;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.18);
-        color: #fff;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 12px;
-        font-weight: 700;
-        flex-shrink: 0;
-      }
+.playlist-error-box h1 {
+  margin-top: 0;
+  color: white;
+}
 
-      .poke-hero-author-name {
-        font-size: 14px;
-        font-weight: 500;
-        color: #ffffff;
-      }
-
-      .poke-hero-author:hover .poke-hero-author-name {
-        text-decoration: underline;
-      }
-
-      .poke-hero-stats {
-        font-size: 12px;
-        line-height: 1.5;
-        color: rgba(255, 255, 255, 0.78);
-        margin-bottom: 14px;
-      }
-
-      .poke-hero-description {
-        font-size: 13px;
-        line-height: 1.5;
-        color: rgba(255, 255, 255, 0.85);
-        margin-bottom: 20px;
-        white-space: pre-wrap;
-        word-break: break-word;
-      }
-
-      .poke-hero-description a {
-        color: #ffffff;
-        text-decoration: underline;
-      }
-
-      .poke-hero-description.is-empty {
-        color: rgba(255, 255, 255, 0.5);
-        font-style: italic;
-      }
-
-      .poke-hero-actions {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-top: 2px;
-        flex-shrink: 0;
-      }
-
-      .poke-btn-play-first,
-      .poke-btn-play-first:hover,
-      .poke-btn-play-first:focus {
-        flex: 1;
-        height: 38px;
-        padding: 0 20px;
-        border-radius: 9999px;
-        background: var(--poke-pill-bg);
-        color: var(--poke-pill-text);
-        font-size: 14px;
-        font-weight: 600;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        border: none;
-        cursor: pointer;
-        transition: background-color 0.15s ease;
-        white-space: nowrap;
-        text-decoration: none !important;
-      }
-
-      .poke-btn-play-first:hover {
-        background: var(--poke-pill-hover);
-        color: var(--poke-pill-text);
-      }
-
-      .poke-btn-circle,
-      .poke-btn-circle:hover,
-      .poke-btn-circle:focus {
-        width: 38px;
-        height: 38px;
-        border-radius: 50%;
-        background: var(--poke-icon-btn-bg);
-        color: #ffffff;
-        border: none;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        font-size: 15px;
-        flex-shrink: 0;
-        transition: background-color 0.15s ease;
-        text-decoration: none !important;
-      }
-
-      .poke-btn-circle:hover {
-        background: var(--poke-icon-btn-hover);
-      }
-
-      .poke-playlist-videos {
-        flex: 1;
-        min-width: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-      }
-
-      .poke-video-row {
-        display: flex;
-        align-items: flex-start;
-        padding: 10px 12px;
-        border-radius: 12px;
-        transition: background-color 0.15s ease;
-        position: relative;
-      }
-
-      .poke-video-row:hover {
-        background-color: var(--poke-hover);
-      }
-
-      .poke-video-thumb-wrap {
-        position: relative;
-        width: 210px;
-        min-width: 210px;
-        aspect-ratio: 16 / 9;
-        border-radius: 10px;
-        overflow: hidden;
-        background: #202020;
-        flex-shrink: 0;
-        display: block;
-      }
-
-      .poke-video-thumb-wrap img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        display: block;
-      }
-
-      .poke-video-duration {
-        position: absolute;
-        bottom: 6px;
-        right: 6px;
-        background: rgba(0, 0, 0, 0.84);
-        color: #ffffff;
-        font-size: 12px;
-        font-weight: 500;
-        line-height: 1;
-        padding: 3px 6px;
-        border-radius: 4px;
-        letter-spacing: 0.2px;
-      }
-
-      .poke-video-meta {
-        flex: 1;
-        min-width: 0;
-        margin-left: 16px;
-        padding-right: 12px;
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-      }
-
-      .poke-video-title,
-      .poke-video-title:hover,
-      .poke-video-title:focus {
-        font-size: 17px;
-        font-weight: 600;
-        line-height: 1.35;
-        color: var(--poke-text-primary);
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        word-break: break-word;
-        text-decoration: none !important;
-      }
-
-      .poke-video-byline {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 6px;
-        font-size: 13px;
-        color: var(--poke-text-secondary);
-        line-height: 1.4;
-      }
-
-      .poke-video-author,
-      .poke-video-author:hover,
-      .poke-video-author:focus {
-        color: var(--poke-text-secondary);
-        transition: color 0.12s ease;
-        text-decoration: none !important;
-      }
-
-      .poke-video-author:hover {
-        color: var(--poke-text-primary);
-      }
-
-      .poke-video-menu-wrap {
-        position: relative;
-        flex-shrink: 0;
-      }
-
-      .poke-video-menu-btn {
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        background: transparent;
-        border: none;
-        color: var(--poke-text-primary);
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        opacity: 0.85;
-        transition: background-color 0.15s ease, opacity 0.15s ease;
-      }
-
-      .poke-video-menu-btn:hover {
-        background: rgba(255, 255, 255, 0.12);
-        opacity: 1;
-      }
-
-      .poke-video-dropdown {
-        position: absolute;
-        top: 40px;
-        right: 0;
-        min-width: 156px;
-        background: var(--poke-menu-bg);
-        border-radius: 12px;
-        padding: 6px 0;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
-        display: none;
-        flex-direction: column;
-        z-index: 200;
-      }
-
-      .poke-video-dropdown.open {
-        display: flex;
-      }
-
-      .poke-dropdown-item,
-      .poke-dropdown-item:hover,
-      .poke-dropdown-item:focus {
-        width: 100%;
-        box-sizing: border-box;
-        padding: 10px 16px;
-        background: transparent;
-        border: none;
-        color: var(--poke-text-primary);
-        font-family: inherit;
-        font-size: 14px;
-        font-weight: 500;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        cursor: pointer;
-        text-align: left;
-        text-decoration: none !important;
-      }
-
-      .poke-dropdown-item:hover {
-        background: var(--poke-menu-hover);
-      }
-
-      .poke-toast {
-        position: fixed;
-        bottom: 24px;
-        left: 24px;
-        background: #f1f1f1;
-        color: #0f0f0f;
-        padding: 10px 18px;
-        border-radius: 8px;
-        font-size: 14px;
-        font-weight: 500;
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
-        opacity: 0;
-        pointer-events: none;
-        transform: translateY(10px);
-        transition: opacity 0.2s ease, transform 0.2s ease;
-        z-index: 9999;
-      }
-
-      .poke-toast.show {
-        opacity: 1;
-        transform: translateY(0);
-      }
-
-      .playlist-error {
-        margin: 0 auto;
-        max-width: 640px;
-        padding: 96px 24px;
-        color: #fff;
-        background: #000000;
-      }
-
-      .playlist-error-box {
-        background: transparent;
-        border: none;
-        border-radius: 0;
-        padding: 0;
-      }
-
-      .playlist-error-box h1 {
-        margin: 0 0 8px 0;
-        font-size: 22px;
-        color: #fff;
-      }
-
-      .playlist-error-box p {
-        color: #aaa;
-        margin: 0 0 18px 0;
-        font-size: 14px;
-      }
-
-      .playlist-error-box a {
-        display: inline-block;
-        padding: 8px 18px;
-        border-radius: 9999px;
-        background: #fff;
-        color: #0f0f0f;
-        font-weight: 600;
-        font-size: 14px;
-        text-decoration: none !important;
-      }
-
-      @media (max-width: 1024px) {
-        .poke-playlist-shell {
-          flex-direction: column;
-          padding: 16px;
-          gap: 20px;
-        }
-
-        .poke-playlist-hero {
-          position: relative;
-          top: 0;
-          width: 100%;
-          min-height: auto;
-          max-height: none;
-        }
-
-        .poke-hero-scroll {
-          overflow-y: visible;
-        }
-
-        .poke-playlist-videos {
-          width: 100%;
-        }
-      }
-
-      @media (max-width: 600px) {
-        .poke-video-thumb-wrap {
-          width: 148px;
-          min-width: 148px;
-        }
-
-        .poke-video-title {
-          font-size: 15px;
-        }
-
-        .poke-hero-title {
-          font-size: 22px;
-        }
-      }
-    </style>
-</head>
+.playlist-error-box p {
+  color: #aaa;
+}
+  
+  </style>
+ </head>
+ 
 <body>
-    <nav>
-      <div class="left">
-        <a class="class" href="/143" style="color:#fff">
-          <img style="transform: scale(1.3);padding-left:0.9em;width: 8.5em;display: block;margin-left: auto;margin-right: auto;" src="/css/logo.svg?v=5" alt="Poke">
-        </a>
-      </div>
+    
+     <nav>
+      <div class="left"><a class="class" href="/143" style=font-family:Inter,sans-serif;color:#fff> <img style="transform: scale(1.3);padding-left:0.9em;width: 8.5em;display: block;margin-left: auto;margin-right: auto;" src="/css/logo.svg?v=5">         </a>             </div>                                    
       <div class="middle">
-        <div class="search">
-          <form action="/search">
-            <input class="search-bar" autocomplete="on" id="fname" name="query" placeholder="" style="color:#fff;border-radius: 8px;" data-ddg-inputtype="identities.firstName">
-            <button class="btn btn-success" type="submit"><i class="fa-light fa-search"></i></button>
-          </form>
-        </div>
+      <div class="search">
+        
+        <form action="/search">
+   <input class="search-bar" autocomplete="on" id="fname" name="query" placeholder="" style="color:#fff;font-family:Inter,sans-serif;border-radius: 8px;" data-ddg-inputtype="identities.firstName">
+  
+
+          <button class="btn btn-success" type="submit"><i class="fa-light fa-search"></i></button>
+        
+        </form>
+  
+      </div>
+ 
       </div>
       <div class="right">
-        <% if (playlistId) { %>
-          <a href="https://www.youtube.com/playlist?list=<%= encodeURIComponent(playlistId) %>" target="_blank" rel="noopener noreferrer" title="Open playlist on YouTube">
-            <i class="fa-brands fa-youtube"></i>
-          </a>
-        <% } %>
-        <a href="/privacy" title="Privacy Policy">
-          <i class="fa-light fa-shield"></i>
+      <a href="/privacy" style="text-decoration: none;" title="Privacy Policy">
+          <i style="display: block;margin-left: auto;margin-right: auto;" class="fa-light fa-shield"></i>
         </a>
+       
+        
       </div>
     </nav>
 
 <% if (hasPlaylist) { %>
-<main class="poke-playlist-shell">
-  <aside class="poke-playlist-hero" style="--hero-bg: url('<%= heroThumbUrl %>');">
-    <div class="poke-hero-scroll">
-      <% if (firstVideoId) { %>
-        <a href="/watch?v=<%= encodeURIComponent(firstVideoId) %>" class="poke-hero-thumb-link">
-          <img src="<%= heroThumbUrl %>" alt="<%= playlistTitle %>" loading="eager">
-          <span class="poke-hero-thumb-overlay">
-            <span>Watch :3</span>
-          </span>
-        </a>
-      <% } else if (heroThumbUrl) { %>
-        <div class="poke-hero-thumb-link">
-          <img src="<%= heroThumbUrl %>" alt="<%= playlistTitle %>" loading="eager">
-        </div>
+<div class="playlist-page" style="margin-left: auto;margin-right: auto;width: 56em;">
+<div class="playlist-info" style="height: fit-content; max-height: calc(100vh - 2em); overflow: hidden; border-radius: 1em;">
+      <% if (!playlistMixId && firstVideoId) { %>  
+		<a href="/watch?v=<%- firstVideoId %>" class="thumbnail" style="background-image: url('<%- proxyBase %>https://i.ytimg.com/vi/<%- firstVideoId %>/hqdefault.jpg');border-radius: 13px;border: 1px solid #ff0064">
+        <span class="hover-text">Watch :3</span>
+		</a>	
       <% } %>
 
-      <h1 class="poke-hero-title"><%= playlistTitle %></h1>
+		<p class="title"><%- playlistTitle %> </p>
+          <% if (!playlistMixId) { %>  
+		<span class="info"><%- playlistVideoCount %> videos • <%- playlistViewCount %> views  • by <%- playlistAuthor %> </span>
+	  <% } %>
 
-      <% if (playlistAuthorId) { %>
-        <a href="/channel?id=<%= encodeURIComponent(playlistAuthorId) %>" class="poke-hero-author">
-          <% if (authorAvatarUrl) { %>
-            <img class="poke-hero-author-avatar" src="<%= authorAvatarUrl %>" alt="<%= playlistAuthor %>">
-          <% } else { %>
-            <span class="poke-hero-author-fallback"><%= playlistAuthor.charAt(0).toUpperCase() %></span>
-          <% } %>
-          <span class="poke-hero-author-name"><%= playlistAuthor %></span>
-        </a>
+      <% if (hasDescription) { %>
+        <span class="description"><%- playlistDescription %></span>
       <% } else { %>
-        <div class="poke-hero-author">
-          <% if (authorAvatarUrl) { %>
-            <img class="poke-hero-author-avatar" src="<%= authorAvatarUrl %>" alt="<%= playlistAuthor %>">
-          <% } else { %>
-            <span class="poke-hero-author-fallback"><%= playlistAuthor.charAt(0).toUpperCase() %></span>
-          <% } %>
-          <span class="poke-hero-author-name"><%= playlistAuthor %></span>
-        </div>
+        <span class="description" style="color: #aaa; font-style: italic; font-size: 0.9em; margin-top: 0.5em; display: block;">No description provided for this playlist.</span>
       <% } %>
-
-      <div class="poke-hero-stats">
-        Playlist • <%= playlistVideoCount.toLocaleString() %> <%= playlistVideoCount === 1 ? "video" : "videos" %> • <%= playlistViewCountText %><% if (updatedText) { %> • Updated <%= updatedText %><% } %>
-      </div>
-
-      <% if (hasDescriptionHtml) { %>
-        <div class="poke-hero-description"><%- playlistDescriptionHtml %></div>
-      <% } else if (hasDescriptionText) { %>
-        <div class="poke-hero-description"><%= playlistDescription %></div>
-      <% } else { %>
-        <div class="poke-hero-description is-empty">No description provided for this playlist.</div>
-      <% } %>
-
-      <div class="poke-hero-actions">
-        <% if (firstVideoId) { %>
-          <a href="/watch?v=<%= encodeURIComponent(firstVideoId) %>" class="poke-btn-play-first">
-            <i class="fa-solid fa-play"></i>
-            <span>Play</span>
+      
+		<div class="channel-info">
+		 
+		</div>
+	</div>
+	<div class="video-list playlist-video-list">
+		     <% playlistVideos.forEach(video => { %>
+  
+    <div class="playlist-video">
+      <a href="/watch?v=<%- video.videoId || '' %>" class="index">
+           <%- typeof video.index === "number" ? video.index + 1 : "" %>
+       </a>
+ 				<a href="/watch?v=<%- video.videoId || '' %>" class="thumbnail"
+				   style="background-image: url('<%- proxyBase %>https://i.ytimg.com/vi/<%- video.videoId || '' %>/hqdefault.jpg?sqp=-oaymwEjCNACELwBSFryq4qpAxUIARUAAAAAGAElAADIQj0AgKJDeAE=&amp;rs=AOn4CLBibY6d4Dg0K69NC-0b7NFsD7AH1w');">
+ 				</a>
+				<div class="info">
+					<a href="/watch?v=<%- video.videoId || '' %>" class="title max-lines-2">
+        <%- video.title || "Untitled video" %>
           </a>
-        <% } %>
+					<div>
+						<a href="/channel?id=<%- video.authorId || '' %>" style="border-radius:0em"><%- video.author || "Unknown" %></a><br>
+            <a href="/download?v=<%- video.videoId || '' %>" style="border-radius:0em"> Download </a>
+ 					</div>
+				</div>
+			</div>
 
-        <% if (validVideoIds.length > 1 && randomVideoId) { %>
-          <a href="/watch?v=<%= encodeURIComponent(randomVideoId) %>" class="poke-btn-circle" title="Shuffle">
-            <i class="fa-solid fa-shuffle"></i>
-          </a>
-        <% } %>
+             <% }) %>
+ 	
+ 
+</div>
+ 
 
-        <button type="button" class="poke-btn-circle" id="sharePlaylistBtn" title="Copy playlist link">
-          <i class="fa-solid fa-share"></i>
-        </button>
-      </div>
-    </div>
-  </aside>
-
-  <section class="poke-playlist-videos" aria-label="Playlist videos">
-    <% playlistVideos.forEach((video) => { 
-      const vidId = video && video.videoId ? video.videoId : "";
-      const vidTitle = video && video.title ? video.title : "Untitled video";
-      const vidAuthor = video && video.author ? video.author : "Unknown";
-      const vidAuthorId = video && video.authorId ? video.authorId : "";
-      const vidThumb = proxyImgUrl(vidId);
-      const vidDuration = formatDuration(video && video.lengthSeconds);
-      const vidWatchUrl = `/watch?v=${encodeURIComponent(vidId)}`;
-      const vidDownloadUrl = `/download?v=${encodeURIComponent(vidId)}`;
-    %>
-      <div class="poke-video-row">
-        <a href="<%= vidWatchUrl %>" class="poke-video-thumb-wrap">
-          <img src="<%= vidThumb %>" alt="<%= vidTitle %>" loading="lazy">
-          <% if (vidDuration) { %>
-            <span class="poke-video-duration"><%= vidDuration %></span>
-          <% } %>
-        </a>
-
-        <div class="poke-video-meta">
-          <a href="<%= vidWatchUrl %>" class="poke-video-title"><%= vidTitle %></a>
-          <div class="poke-video-byline">
-            <% if (vidAuthorId) { %>
-              <a href="/channel?id=<%= encodeURIComponent(vidAuthorId) %>" class="poke-video-author"><%= vidAuthor %></a>
-            <% } else { %>
-              <span class="poke-video-author"><%= vidAuthor %></span>
-            <% } %>
-          </div>
-        </div>
-
-        <div class="poke-video-menu-wrap">
-          <button
-            type="button"
-            class="poke-video-menu-btn"
-            title="More options"
-            aria-label="More options for <%= vidTitle %>"
-            aria-expanded="false"
-          >
-            <i class="fa-solid fa-ellipsis-vertical"></i>
-          </button>
-          <div class="poke-video-dropdown" role="menu">
-            <a href="<%= vidDownloadUrl %>" class="poke-dropdown-item" role="menuitem">
-              <i class="fa-solid fa-download"></i>
-              <span>Download</span>
-            </a>
-            <button type="button" class="poke-dropdown-item" role="menuitem" data-copy-video="<%= vidWatchUrl %>">
-              <i class="fa-solid fa-share"></i>
-              <span>Share</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    <% }) %>
-  </section>
-</main>
-
-<div id="pokeToast" class="poke-toast" role="status" aria-live="polite"></div>
-
-<script>
-  (function () {
-    const toastEl = document.getElementById("pokeToast");
-    let toastTimer = null;
-
-    function showToast(msg) {
-      if (!toastEl) return;
-      toastEl.textContent = msg;
-      toastEl.classList.add("show");
-      clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => toastEl.classList.remove("show"), 2200);
-    }
-
-    function copyText(text, successMsg) {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(() => showToast(successMsg)).catch(() => showToast("Could not copy link"));
-      } else {
-        const temp = document.createElement("input");
-        temp.value = text;
-        document.body.appendChild(temp);
-        temp.select();
-        document.execCommand("copy");
-        document.body.removeChild(temp);
-        showToast(successMsg);
-      }
-    }
-
-    function closeAllDropdowns() {
-      document.querySelectorAll(".poke-video-dropdown.open").forEach((menu) => {
-        menu.classList.remove("open");
-        const btn = menu.previousElementSibling;
-        if (btn) btn.setAttribute("aria-expanded", "false");
-      });
-    }
-
-    document.querySelectorAll(".poke-video-menu-btn").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const menu = btn.nextElementSibling;
-        const isOpen = menu && menu.classList.contains("open");
-        closeAllDropdowns();
-        if (menu && !isOpen) {
-          menu.classList.add("open");
-          btn.setAttribute("aria-expanded", "true");
-        }
-      });
-    });
-
-    document.addEventListener("click", closeAllDropdowns);
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") closeAllDropdowns();
-    });
-
-    const shareBtn = document.getElementById("sharePlaylistBtn");
-    if (shareBtn) {
-      shareBtn.addEventListener("click", () => {
-        copyText(window.location.href, "Playlist link copied to clipboard");
-      });
-    }
-
-    document.querySelectorAll("[data-copy-video]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const rel = btn.getAttribute("data-copy-video");
-        closeAllDropdowns();
-        if (!rel) return;
-        copyText(window.location.origin + rel, "Video link copied to clipboard");
-      });
-    });
-  })();
-</script>
+</div>
+</div>
 <% } else { %>
 <div class="playlist-error">
   <div class="playlist-error-box">
     <h1>Playlist unavailable</h1>
     <p>This playlist could not be loaded because its data was missing or invalid.</p>
-    <a href="/">Go home</a>
+    <a href="/" style="color:#3ea6ff;text-decoration:none;">Go home</a>
   </div>
 </div>
 <% } %>
-
-<script src="/css/custom-css.js"></script>
+      
+<script src="/css/custom-css.js"> </script>
+ 
 </body>
 </html>
