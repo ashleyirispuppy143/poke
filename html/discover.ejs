@@ -2,10 +2,15 @@
 <html lang="en">
 <head>
     <%
-        const results = typeof j !== "undefined" && j && Array.isArray(j.results) ? j.results : [];
-        const videoResults = results.filter(item => item && (item.type === "video" || item.videoId));
+        const results = typeof j !== "undefined" && j && Array.isArray(j.results) ? j.results.filter(Boolean) : [];
         const searchValue = typeof mobilesearch !== "undefined" ? mobilesearch : "";
         const mediaProxyBase = typeof media_proxy_url !== "undefined" && media_proxy_url ? String(media_proxy_url).replace(/\/$/, "") : "";
+
+        const currentDate = typeof date !== "undefined" && date ? String(date) : "";
+        const currentDuration = typeof duration !== "undefined" && duration ? String(duration) : "";
+        const currentType = typeof type !== "undefined" && type ? String(type) : "all";
+        const currentSort = typeof sort !== "undefined" && sort ? String(sort) : "";
+        const hasActiveFilters = Boolean(currentDate || currentDuration || (currentType && currentType !== "all") || currentSort);
 
         let currentPage = typeof continuation !== "undefined" && continuation ? Number(continuation) : 1;
         if (!Number.isFinite(currentPage) || currentPage < 1) currentPage = 1;
@@ -13,14 +18,26 @@
         const previousPage = currentPage > 1 ? currentPage - 1 : 1;
         const nextPage = currentPage + 1;
 
+        function normalizeUrl(url) {
+            if (!url || typeof url !== "string") return "";
+            if (url.startsWith("//")) return "https:" + url;
+            return url;
+        }
+
         function proxyMediaUrl(url) {
-            if (!url) return "";
-            if (!mediaProxyBase) return url;
-            return mediaProxyBase + "/proxy?url=" + encodeURIComponent(url);
+            const cleanUrl = normalizeUrl(url);
+            if (!cleanUrl) return "";
+            if (!mediaProxyBase) return cleanUrl;
+            return mediaProxyBase + "/proxy?url=" + encodeURIComponent(cleanUrl);
         }
 
         function pageUrl(page) {
-            return "/app?mobilesearch=" + encodeURIComponent(searchValue) + "&continuation=" + encodeURIComponent(page);
+            let url = "/app?mobilesearch=" + encodeURIComponent(searchValue) + "&continuation=" + encodeURIComponent(page);
+            if (currentDate) url += "&date=" + encodeURIComponent(currentDate);
+            if (currentDuration) url += "&duration=" + encodeURIComponent(currentDuration);
+            if (currentType && currentType !== "all") url += "&type=" + encodeURIComponent(currentType);
+            if (currentSort) url += "&sort=" + encodeURIComponent(currentSort);
+            return url;
         }
 
         function videoHref(item) {
@@ -33,6 +50,11 @@
             return "#";
         }
 
+        function playlistHref(item) {
+            if (!item || !item.playlistId) return "#";
+            return "/playlist?list=" + encodeURIComponent(item.playlistId);
+        }
+
         function rawVideoThumbnailUrl(videoId) {
             if (!videoId) return "";
             return "https://i.ytimg.com/vi/" + encodeURIComponent(videoId) + "/hq720.jpg";
@@ -41,6 +63,15 @@
         function rawFallbackVideoThumbnailUrl(videoId) {
             if (!videoId) return "";
             return "https://i.ytimg.com/vi/" + encodeURIComponent(videoId) + "/hqdefault.jpg";
+        }
+
+        function rawPlaylistThumbnailUrl(item) {
+            if (!item) return "";
+            if (item.playlistThumbnail) return item.playlistThumbnail;
+            if (Array.isArray(item.videos) && item.videos.length && item.videos[0] && item.videos[0].videoId) {
+                return rawFallbackVideoThumbnailUrl(item.videos[0].videoId);
+            }
+            return "";
         }
 
         function rawAvatarUrl(item) {
@@ -162,8 +193,8 @@
         <meta http-equiv="refresh" content="0; url=/search">
     <% } %>
 
-<link href="/css/poke-icon-logo.svg?v=46" rel=icon>
-<link href="/css/app-cdn.min.css" rel="stylesheet">
+    <link href="/css/poke-icon-logo.svg?v=46" rel="icon">
+    <link href="/css/app-cdn.min.css" rel="stylesheet">
 
     <style>
         @import url("https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css");
@@ -332,11 +363,132 @@
             border: 0;
         }
 
+        .filters-bar {
+            width: 100%;
+            max-width: 390px;
+            margin: 0 auto;
+            padding: 0 14px 8px;
+        }
+
+        .filters-details {
+            width: 100%;
+        }
+
+        .filters-summary {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 14px;
+            border-radius: 999px;
+            background: var(--chip);
+            color: var(--text);
+            font-size: 13.5px;
+            font-weight: 600;
+            cursor: pointer;
+            list-style: none;
+            user-select: none;
+        }
+
+        .filters-summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .filters-summary.active {
+            background: #f1f1f1;
+            color: #0f0f0f;
+        }
+
+        .filters-panel {
+            margin-top: 10px;
+            padding: 14px;
+            border-radius: 14px;
+            background: #181818;
+            border: 1px solid var(--line);
+        }
+
+        .filters-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px 12px;
+        }
+
+        .filter-group {
+            min-width: 0;
+        }
+
+        .filter-group-title {
+            margin: 0 0 8px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--line);
+            color: var(--text);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .filter-option {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 4px 0;
+            color: var(--text-soft);
+            font-size: 13px;
+            line-height: 1.3;
+            cursor: pointer;
+        }
+
+        .filter-option input[type="radio"] {
+            margin: 2px 0 0;
+            flex: 0 0 auto;
+            accent-color: #3ea6ff;
+        }
+
+        .filter-option input[type="radio"]:checked + span {
+            color: var(--text);
+            font-weight: 560;
+        }
+
+        .filters-actions {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px solid var(--line);
+        }
+
+        .reset-filters-button {
+            padding: 8px 14px;
+            border-radius: 999px;
+            background: transparent;
+            border: 1px solid var(--line);
+            color: var(--text-soft);
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .apply-filters-button {
+            padding: 8px 18px;
+            border: 0;
+            border-radius: 999px;
+            background: #f1f1f1;
+            color: #0f0f0f;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .apply-filters-button:active {
+            transform: scale(0.97);
+        }
+
         .feed {
             width: 100%;
             max-width: 390px;
             margin: 0 auto;
-            padding: 10px 0 calc(96px + env(safe-area-inset-bottom));
+            padding: 6px 0 calc(96px + env(safe-area-inset-bottom));
             background: var(--bg);
         }
 
@@ -351,8 +503,83 @@
             margin-top: 18px;
         }
 
-        .video-card {
+        .video-card,
+        .playlist-card {
             padding: 0 0 12px;
+        }
+
+        .channel-card {
+            padding: 4px 14px 8px;
+        }
+
+        .channel-card-link {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: #181818;
+        }
+
+        .channel-avatar-wrap {
+            width: 64px;
+            height: 64px;
+            flex: 0 0 64px;
+            border-radius: 999px;
+            overflow: hidden;
+            background: #272727;
+        }
+
+        .channel-avatar-img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .channel-avatar-letter {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #7b1fa2, #e91e63);
+            color: #ffffff;
+            font-size: 24px;
+            font-weight: 760;
+        }
+
+        .channel-info {
+            min-width: 0;
+            flex: 1 1 auto;
+        }
+
+        .channel-name {
+            color: var(--text);
+            font-size: 16px;
+            font-weight: 600;
+            line-height: 1.25;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .channel-meta {
+            margin-top: 3px;
+            color: var(--text-soft);
+            font-size: 12.5px;
+            line-height: 1.3;
+        }
+
+        .channel-desc {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            margin-top: 4px;
+            color: var(--text-muted);
+            font-size: 12px;
+            line-height: 1.35;
         }
 
         .thumbnail-shell {
@@ -393,7 +620,8 @@
         }
 
         .duration-badge,
-        .live-badge {
+        .live-badge,
+        .playlist-badge {
             position: absolute;
             right: 6px;
             bottom: 6px;
@@ -401,6 +629,7 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            gap: 5px;
             border-radius: 5px;
             color: #ffffff;
             font-size: 12px;
@@ -408,9 +637,10 @@
             font-weight: 760;
         }
 
-        .duration-badge {
+        .duration-badge,
+        .playlist-badge {
             min-width: 36px;
-            padding: 0 5px;
+            padding: 0 6px;
             background: rgba(0, 0, 0, 0.88);
         }
 
@@ -642,12 +872,14 @@
         @media (min-width: 391px) {
             .feed,
             .pagination-inner,
-            .nav-wrap {
+            .nav-wrap,
+            .filters-bar {
                 border-left: 1px solid rgba(255, 255, 255, 0.06);
                 border-right: 1px solid rgba(255, 255, 255, 0.06);
             }
 
-            .nav-wrap {
+            .nav-wrap,
+            .filters-bar {
                 border-left-color: transparent;
                 border-right-color: transparent;
             }
@@ -686,7 +918,7 @@
                 <i class="fa-light fa-chevron-left"></i>
             </a>
 
-            <form action="/app" class="search-container" role="search">
+            <form action="/app" method="get" class="search-container" role="search">
                 <input type="text" name="mobilesearch" value="<%= searchValue %>" placeholder="Search" autocomplete="off">
                 <button type="button" class="clear-search-button" aria-label="Clear search">
                     <i class="fa-light fa-xmark"></i>
@@ -694,84 +926,268 @@
                 <button type="submit" class="hidden-submit" aria-label="Search">Search</button>
             </form>
         </div>
+
+        <div class="filters-bar">
+            <details class="filters-details">
+                <summary class="filters-summary <%= hasActiveFilters ? 'active' : '' %>">
+                    <i class="fa-light fa-filter"></i>
+                    <span>Filters</span>
+                </summary>
+
+                <form action="/app" method="get" class="filters-panel">
+                    <input type="hidden" name="mobilesearch" value="<%= searchValue %>">
+
+                    <div class="filters-grid">
+                        <div class="filter-group">
+                            <div class="filter-group-title">Upload Date</div>
+                            <label class="filter-option">
+                                <input type="radio" name="date" value="" <%= !currentDate ? "checked" : "" %>>
+                                <span>Any date</span>
+                            </label>
+                            <label class="filter-option">
+                                <input type="radio" name="date" value="hour" <%= currentDate === "hour" ? "checked" : "" %>>
+                                <span>Last Hour</span>
+                            </label>
+                            <label class="filter-option">
+                                <input type="radio" name="date" value="today" <%= currentDate === "today" ? "checked" : "" %>>
+                                <span>Today</span>
+                            </label>
+                            <label class="filter-option">
+                                <input type="radio" name="date" value="week" <%= currentDate === "week" ? "checked" : "" %>>
+                                <span>This week</span>
+                            </label>
+                            <label class="filter-option">
+                                <input type="radio" name="date" value="month" <%= currentDate === "month" ? "checked" : "" %>>
+                                <span>This month</span>
+                            </label>
+                            <label class="filter-option">
+                                <input type="radio" name="date" value="year" <%= currentDate === "year" ? "checked" : "" %>>
+                                <span>This year</span>
+                            </label>
+                        </div>
+
+                        <div class="filter-group">
+                            <div class="filter-group-title">Duration</div>
+                            <label class="filter-option">
+                                <input type="radio" name="duration" value="" <%= !currentDuration ? "checked" : "" %>>
+                                <span>Any duration</span>
+                            </label>
+                            <label class="filter-option">
+                                <input type="radio" name="duration" value="short" <%= currentDuration === "short" ? "checked" : "" %>>
+                                <span>Short (&lt; 4 minutes)</span>
+                            </label>
+                            <label class="filter-option">
+                                <input type="radio" name="duration" value="medium" <%= currentDuration === "medium" ? "checked" : "" %>>
+                                <span>Medium (4 - 20 minutes)</span>
+                            </label>
+                            <label class="filter-option">
+                                <input type="radio" name="duration" value="long" <%= currentDuration === "long" ? "checked" : "" %>>
+                                <span>Long (&gt; 20 minutes)</span>
+                            </label>
+                        </div>
+
+                        <div class="filter-group">
+                            <div class="filter-group-title">Type</div>
+                            <label class="filter-option">
+                                <input type="radio" name="type" value="all" <%= currentType === "all" ? "checked" : "" %>>
+                                <span>All</span>
+                            </label>
+                            <label class="filter-option">
+                                <input type="radio" name="type" value="video" <%= currentType === "video" ? "checked" : "" %>>
+                                <span>Video</span>
+                            </label>
+                            <label class="filter-option">
+                                <input type="radio" name="type" value="channel" <%= currentType === "channel" ? "checked" : "" %>>
+                                <span>Channel</span>
+                            </label>
+                            <label class="filter-option">
+                                <input type="radio" name="type" value="playlist" <%= currentType === "playlist" ? "checked" : "" %>>
+                                <span>Playlist</span>
+                            </label>
+                        </div>
+
+                        <div class="filter-group">
+                            <div class="filter-group-title">Sort By</div>
+                            <label class="filter-option">
+                                <input type="radio" name="sort" value="" <%= !currentSort || currentSort === "relevance" ? "checked" : "" %>>
+                                <span>Relevance</span>
+                            </label>
+                            <label class="filter-option">
+                                <input type="radio" name="sort" value="rating" <%= currentSort === "rating" ? "checked" : "" %>>
+                                <span>Rating</span>
+                            </label>
+                            <label class="filter-option">
+                                <input type="radio" name="sort" value="views" <%= currentSort === "views" ? "checked" : "" %>>
+                                <span>View count</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="filters-actions">
+                        <% if (hasActiveFilters) { %>
+                            <a href="/app?mobilesearch=<%= encodeURIComponent(searchValue) %>" class="reset-filters-button">Reset</a>
+                        <% } %>
+                        <button type="submit" class="apply-filters-button">Apply Filters</button>
+                    </div>
+                </form>
+            </details>
+        </div>
     </header>
 
     <main class="feed">
-        <% if (videoResults.length) { %>
-            <% videoResults.forEach(item => { %>
+        <% if (results.length) { %>
+            <% results.forEach(item => { %>
                 <%
-                    const href = videoHref(item);
-                    const authorHref = channelHref(item);
-                    const thumb = proxyMediaUrl(rawVideoThumbnailUrl(item.videoId));
-                    const fallbackThumb = proxyMediaUrl(rawFallbackVideoThumbnailUrl(item.videoId));
-                    const avatar = proxyMediaUrl(rawAvatarUrl(item));
-                    const duration = formatDuration(item.lengthSeconds);
-                    const bareViews = formatCompactNumber(item.viewCount);
-                    const published = formatPublishedText(item);
+                    const itemType = item.type || (item.videoId ? "video" : item.playlistId ? "playlist" : item.authorId ? "channel" : "unknown");
                 %>
 
-                <article class="result-card video-card">
-                    <div class="thumbnail-shell">
-                        <a href="<%= href %>" class="thumbnail-link" aria-label="<%= item.title || 'Video' %>">
-                            <% if (thumb) { %>
-                                <img class="thumbnail-img" src="<%= thumb %>" data-fallback-src="<%= fallbackThumb %>" alt="" loading="lazy">
-                            <% } else { %>
-                                <div class="thumbnail-placeholder">
-                                    <i class="fa-light fa-video"></i>
-                                </div>
-                            <% } %>
+                <% if (itemType === "channel") { %>
+                    <%
+                        const authorHref = channelHref(item);
+                        const avatar = proxyMediaUrl(rawAvatarUrl(item));
+                        const subs = formatCompactNumber(item.subCount);
+                        const videoCount = formatCompactNumber(item.videoCount);
+                    %>
+                    <article class="result-card channel-card">
+                        <a href="<%= authorHref %>" class="channel-card-link">
+                            <div class="channel-avatar-wrap">
+                                <% if (avatar) { %>
+                                    <img class="channel-avatar-img" src="<%= avatar %>" alt="" loading="lazy">
+                                <% } else { %>
+                                    <span class="channel-avatar-letter"><%= authorInitial(item.author) %></span>
+                                <% } %>
+                            </div>
 
-                            <% if (item.liveNow) { %>
-                                <span class="live-badge">LIVE</span>
-                            <% } else if (duration) { %>
-                                <span class="duration-badge"><%= duration %></span>
-                            <% } %>
+                            <div class="channel-info">
+                                <div class="channel-name"><%= item.author || "Channel" %></div>
+                                <% if (subs || videoCount) { %>
+                                    <div class="channel-meta">
+                                        <%= subs ? subs + " subscribers" : "" %><%= subs && videoCount ? " • " : "" %><%= videoCount ? videoCount + " videos" : "" %>
+                                    </div>
+                                <% } %>
+                                <% if (item.description) { %>
+                                    <div class="channel-desc"><%= item.description %></div>
+                                <% } %>
+                            </div>
                         </a>
-                    </div>
+                    </article>
 
-                    <div class="video-info">
-                        <a href="<%= href %>" class="title"><%= item.title || "Untitled video" %></a>
-
-                        <div class="meta-line">
-                            <% if (item.author || avatar) { %>
-                                <% if (authorHref && authorHref !== "#") { %>
-                                    <a class="avatar-link" href="<%= authorHref %>" aria-label="<%= item.author || 'Channel' %>">
-                                        <% if (avatar) { %>
-                                            <img class="avatar-img" src="<%= avatar %>" alt="" loading="lazy">
-                                        <% } else { %>
-                                            <span class="avatar-letter"><%= authorInitial(item.author) %></span>
-                                        <% } %>
-                                    </a>
+                <% } else if (itemType === "playlist") { %>
+                    <%
+                        const href = playlistHref(item);
+                        const authorHref = channelHref(item);
+                        const thumb = proxyMediaUrl(rawPlaylistThumbnailUrl(item));
+                        const videoCount = Number(item.videoCount);
+                    %>
+                    <article class="result-card playlist-card">
+                        <div class="thumbnail-shell">
+                            <a href="<%= href %>" class="thumbnail-link" aria-label="<%= item.title || 'Playlist' %>">
+                                <% if (thumb) { %>
+                                    <img class="thumbnail-img" src="<%= thumb %>" alt="" loading="lazy">
                                 <% } else { %>
-                                    <span class="avatar-fallback" aria-hidden="true">
-                                        <% if (avatar) { %>
-                                            <img class="avatar-img" src="<%= avatar %>" alt="" loading="lazy">
-                                        <% } else { %>
-                                            <span class="avatar-letter"><%= authorInitial(item.author) %></span>
-                                        <% } %>
-                                    </span>
+                                    <div class="thumbnail-placeholder">
+                                        <i class="fa-light fa-list-ul"></i>
+                                    </div>
                                 <% } %>
-                            <% } %>
 
-                            <% if (item.author) { %>
-                                <% if (authorHref && authorHref !== "#") { %>
-                                    <a class="meta-author" href="<%= authorHref %>"><%= item.author %></a>
-                                <% } else { %>
-                                    <span class="meta-author"><%= item.author %></span>
-                                <% } %>
-                            <% } %>
-
-                            <% if (bareViews) { %>
-                                <span class="meta-play-icon" aria-hidden="true">▷</span>
-                                <span class="meta-views"><%= bareViews %></span>
-                            <% } %>
-
-                            <% if (published) { %>
-                                <span class="meta-age"><%= published %></span>
-                            <% } %>
+                                <span class="playlist-badge">
+                                    <i class="fa-light fa-list-ul"></i>
+                                    <%= Number.isFinite(videoCount) && videoCount > 0 ? videoCount + " videos" : "Playlist" %>
+                                </span>
+                            </a>
                         </div>
-                    </div>
-                </article>
+
+                        <div class="video-info">
+                            <a href="<%= href %>" class="title"><%= item.title || "Untitled playlist" %></a>
+
+                            <div class="meta-line">
+                                <% if (item.author) { %>
+                                    <% if (authorHref && authorHref !== "#") { %>
+                                        <a class="meta-author" href="<%= authorHref %>"><%= item.author %></a>
+                                    <% } else { %>
+                                        <span class="meta-author"><%= item.author %></span>
+                                    <% } %>
+                                <% } %>
+                                <span class="meta-age">Playlist</span>
+                            </div>
+                        </div>
+                    </article>
+
+                <% } else if (itemType === "video") { %>
+                    <%
+                        const href = videoHref(item);
+                        const authorHref = channelHref(item);
+                        const thumb = proxyMediaUrl(rawVideoThumbnailUrl(item.videoId));
+                        const fallbackThumb = proxyMediaUrl(rawFallbackVideoThumbnailUrl(item.videoId));
+                        const avatar = proxyMediaUrl(rawAvatarUrl(item));
+                        const duration = formatDuration(item.lengthSeconds);
+                        const bareViews = formatCompactNumber(item.viewCount);
+                        const published = formatPublishedText(item);
+                    %>
+
+                    <article class="result-card video-card">
+                        <div class="thumbnail-shell">
+                            <a href="<%= href %>" class="thumbnail-link" aria-label="<%= item.title || 'Video' %>">
+                                <% if (thumb) { %>
+                                    <img class="thumbnail-img" src="<%= thumb %>" data-fallback-src="<%= fallbackThumb %>" alt="" loading="lazy">
+                                <% } else { %>
+                                    <div class="thumbnail-placeholder">
+                                        <i class="fa-light fa-video"></i>
+                                    </div>
+                                <% } %>
+
+                                <% if (item.liveNow) { %>
+                                    <span class="live-badge">LIVE</span>
+                                <% } else if (duration) { %>
+                                    <span class="duration-badge"><%= duration %></span>
+                                <% } %>
+                            </a>
+                        </div>
+
+                        <div class="video-info">
+                            <a href="<%= href %>" class="title"><%= item.title || "Untitled video" %></a>
+
+                            <div class="meta-line">
+                                <% if (item.author || avatar) { %>
+                                    <% if (authorHref && authorHref !== "#") { %>
+                                        <a class="avatar-link" href="<%= authorHref %>" aria-label="<%= item.author || 'Channel' %>">
+                                            <% if (avatar) { %>
+                                                <img class="avatar-img" src="<%= avatar %>" alt="" loading="lazy">
+                                            <% } else { %>
+                                                <span class="avatar-letter"><%= authorInitial(item.author) %></span>
+                                            <% } %>
+                                        </a>
+                                    <% } else { %>
+                                        <span class="avatar-fallback" aria-hidden="true">
+                                            <% if (avatar) { %>
+                                                <img class="avatar-img" src="<%= avatar %>" alt="" loading="lazy">
+                                            <% } else { %>
+                                                <span class="avatar-letter"><%= authorInitial(item.author) %></span>
+                                            <% } %>
+                                        </span>
+                                    <% } %>
+                                <% } %>
+
+                                <% if (item.author) { %>
+                                    <% if (authorHref && authorHref !== "#") { %>
+                                        <a class="meta-author" href="<%= authorHref %>"><%= item.author %></a>
+                                    <% } else { %>
+                                        <span class="meta-author"><%= item.author %></span>
+                                    <% } %>
+                                <% } %>
+
+                                <% if (bareViews) { %>
+                                    <span class="meta-play-icon" aria-hidden="true">▷</span>
+                                    <span class="meta-views"><%= bareViews %></span>
+                                <% } %>
+
+                                <% if (published) { %>
+                                    <span class="meta-age"><%= published %></span>
+                                <% } %>
+                            </div>
+                        </div>
+                    </article>
+                <% } %>
             <% }) %>
         <% } else { %>
             <div class="empty-state">
