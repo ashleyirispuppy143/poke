@@ -68,6 +68,29 @@
     return hrs > 0 ? `${hrs}:${pad(mins)}:${pad(secs)}` : `${mins}:${pad(secs)}`;
   }
 
+  function formatTotalDuration(seconds) {
+    const total = Math.floor(Number(seconds));
+    if (!Number.isFinite(total) || total <= 0) return "";
+    const hrs = Math.floor(total / 3600);
+    const mins = Math.floor((total % 3600) / 60);
+    const secs = total % 60;
+
+    if (hrs > 0) {
+      const hrStr = `${hrs} ${hrs === 1 ? "hour" : "hours"}`;
+      if (mins > 0) {
+        const minStr = `${mins} ${mins === 1 ? "minute" : "minutes"}`;
+        return `${hrStr} and ${minStr}`;
+      }
+      return hrStr;
+    }
+
+    if (mins > 0) {
+      return `${mins} ${mins === 1 ? "minute" : "minutes"}`;
+    }
+
+    return `${secs} ${secs === 1 ? "second" : "seconds"}`;
+  }
+
   const playlistId = hasPlaylist && playlist.playlistId ? playlist.playlistId : "";
   const playlistTitle = hasPlaylist && playlist.title ? playlist.title : "Playlist unavailable";
   const playlistDescription = hasPlaylist && typeof playlist.description === "string" ? playlist.description : "";
@@ -92,6 +115,12 @@
         ? `${playlist.viewCount.toLocaleString()} views`
         : "0 views";
   const playlistVideos = hasPlaylist && Array.isArray(playlist.videos) ? playlist.videos : [];
+  const totalPlaylistSeconds = playlistVideos.reduce((sum, v) => {
+    const secs = Number(v && v.lengthSeconds);
+    return Number.isFinite(secs) && secs > 0 ? sum + secs : sum;
+  }, 0);
+  const totalDurationText = formatTotalDuration(totalPlaylistSeconds);
+
   const firstVideo = playlistVideos.length > 0 ? playlistVideos[0] : null;
   const firstVideoId = firstVideo && firstVideo.videoId ? firstVideo.videoId : null;
   const validVideoIds = playlistVideos.map((v) => v && v.videoId).filter(Boolean);
@@ -999,7 +1028,7 @@
       <% } %>
 
       <div class="poke-hero-stats">
-        Playlist • <%= playlistVideoCount.toLocaleString() %> <%= playlistVideoCount === 1 ? "video" : "videos" %> • <%= playlistViewCountText %><% if (updatedText) { %> • Updated <%= updatedText %><% } %>
+        Playlist • <%= playlistVideoCount.toLocaleString() %> <%= playlistVideoCount === 1 ? "video" : "videos" %><% if (totalDurationText) { %> • <%= totalDurationText %><% } %> • <%= playlistViewCountText %><% if (updatedText) { %> • Updated <%= updatedText %><% } %>
       </div>
 
       <% if (hasDescriptionHtml) { %>
