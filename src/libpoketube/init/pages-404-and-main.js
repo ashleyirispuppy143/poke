@@ -46,10 +46,9 @@ function getRandomSplash() {
 }
 
 module.exports = function (app, config, renderTemplate) {
- app.get("/app", async function (req, res) {
+app.get("/app", async function (req, res) {
   const isMobile = req.useragent?.isMobile;
 
-  // If the user is NOT on mobile (desktop), redirect to /search immediately
   if (!isMobile) {
     const searchQuery = req.query.mobilesearch || req.query.query || req.query.q;
     if (searchQuery) {
@@ -58,24 +57,19 @@ module.exports = function (app, config, renderTemplate) {
     return res.redirect("/search");
   }
 
-  // If the user IS on mobile, but there is no mobilesearch query, redirect to /search
   if (isMobile && !req.query.mobilesearch) {
     return res.redirect("/search");
   }
 
   const { fetch } = await import("undici");
-  const currentTab = req.query.tab;
-
-  let tab = "";
-  if (req.query.tab) {
-    tab = `/?type=${capitalizeFirstLetter(req.query.tab)}`;
-  }
-  
   const t = [];
-    
   const p = "";
-
   let j = { results: [], meta: {} };
+
+  const date = typeof req.query.date === "string" ? req.query.date : "";
+  const type = typeof req.query.type === "string" && req.query.type ? req.query.type : "all";
+  const duration = typeof req.query.duration === "string" ? req.query.duration : "";
+  const sort = typeof req.query.sort === "string" ? req.query.sort : "";
 
   const normalizeSearchData = (data) => {
     if (!data) return { results: [] };
@@ -92,9 +86,9 @@ module.exports = function (app, config, renderTemplate) {
   try {
     const query =
       (typeof req.query.mobilesearch === "string" &&
-        req.query.mobilesearch.trim()) ??
-      (typeof req.query.query === "string" && req.query.query.trim()) ??
-      (typeof req.query.q === "string" && req.query.q.trim()) ??
+        req.query.mobilesearch.trim()) ||
+      (typeof req.query.query === "string" && req.query.query.trim()) ||
+      (typeof req.query.q === "string" && req.query.q.trim()) ||
       "";
 
     const continuation = (req.query.continuation ?? "1").toString();
@@ -102,7 +96,11 @@ module.exports = function (app, config, renderTemplate) {
     if (query) {
       const searchUrl = `${config.invapi}/search?q=${encodeURIComponent(
         query
-      )}&type=video&page=${encodeURIComponent(continuation)}&hl=EN-GB`;
+      )}&page=${encodeURIComponent(continuation)}&date=${encodeURIComponent(
+        date
+      )}&type=${encodeURIComponent(type)}&duration=${encodeURIComponent(
+        duration
+      )}&sort=${encodeURIComponent(sort)}&hl=EN-GB`;
 
       const r = await fetch(searchUrl, {
         headers: { "User-Agent": config.useragent },
@@ -158,10 +156,14 @@ module.exports = function (app, config, renderTemplate) {
     inv: t,
     turntomins,
     continuation: req.query.continuation,
+    date,
+    type,
+    duration,
+    sort,
     j,
   });
 });
-
+  
   app.get("/:v*?", async function (req, res) {
     const uaos = req.useragent.os;
     const random = getRandomSplash();
