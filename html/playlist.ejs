@@ -1,7 +1,7 @@
 <!--
 	    This Source Code Form is subject to the terms of the GNU General Public License:
 	   
-	    Copyright (C) 2021-2025 PokeTube Of Poke Project, a part of The Poke Project Initiative (initiative.poketube.fun) 
+	    Copyright (C) 2021-2026 PokeTube Of Poke Project, a part of The Poke Project Initiative (initiative.poketube.fun) 
 	    source code :https://codeberg.org/ashleyirispuppy/poke
 	
 	    This program is free software: you can redistribute it and/or modify
@@ -24,326 +24,794 @@
   const safeMediaProxy = typeof mediaproxy !== "undefined" && mediaproxy ? mediaproxy : "";
   const proxyBase = safeMediaProxy ? `${safeMediaProxy}/proxy?url=` : "/proxy?url=";
 
-  const playlistTitle = hasPlaylist && playlist.title ? playlist.title : "Playlist unavailable";
-  const playlistDescription = hasPlaylist && playlist.description ? playlist.description : "";
-  const playlistThumbnail = hasPlaylist && playlist.playlistThumbnail ? playlist.playlistThumbnail : "";
-  const playlistAuthor = hasPlaylist && playlist.author ? playlist.author : "Unknown";
-  const playlistVideoCount = hasPlaylist && playlist.videoCount ? playlist.videoCount : 0;
-  const playlistViewCount = hasPlaylist && typeof playlist.viewCount === "number" ? playlist.viewCount.toLocaleString() : "0";
-  const playlistMixId = hasPlaylist && playlist.mixId ? playlist.mixId : null;
-  const playlistVideos = hasPlaylist && Array.isArray(playlist.videos) ? playlist.videos : [];
-
-  let firstVideoId = null;
-
-  if (playlistVideos && playlistVideos.length > 0 && playlistVideos[0].videoId) {
-    firstVideoId = playlistVideos[0].videoId;
-  } else if (playlistThumbnail && playlistThumbnail.includes("/vi/")) {
-    firstVideoId = playlistThumbnail.split("/vi/")[1].split("/")[0];
+  function proxyUrl(url) {
+    if (!url || typeof url !== "string") return "";
+    if (url.startsWith("//")) return `${proxyBase}https:${url}`;
+    if (url.startsWith("http://") || url.startsWith("https://")) return `${proxyBase}${url}`;
+    return url;
   }
 
-  // Check if a valid description exists
-  const hasDescription = playlistDescription && playlistDescription.trim().length > 0;
+  function formatDuration(seconds) {
+    const total = Number(seconds);
+    if (!Number.isFinite(total) || total <= 0) return "";
+    const hrs = Math.floor(total / 3600);
+    const mins = Math.floor((total % 3600) / 60);
+    const secs = Math.floor(total % 60);
+    const pad = (n) => String(n).padStart(2, "0");
+    return hrs > 0 ? `${hrs}:${pad(mins)}:${pad(secs)}` : `${mins}:${pad(secs)}`;
+  }
+
+  function getVideoThumbnail(video) {
+    if (video && Array.isArray(video.videoThumbnails) && video.videoThumbnails.length > 0) {
+      const preferred =
+        video.videoThumbnails.find((t) => t && (t.quality === "medium" || t.quality === "high" || t.quality === "hqdefault")) ||
+        video.videoThumbnails[0];
+      if (preferred && preferred.url) return proxyUrl(preferred.url);
+    }
+    if (video && video.videoId) {
+      return `${proxyBase}https://i.ytimg.com/vi/${video.videoId}/hqdefault.jpg`;
+    }
+    return "";
+  }
+
+  function getHeroThumbnail(pl, firstVid) {
+    if (firstVid && Array.isArray(firstVid.videoThumbnails) && firstVid.videoThumbnails.length > 0) {
+      const preferred =
+        firstVid.videoThumbnails.find((t) => t && (t.quality === "maxresdefault" || t.quality === "sddefault" || t.quality === "high" || t.quality === "hqdefault")) ||
+        firstVid.videoThumbnails[0];
+      if (preferred && preferred.url) return proxyUrl(preferred.url);
+    }
+    if (firstVid && firstVid.videoId) {
+      return `${proxyBase}https://i.ytimg.com/vi/${firstVid.videoId}/hqdefault.jpg`;
+    }
+    if (pl && pl.playlistThumbnail) {
+      return proxyUrl(pl.playlistThumbnail);
+    }
+    return "";
+  }
+
+  function getAuthorAvatar(pl) {
+    if (pl && Array.isArray(pl.authorThumbnails) && pl.authorThumbnails.length > 0) {
+      const preferred =
+        pl.authorThumbnails.find((t) => t && Number(t.width) >= 48 && Number(t.width) <= 176) ||
+        pl.authorThumbnails[pl.authorThumbnails.length - 1];
+      if (preferred && preferred.url) return proxyUrl(preferred.url);
+    }
+    return "";
+  }
+
+  const playlistId = hasPlaylist && playlist.playlistId ? playlist.playlistId : "";
+  const playlistTitle = hasPlaylist && playlist.title ? playlist.title : "Playlist unavailable";
+  const playlistDescription = hasPlaylist && playlist.description ? playlist.description : "";
+  const playlistDescriptionHtml = hasPlaylist && playlist.descriptionHtml ? playlist.descriptionHtml : "";
+  const playlistAuthor = hasPlaylist && playlist.author ? playlist.author : "Unknown";
+  const playlistAuthorId = hasPlaylist && playlist.authorId ? playlist.authorId : "";
+  const playlistVideoCount = hasPlaylist && typeof playlist.videoCount === "number" ? playlist.videoCount : 0;
+  const playlistViewCountText =
+    hasPlaylist && playlist.viewCountText
+      ? playlist.viewCountText
+      : hasPlaylist && typeof playlist.viewCount === "number"
+        ? `${playlist.viewCount.toLocaleString()} views`
+        : "0 views";
+  const playlistVideos = hasPlaylist && Array.isArray(playlist.videos) ? playlist.videos : [];
+  const firstVideo = playlistVideos.length > 0 ? playlistVideos[0] : null;
+  const firstVideoId = firstVideo && firstVideo.videoId ? firstVideo.videoId : null;
+
+  const heroThumbUrl = getHeroThumbnail(playlist, firstVideo);
+  const authorAvatarUrl = getAuthorAvatar(playlist);
+  const hasDescription = (playlistDescription && playlistDescription.trim().length > 0) || (playlistDescriptionHtml && playlistDescriptionHtml.trim().length > 0);
+  const updatedText =
+    hasPlaylist && playlist.updated
+      ? new Date(playlist.updated * 1000).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+      : "";
 %>
 <!DOCTYPE html>
-<html style="background:#000000">
+<html lang="en" style="background:#0f0f0f">
 <head>
-    <title>Poke | <%- playlistTitle %></title>
-    <link href="/css/yt-ukraine.svg?v=6" rel=icon>
+    <meta charset="UTF-8">
+    <title>Poke | <%= playlistTitle %></title>
+    <link href="/css/yt-ukraine.svg?v=6" rel="icon">
     <link rel="manifest" href="/manifest.json">
-    <meta content=website property=og:type>
-    <meta name="viewport" content="width=device-1200px, initial-scale=1.0, shrink-to-fit=yes, viewport-fit=cover">
-    <meta content="Poke - <%- playlistTitle %>" property=og:title>
-    <meta content="<%- playlistDescription %>" property=twitter:description>
-    <% if (firstVideoId) { %>
-    <meta content="<%- proxyBase %>https://i.ytimg.com/vi/<%- firstVideoId %>/hqdefault.jpg" property="og:image" />
-    <% } else if (playlistThumbnail) { %>
-    <meta content="<%- proxyBase %><%- playlistThumbnail %>" property="og:image" />
+    <meta content="website" property="og:type">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta content="Poke - <%= playlistTitle %>" property="og:title">
+    <meta content="<%= playlistDescription %>" property="twitter:description">
+    <% if (heroThumbUrl) { %>
+    <meta content="<%= heroThumbUrl %>" property="og:image" />
     <% } %>
-    <meta content=summary_large_image name=twitter:card>
-    <link href="/css/app-cdn.min.css?v=2" rel=stylesheet>
-    <link href="/css/app.main.css?v=44600" rel=stylesheet>
-    <link href="/css/watch.main.css?v=56" rel=stylesheet>
-    <link href="https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css" rel=stylesheet>
-<style>
-   a.class:hover {
-    font-weight:bold
-}
-  summary{
-    color:gray;
-}
-summary:hover {
-    color:white;
-}
+    <meta content="summary_large_image" name="twitter:card">
+    <link href="/css/app-cdn.min.css?v=2" rel="stylesheet">
+    <link href="/css/app.main.css?v=44600" rel="stylesheet">
+    <link href="/css/watch.main.css?v=56" rel="stylesheet">
+    <link href="https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css" rel="stylesheet">
 
-</style>
-   <style>
-    body{
+    <style>
+      @font-face {
+        src: url("/static/robotoflex.ttf");
+        font-family: "PokeTube Flex";
+        font-style: normal;
+        font-stretch: 1% 800%;
+        font-display: swap;
+      }
+
+      :root {
+        --pt-bg: #0f0f0f;
+        --pt-surface: #181818;
+        --pt-hover: rgba(255, 255, 255, 0.08);
+        --pt-text-primary: #f1f1f1;
+        --pt-text-secondary: #aaaaaa;
+        --pt-pill-bg: #ffffff;
+        --pt-pill-text: #0f0f0f;
+        --pt-pill-hover: #d9d9d9;
+        --pt-icon-btn-bg: rgba(255, 255, 255, 0.12);
+        --pt-icon-btn-hover: rgba(255, 255, 255, 0.22);
+      }
+
+      html, body {
+        background-color: var(--pt-bg) !important;
+        color: var(--pt-text-primary) !important;
+        margin: 0;
+        padding: 0;
         overflow-x: hidden;
-        color:#111111;
-    }
+        font-family: "Roboto", "Inter", "PokeTube Flex", -apple-system, BlinkMacSystemFont, sans-serif;
+      }
 
-    @font-face {
-   src: url("/static/robotoflex.ttf");
-       font-family: "PokeTube Flex";
-      font-style: normal;
-      font-stretch: 1% 800%;
-      font-display: swap;
-    }
-    
-    :root {
-    --text-primary: #fff;
-    --text-secondary: #fff;
-    --text-link: #3ea6ff;
+      a {
+        text-decoration: none;
+        color: inherit;
+      }
 
-    --app-background: #111111;
-    --context-menu-background: #333;
-    --border-color: #444;
-    --item-hover-background: #373737;
-    --item-active-background: #383838;
+      .pt-playlist-shell {
+        display: flex;
+        align-items: flex-start;
+        gap: 24px;
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 24px 24px 48px;
+        box-sizing: border-box;
+      }
 
-    --top-bar-background: #202020;
-    --guide-background: #212121;
+      .pt-playlist-hero {
+        position: sticky;
+        top: 76px;
+        width: 360px;
+        flex-shrink: 0;
+        min-height: calc(100vh - 104px);
+        max-height: calc(100vh - 104px);
+        border-radius: 16px;
+        overflow: hidden;
+        background: #21242c;
+        display: flex;
+        flex-direction: column;
+        box-sizing: border-box;
+        isolation: isolate;
+      }
 
-    --thumbnail-background: #252525;
+      .pt-playlist-hero::before {
+        content: "";
+        position: absolute;
+        inset: -30px;
+        background-image: var(--hero-bg);
+        background-size: cover;
+        background-position: center top;
+        filter: blur(50px) saturate(1.35) brightness(0.65);
+        z-index: -2;
+        transform: scale(1.15);
+      }
 
-    --channel-info-background: #181818;
-    --channel-contents-background: #0f0f0f;
-}
+      .pt-playlist-hero::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          180deg,
+          rgba(32, 36, 44, 0.35) 0%,
+          rgba(22, 24, 30, 0.72) 45%,
+          rgba(15, 15, 15, 0.96) 100%
+        );
+        z-index: -1;
+      }
 
-.alert {
-  padding: 20px;
-  background-color: #f44336;
-  color: white;
-  opacity: 1;
-  transition: opacity 0.6s;
-  margin-bottom: 15px;
-}
+      .pt-hero-scroll {
+        padding: 24px;
+        overflow-y: auto;
+        scrollbar-width: none;
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+      }
 
-.alert.success {background-color: #04AA6D;}
-.alert.info {background-color: #2196F3;}
-.alert.warning {background-color: #ff9800;}
+      .pt-hero-scroll::-webkit-scrollbar {
+        display: none;
+      }
 
-.closebtn {
-  margin-left: 15px;
-  color: white;
-  font-weight: bold;
-  float: right;
-  font-size: 22px;
-  line-height: 20px;
-  cursor: pointer;
-  transition: 0.3s;
-}
-a{
-border-radius:9.5px
-}
-    
-.video-list > p {
-font-family:Ubuntu
-}
-.closebtn:hover {
-  color: black;
-}
-.thumbnail {
-  position: relative;
-  display: inline-block;
-}
+      .pt-hero-thumb-link {
+        position: relative;
+        display: block;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        border-radius: 12px;
+        overflow: hidden;
+        background-color: #202020;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        margin-bottom: 20px;
+      }
 
-.thumbnail .hover-text {
-    display: none;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: white;
-  font-size: 24px;
-  font-weight: bold;
-  background-color: rgba(0, 0, 0, 0.5);  
-  padding: 5px 10px;
-  border-radius: 5px;
-  z-index: 2;
-}
+      .pt-hero-thumb-link img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+        transition: transform 0.2s ease;
+      }
 
-.thumbnail:hover .hover-text {
-  display: block;
-}
+      .pt-hero-thumb-link:hover img {
+        transform: scale(1.02);
+      }
 
-.thumbnail .video-length {
-  position: absolute;
-  bottom: 10px;
-  right: 10px;
-  z-index: 1;
-}
+      .pt-hero-thumb-overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        color: #fff;
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        opacity: 0;
+        transition: opacity 0.18s ease;
+      }
 
-.thumbnail:hover .video-length {
-  display: none;
-}
-.playlist-video > .info > .title {
-    border-radius:0em;
-    max-height: 1.9em;
-}
+      .pt-hero-thumb-link:hover .pt-hero-thumb-overlay {
+        opacity: 1;
+      }
 
-.playlist-info>.title {
-  font-family: "PokeTube flex";
-  font-stretch: ultra-expanded;
-  font-weight: 600;
-}
+      .pt-hero-title {
+        margin: 0 0 14px 0;
+        font-size: 28px;
+        font-weight: 700;
+        line-height: 1.25;
+        color: #ffffff;
+        word-break: break-word;
+      }
 
-.playlist-info{
-  position: sticky;
-  top:0;
-}
+      .pt-hero-author {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+        width: fit-content;
+      }
 
-<% if (firstVideoId) { %>
-.playlist-info::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 13em;
-  height: 447px;
-  background-size: cover;
-  filter: blur(53px);
-  backdrop-filter: blur(157px);
-  z-index: -1;
-  background-image: url('<%- proxyBase %>https://i.ytimg.com/vi/<%- firstVideoId %>/hqdefault.jpg');
-  margin-left: 82px;
-}
-<% } else if (playlistThumbnail) { %>
-.playlist-info::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 13em;
-  height: 447px;
-  background-size: cover;
-  filter: blur(53px);
-  backdrop-filter: blur(157px);
-  z-index: -1;
-  background-image: url('<%- proxyBase %><%- playlistThumbnail %>');
-  margin-left: 82px;
-}
-<% } %>
+      .pt-hero-author-avatar {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        object-fit: cover;
+        background: rgba(255, 255, 255, 0.15);
+        flex-shrink: 0;
+      }
 
-.playlist-error {
-  margin-left: auto;
-  margin-right: auto;
-  width: 56em;
-  color: white;
-  font-family: Inter, sans-serif;
-  padding-top: 7em;
-}
+      .pt-hero-author-fallback {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.16);
+        color: #fff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 700;
+        flex-shrink: 0;
+      }
 
-.playlist-error-box {
-  background: #181818;
-  border: 1px solid #333;
-  border-radius: 1em;
-  padding: 2em;
-}
+      .pt-hero-author-name {
+        font-size: 14px;
+        font-weight: 500;
+        color: #ffffff;
+      }
 
-.playlist-error-box h1 {
-  margin-top: 0;
-  color: white;
-}
+      .pt-hero-author:hover .pt-hero-author-name {
+        text-decoration: underline;
+      }
 
-.playlist-error-box p {
-  color: #aaa;
-}
-  
-  </style>
- </head>
+      /* Metadata Line */
+      .pt-hero-stats {
+        font-size: 12px;
+        line-height: 1.5;
+        color: rgba(255, 255, 255, 0.72);
+        margin-bottom: 14px;
+      }
+
+      /* Description */
+      .pt-hero-description {
+        font-size: 13px;
+        line-height: 1.5;
+        color: rgba(255, 255, 255, 0.8);
+        margin-bottom: 20px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .pt-hero-description a {
+        color: #ffffff;
+        text-decoration: underline;
+      }
+
+      .pt-hero-description.is-empty {
+        color: rgba(255, 255, 255, 0.45);
+        font-style: italic;
+      }
+
+      /* Action Buttons Row */
+      .pt-hero-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 2px;
+      }
+
+      .pt-btn-play-first {
+        flex: 1;
+        height: 36px;
+        padding: 0 20px;
+        border-radius: 9999px;
+        background: var(--pt-pill-bg);
+        color: var(--pt-pill-text);
+        font-size: 14px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border: none;
+        cursor: pointer;
+        transition: background-color 0.15s ease;
+        white-space: nowrap;
+      }
+
+      .pt-btn-play-first:hover {
+        background: var(--pt-pill-hover);
+        color: var(--pt-pill-text);
+      }
+
+      .pt-btn-circle {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: var(--pt-icon-btn-bg);
+        color: #ffffff;
+        border: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 15px;
+        flex-shrink: 0;
+        transition: background-color 0.15s ease;
+      }
+
+      .pt-btn-circle:hover {
+        background: var(--pt-icon-btn-hover);
+      }
+
+      .pt-playlist-videos {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .pt-video-row {
+        display: flex;
+        align-items: flex-start;
+        padding: 8px 10px;
+        border-radius: 12px;
+        transition: background-color 0.15s ease;
+        position: relative;
+      }
+
+      .pt-video-row:hover {
+        background-color: var(--pt-hover);
+      }
+
+      .pt-video-thumb-wrap {
+        position: relative;
+        width: 168px;
+        aspect-ratio: 16 / 9;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #202020;
+        flex-shrink: 0;
+        display: block;
+      }
+
+      .pt-video-thumb-wrap img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+
+      .pt-video-duration {
+        position: absolute;
+        bottom: 4px;
+        right: 4px;
+        background: rgba(0, 0, 0, 0.82);
+        color: #ffffff;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1;
+        padding: 3px 5px;
+        border-radius: 4px;
+        letter-spacing: 0.2px;
+      }
+
+      .pt-video-meta {
+        flex: 1;
+        min-width: 0;
+        margin-left: 16px;
+        padding-right: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .pt-video-title {
+        font-size: 16px;
+        font-weight: 600;
+        line-height: 1.35;
+        color: var(--pt-text-primary);
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        word-break: break-word;
+      }
+
+      .pt-video-byline {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--pt-text-secondary);
+        line-height: 1.4;
+      }
+
+      .pt-video-author {
+        color: var(--pt-text-secondary);
+        transition: color 0.12s ease;
+      }
+
+      .pt-video-author:hover {
+        color: var(--pt-text-primary);
+      }
+
+      .pt-video-menu-btn {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: transparent;
+        border: none;
+        color: var(--pt-text-primary);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        flex-shrink: 0;
+        opacity: 0.8;
+        transition: background-color 0.15s ease, opacity 0.15s ease;
+      }
+
+      .pt-video-menu-btn:hover {
+        background: rgba(255, 255, 255, 0.12);
+        opacity: 1;
+      }
  
+       .pt-toast {
+        position: fixed;
+        bottom: 24px;
+        left: 24px;
+        background: #f1f1f1;
+        color: #0f0f0f;
+        padding: 10px 18px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(10px);
+        transition: opacity 0.2s ease, transform 0.2s ease;
+        z-index: 9999;
+      }
+
+      .pt-toast.show {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      /* Error State */
+      .playlist-error {
+        margin: 0 auto;
+        max-width: 640px;
+        padding: 96px 24px;
+        color: #fff;
+      }
+
+      .playlist-error-box {
+        background: #181818;
+        border: 1px solid #303030;
+        border-radius: 16px;
+        padding: 28px;
+      }
+
+      .playlist-error-box h1 {
+        margin: 0 0 8px 0;
+        font-size: 22px;
+        color: #fff;
+      }
+
+      .playlist-error-box p {
+        color: #aaa;
+        margin: 0 0 18px 0;
+        font-size: 14px;
+      }
+
+      .playlist-error-box a {
+        display: inline-block;
+        padding: 8px 18px;
+        border-radius: 9999px;
+        background: #fff;
+        color: #0f0f0f;
+        font-weight: 600;
+        font-size: 14px;
+      }
+
+      /* Responsive */
+      @media (max-width: 1024px) {
+        .pt-playlist-shell {
+          flex-direction: column;
+          padding: 16px;
+          gap: 20px;
+        }
+
+        .pt-playlist-hero {
+          position: relative;
+          top: 0;
+          width: 100%;
+          min-height: auto;
+          max-height: none;
+        }
+
+        .pt-playlist-videos {
+          width: 100%;
+        }
+      }
+
+      @media (max-width: 600px) {
+        .pt-video-thumb-wrap {
+          width: 136px;
+        }
+
+        .pt-video-title {
+          font-size: 14px;
+        }
+
+        .pt-hero-title {
+          font-size: 22px;
+        }
+      }
+    </style>
+</head>
 <body>
-    
-     <nav>
-      <div class="left"><a class="class" href="/143" style=font-family:Inter,sans-serif;color:#fff> <img style="transform: scale(1.3);padding-left:0.9em;width: 8.5em;display: block;margin-left: auto;margin-right: auto;" src="/css/logo.svg?v=5">         </a>             </div>                                    
-      <div class="middle">
-      <div class="search">
-        
-        <form action="/search">
-   <input class="search-bar" autocomplete="on" id="fname" name="query" placeholder="" style="color:#fff;font-family:Inter,sans-serif;border-radius: 8px;" data-ddg-inputtype="identities.firstName">
-  
-
-          <button class="btn btn-success" type="submit"><i class="fa-light fa-search"></i></button>
-        
-        </form>
-  
+    <nav>
+      <div class="left">
+        <a class="class" href="/143" style="font-family:Inter,sans-serif;color:#fff">
+          <img style="transform: scale(1.3);padding-left:0.9em;width: 8.5em;display: block;margin-left: auto;margin-right: auto;" src="/css/logo.svg?v=5" alt="Poke">
+        </a>
       </div>
- 
+      <div class="middle">
+        <div class="search">
+          <form action="/search">
+            <input class="search-bar" autocomplete="on" id="fname" name="query" placeholder="" style="color:#fff;font-family:Inter,sans-serif;border-radius: 8px;" data-ddg-inputtype="identities.firstName">
+            <button class="btn btn-success" type="submit"><i class="fa-light fa-search"></i></button>
+          </form>
+        </div>
       </div>
       <div class="right">
-      <a href="/privacy" style="text-decoration: none;" title="Privacy Policy">
+        <a href="/privacy" style="text-decoration: none;" title="Privacy Policy">
           <i style="display: block;margin-left: auto;margin-right: auto;" class="fa-light fa-shield"></i>
         </a>
-       
-        
       </div>
     </nav>
 
 <% if (hasPlaylist) { %>
-<div class="playlist-page" style="margin-left: auto;margin-right: auto;width: 56em;">
-<div class="playlist-info" style="height: fit-content; max-height: calc(100vh - 2em); overflow: hidden; border-radius: 1em;">
-      <% if (!playlistMixId && firstVideoId) { %>  
-		<a href="/watch?v=<%- firstVideoId %>" class="thumbnail" style="background-image: url('<%- proxyBase %>https://i.ytimg.com/vi/<%- firstVideoId %>/hqdefault.jpg');border-radius: 13px;border: 1px solid #ff0064">
-        <span class="hover-text">Watch :3</span>
-		</a>	
+<main class="pt-playlist-shell">
+  <!-- Left Sticky Playlist Info Card -->
+  <aside class="pt-playlist-hero" style="--hero-bg: url('<%= heroThumbUrl %>');">
+    <div class="pt-hero-scroll">
+      <% if (firstVideoId) { %>
+        <a href="/watch?v=<%= encodeURIComponent(firstVideoId) %>" class="pt-hero-thumb-link">
+          <img src="<%= heroThumbUrl %>" alt="<%= playlistTitle %>" loading="eager">
+          <span class="pt-hero-thumb-overlay">
+            <i class="fa-solid fa-play"></i>
+            <span>Play first</span>
+          </span>
+        </a>
+      <% } else if (heroThumbUrl) { %>
+        <div class="pt-hero-thumb-link">
+          <img src="<%= heroThumbUrl %>" alt="<%= playlistTitle %>" loading="eager">
+        </div>
       <% } %>
 
-		<p class="title"><%- playlistTitle %> </p>
-          <% if (!playlistMixId) { %>  
-		<span class="info"><%- playlistVideoCount %> videos • <%- playlistViewCount %> views  • by <%- playlistAuthor %> </span>
-	  <% } %>
+      <h1 class="pt-hero-title"><%= playlistTitle %></h1>
+
+      <% if (playlistAuthorId) { %>
+        <a href="/channel?id=<%= encodeURIComponent(playlistAuthorId) %>" class="pt-hero-author">
+          <% if (authorAvatarUrl) { %>
+            <img class="pt-hero-author-avatar" src="<%= authorAvatarUrl %>" alt="<%= playlistAuthor %>">
+          <% } else { %>
+            <span class="pt-hero-author-fallback"><%= playlistAuthor.charAt(0).toUpperCase() %></span>
+          <% } %>
+          <span class="pt-hero-author-name"><%= playlistAuthor %></span>
+        </a>
+      <% } else { %>
+        <div class="pt-hero-author">
+          <% if (authorAvatarUrl) { %>
+            <img class="pt-hero-author-avatar" src="<%= authorAvatarUrl %>" alt="<%= playlistAuthor %>">
+          <% } else { %>
+            <span class="pt-hero-author-fallback"><%= playlistAuthor.charAt(0).toUpperCase() %></span>
+          <% } %>
+          <span class="pt-hero-author-name"><%= playlistAuthor %></span>
+        </div>
+      <% } %>
+
+      <div class="pt-hero-stats">
+        Playlist • <%= playlistVideoCount.toLocaleString() %> <%= playlistVideoCount === 1 ? "video" : "videos" %> • <%= playlistViewCountText %><% if (updatedText) { %> • Updated <%= updatedText %><% } %>
+      </div>
 
       <% if (hasDescription) { %>
-        <span class="description"><%- playlistDescription %></span>
+        <div class="pt-hero-description"><%- playlistDescriptionHtml ? playlistDescriptionHtml : playlistDescription %></div>
       <% } else { %>
-        <span class="description" style="color: #aaa; font-style: italic; font-size: 0.9em; margin-top: 0.5em; display: block;">No description provided for this playlist.</span>
+        <div class="pt-hero-description is-empty">No description provided for this playlist.</div>
       <% } %>
-      
-		<div class="channel-info">
-		 
-		</div>
-	</div>
-	<div class="video-list playlist-video-list">
-		     <% playlistVideos.forEach(video => { %>
-  
-    <div class="playlist-video">
-      <a href="/watch?v=<%- video.videoId || '' %>" class="index">
-           <%- typeof video.index === "number" ? video.index + 1 : "" %>
-       </a>
- 				<a href="/watch?v=<%- video.videoId || '' %>" class="thumbnail"
-				   style="background-image: url('<%- proxyBase %>https://i.ytimg.com/vi/<%- video.videoId || '' %>/hqdefault.jpg?sqp=-oaymwEjCNACELwBSFryq4qpAxUIARUAAAAAGAElAADIQj0AgKJDeAE=&amp;rs=AOn4CLBibY6d4Dg0K69NC-0b7NFsD7AH1w');">
- 				</a>
-				<div class="info">
-					<a href="/watch?v=<%- video.videoId || '' %>" class="title max-lines-2">
-        <%- video.title || "Untitled video" %>
+
+      <div class="pt-hero-actions">
+        <% if (firstVideoId) { %>
+          <a href="/watch?v=<%= encodeURIComponent(firstVideoId) %>" class="pt-btn-play-first">
+            <i class="fa-solid fa-play"></i>
+            <span>Play first</span>
           </a>
-					<div>
-						<a href="/channel?id=<%- video.authorId || '' %>" style="border-radius:0em"><%- video.author || "Unknown" %></a><br>
-            <a href="/download?v=<%- video.videoId || '' %>" style="border-radius:0em"> Download </a>
- 					</div>
-				</div>
-			</div>
+        <% } %>
 
-             <% }) %>
- 	
- 
-</div>
- 
+        <% if (playlistVideos.length > 1) { %>
+          <button type="button" class="pt-btn-circle" id="shufflePlaylistBtn" title="Shuffle">
+            <i class="fa-solid fa-shuffle"></i>
+          </button>
+        <% } %>
 
-</div>
-</div>
+        <button type="button" class="pt-btn-circle" id="sharePlaylistBtn" title="Copy playlist link">
+          <i class="fa-solid fa-share"></i>
+        </button>
+      </div>
+    </div>
+  </aside>
+ 
+   <section class="pt-playlist-videos" aria-label="Playlist videos">
+    <% playlistVideos.forEach((video, idx) => { 
+      const vidId = video && video.videoId ? video.videoId : "";
+      const vidTitle = video && video.title ? video.title : "Untitled video";
+      const vidAuthor = video && video.author ? video.author : "Unknown";
+      const vidAuthorId = video && video.authorId ? video.authorId : "";
+      const vidThumb = getVideoThumbnail(video);
+      const vidDuration = formatDuration(video && video.lengthSeconds);
+      const vidWatchUrl = `/watch?v=${encodeURIComponent(vidId)}`;
+    %>
+      <div class="pt-video-row">
+        <a href="<%= vidWatchUrl %>" class="pt-video-thumb-wrap">
+          <img src="<%= vidThumb %>" alt="<%= vidTitle %>" loading="lazy">
+          <% if (vidDuration) { %>
+            <span class="pt-video-duration"><%= vidDuration %></span>
+          <% } %>
+        </a>
+
+        <div class="pt-video-meta">
+          <a href="<%= vidWatchUrl %>" class="pt-video-title"><%= vidTitle %></a>
+          <div class="pt-video-byline">
+            <% if (vidAuthorId) { %>
+              <a href="/channel?id=<%= encodeURIComponent(vidAuthorId) %>" class="pt-video-author"><%= vidAuthor %></a>
+            <% } else { %>
+              <span class="pt-video-author"><%= vidAuthor %></span>
+            <% } %>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          class="pt-video-menu-btn"
+          title="Copy video link"
+          data-copy-video="<%= vidWatchUrl %>"
+          aria-label="Copy link to <%= vidTitle %>"
+        >
+          <i class="fa-solid fa-ellipsis-vertical"></i>
+        </button>
+      </div>
+    <% }) %>
+  </section>
+</main>
+
+<div id="ytToast" class="pt-toast" role="status" aria-live="polite"></div>
+
+<script>
+  (function () {
+    const toastEl = document.getElementById("ytToast");
+    let toastTimer = null;
+
+    function showToast(msg) {
+      if (!toastEl) return;
+      toastEl.textContent = msg;
+      toastEl.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toastEl.classList.remove("show"), 2200);
+    }
+
+    function copyText(text, successMsg) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => showToast(successMsg)).catch(() => showToast("Could not copy link"));
+      } else {
+        const temp = document.createElement("input");
+        temp.value = text;
+        document.body.appendChild(temp);
+        temp.select();
+        document.execCommand("copy");
+        document.body.removeChild(temp);
+        showToast(successMsg);
+      }
+    }
+
+    const shareBtn = document.getElementById("sharePlaylistBtn");
+    if (shareBtn) {
+      shareBtn.addEventListener("click", () => {
+        copyText(window.location.href, "Playlist link copied to clipboard");
+      });
+    }
+
+    const shuffleBtn = document.getElementById("shufflePlaylistBtn");
+    if (shuffleBtn) {
+      const videoIds = <%- JSON.stringify(playlistVideos.map((v) => v && v.videoId).filter(Boolean)) %>;
+      shuffleBtn.addEventListener("click", () => {
+        if (!videoIds.length) return;
+        const randomId = videoIds[Math.floor(Math.random() * videoIds.length)];
+        window.location.href = "/watch?v=" + encodeURIComponent(randomId);
+      });
+    }
+
+    document.querySelectorAll("[data-copy-video]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const rel = btn.getAttribute("data-copy-video");
+        if (!rel) return;
+        copyText(window.location.origin + rel, "Video link copied to clipboard");
+      });
+    });
+  })();
+</script>
 <% } else { %>
 <div class="playlist-error">
   <div class="playlist-error-box">
     <h1>Playlist unavailable</h1>
     <p>This playlist could not be loaded because its data was missing or invalid.</p>
-    <a href="/" style="color:#3ea6ff;text-decoration:none;">Go home</a>
+    <a href="/">Go home</a>
   </div>
 </div>
 <% } %>
-      
-<script src="/css/custom-css.js"> </script>
- 
+
+<script src="/css/custom-css.js"></script>
 </body>
 </html>
