@@ -24,11 +24,21 @@
   const safeMediaProxy = typeof mediaproxy !== "undefined" && mediaproxy ? mediaproxy : "";
   const proxyBase = safeMediaProxy ? `${safeMediaProxy}/proxy?url=` : "/proxy?url=";
 
-  function proxyUrl(url) {
+  function proxyImgUrl(videoId) {
+    if (!videoId || typeof videoId !== "string") return "";
+    return `${proxyBase}https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`;
+  }
+
+  function proxyOnlyAllowedHost(url) {
     if (!url || typeof url !== "string") return "";
-    if (url.startsWith("//")) return `${proxyBase}https:${url}`;
-    if (url.startsWith("http://") || url.startsWith("https://")) return `${proxyBase}${url}`;
-    return url;
+    try {
+      const normalized = url.startsWith("//") ? `https:${url}` : url;
+      const parsed = new URL(normalized);
+      if (parsed.hostname === "i.ytimg.com") {
+        return `${proxyBase}${parsed.toString()}`;
+      }
+    } catch (_) {}
+    return "";
   }
 
   function formatDuration(seconds) {
@@ -41,46 +51,6 @@
     return hrs > 0 ? `${hrs}:${pad(mins)}:${pad(secs)}` : `${mins}:${pad(secs)}`;
   }
 
-  function getVideoThumbnail(video) {
-    if (video && Array.isArray(video.videoThumbnails) && video.videoThumbnails.length > 0) {
-      const preferred =
-        video.videoThumbnails.find((t) => t && (t.quality === "medium" || t.quality === "high" || t.quality === "hqdefault")) ||
-        video.videoThumbnails[0];
-      if (preferred && preferred.url) return proxyUrl(preferred.url);
-    }
-    if (video && video.videoId) {
-      return `${proxyBase}https://i.ytimg.com/vi/${video.videoId}/hqdefault.jpg`;
-    }
-    return "";
-  }
-
-  function getHeroThumbnail(pl, firstVid) {
-    if (firstVid && Array.isArray(firstVid.videoThumbnails) && firstVid.videoThumbnails.length > 0) {
-      const preferred =
-        firstVid.videoThumbnails.find((t) => t && (t.quality === "maxresdefault" || t.quality === "sddefault" || t.quality === "high" || t.quality === "hqdefault")) ||
-        firstVid.videoThumbnails[0];
-      if (preferred && preferred.url) return proxyUrl(preferred.url);
-    }
-    if (firstVid && firstVid.videoId) {
-      return `${proxyBase}https://i.ytimg.com/vi/${firstVid.videoId}/hqdefault.jpg`;
-    }
-    if (pl && pl.playlistThumbnail) {
-      return proxyUrl(pl.playlistThumbnail);
-    }
-    return "";
-  }
-
-  function getAuthorAvatar(pl) {
-    if (pl && Array.isArray(pl.authorThumbnails) && pl.authorThumbnails.length > 0) {
-      const preferred =
-        pl.authorThumbnails.find((t) => t && Number(t.width) >= 48 && Number(t.width) <= 176) ||
-        pl.authorThumbnails[pl.authorThumbnails.length - 1];
-      if (preferred && preferred.url) return proxyUrl(preferred.url);
-    }
-    return "";
-  }
-
-  const playlistId = hasPlaylist && playlist.playlistId ? playlist.playlistId : "";
   const playlistTitle = hasPlaylist && playlist.title ? playlist.title : "Playlist unavailable";
   const playlistDescription = hasPlaylist && playlist.description ? playlist.description : "";
   const playlistDescriptionHtml = hasPlaylist && playlist.descriptionHtml ? playlist.descriptionHtml : "";
@@ -96,13 +66,29 @@
   const playlistVideos = hasPlaylist && Array.isArray(playlist.videos) ? playlist.videos : [];
   const firstVideo = playlistVideos.length > 0 ? playlistVideos[0] : null;
   const firstVideoId = firstVideo && firstVideo.videoId ? firstVideo.videoId : null;
+  const validVideoIds = playlistVideos.map((v) => v && v.videoId).filter(Boolean);
+  const randomVideoId =
+    validVideoIds.length > 0
+      ? validVideoIds[Math.floor(Math.random() * validVideoIds.length)]
+      : null;
 
-  const heroThumbUrl = getHeroThumbnail(playlist, firstVideo);
-  const authorAvatarUrl = getAuthorAvatar(playlist);
-  const hasDescription = (playlistDescription && playlistDescription.trim().length > 0) || (playlistDescriptionHtml && playlistDescriptionHtml.trim().length > 0);
+  const heroThumbUrl = firstVideoId
+    ? proxyImgUrl(firstVideoId)
+    : hasPlaylist && playlist.playlistThumbnail
+      ? proxyOnlyAllowedHost(playlist.playlistThumbnail)
+      : "";
+
+  const hasDescription =
+    (playlistDescription && playlistDescription.trim().length > 0) ||
+    (playlistDescriptionHtml && playlistDescriptionHtml.trim().length > 0);
+
   const updatedText =
     hasPlaylist && playlist.updated
-      ? new Date(playlist.updated * 1000).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+      ? new Date(playlist.updated * 1000).toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        })
       : "";
 %>
 <!DOCTYPE html>
@@ -135,25 +121,25 @@
       }
 
       :root {
-        --pt-bg: #0f0f0f;
-        --pt-surface: #181818;
-        --pt-hover: rgba(255, 255, 255, 0.08);
-        --pt-text-primary: #f1f1f1;
-        --pt-text-secondary: #aaaaaa;
-        --pt-pill-bg: #ffffff;
-        --pt-pill-text: #0f0f0f;
-        --pt-pill-hover: #d9d9d9;
-        --pt-icon-btn-bg: rgba(255, 255, 255, 0.12);
-        --pt-icon-btn-hover: rgba(255, 255, 255, 0.22);
+        --poke-bg: #0f0f0f;
+        --poke-surface: #181818;
+        --poke-hover: rgba(255, 255, 255, 0.08);
+        --poke-text-primary: #f1f1f1;
+        --poke-text-secondary: #aaaaaa;
+        --poke-pill-bg: #ffffff;
+        --poke-pill-text: #0f0f0f;
+        --poke-pill-hover: #d9d9d9;
+        --poke-icon-btn-bg: rgba(255, 255, 255, 0.14);
+        --poke-icon-btn-hover: rgba(255, 255, 255, 0.24);
       }
 
       html, body {
-        background-color: var(--pt-bg) !important;
-        color: var(--pt-text-primary) !important;
+        background-color: var(--poke-bg) !important;
+        color: var(--poke-text-primary) !important;
         margin: 0;
         padding: 0;
         overflow-x: hidden;
-        font-family: "Roboto", "Inter", "PokeTube Flex", -apple-system, BlinkMacSystemFont, sans-serif;
+        font-family: "Inter", "PokeTube Flex", -apple-system, BlinkMacSystemFont, sans-serif;
       }
 
       a {
@@ -161,7 +147,7 @@
         color: inherit;
       }
 
-      .pt-playlist-shell {
+      .poke-playlist-shell {
         display: flex;
         align-items: flex-start;
         gap: 24px;
@@ -171,7 +157,7 @@
         box-sizing: border-box;
       }
 
-      .pt-playlist-hero {
+      .poke-playlist-hero {
         position: sticky;
         top: 76px;
         width: 360px;
@@ -180,39 +166,39 @@
         max-height: calc(100vh - 104px);
         border-radius: 16px;
         overflow: hidden;
-        background: #21242c;
+        background: #141414;
         display: flex;
         flex-direction: column;
         box-sizing: border-box;
         isolation: isolate;
       }
 
-      .pt-playlist-hero::before {
+      .poke-playlist-hero::before {
         content: "";
         position: absolute;
-        inset: -30px;
+        inset: -40px;
         background-image: var(--hero-bg);
         background-size: cover;
         background-position: center top;
-        filter: blur(50px) saturate(1.35) brightness(0.65);
+        filter: blur(64px) saturate(2) brightness(0.85);
         z-index: -2;
-        transform: scale(1.15);
+        transform: scale(1.25);
       }
 
-      .pt-playlist-hero::after {
+      .poke-playlist-hero::after {
         content: "";
         position: absolute;
         inset: 0;
         background: linear-gradient(
           180deg,
-          rgba(32, 36, 44, 0.35) 0%,
-          rgba(22, 24, 30, 0.72) 45%,
-          rgba(15, 15, 15, 0.96) 100%
+          rgba(15, 15, 15, 0.12) 0%,
+          rgba(15, 15, 15, 0.48) 50%,
+          rgba(15, 15, 15, 0.94) 100%
         );
         z-index: -1;
       }
 
-      .pt-hero-scroll {
+      .poke-hero-scroll {
         padding: 24px;
         overflow-y: auto;
         scrollbar-width: none;
@@ -221,11 +207,11 @@
         flex: 1;
       }
 
-      .pt-hero-scroll::-webkit-scrollbar {
+      .poke-hero-scroll::-webkit-scrollbar {
         display: none;
       }
 
-      .pt-hero-thumb-link {
+      .poke-hero-thumb-link {
         position: relative;
         display: block;
         width: 100%;
@@ -233,11 +219,11 @@
         border-radius: 12px;
         overflow: hidden;
         background-color: #202020;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
         margin-bottom: 20px;
       }
 
-      .pt-hero-thumb-link img {
+      .poke-hero-thumb-link img {
         width: 100%;
         height: 100%;
         object-fit: cover;
@@ -245,11 +231,11 @@
         transition: transform 0.2s ease;
       }
 
-      .pt-hero-thumb-link:hover img {
+      .poke-hero-thumb-link:hover img {
         transform: scale(1.02);
       }
 
-      .pt-hero-thumb-overlay {
+      .poke-hero-thumb-overlay {
         position: absolute;
         inset: 0;
         background: rgba(0, 0, 0, 0.55);
@@ -258,18 +244,20 @@
         justify-content: center;
         gap: 8px;
         color: #fff;
-        font-size: 14px;
-        font-weight: 600;
+        font-size: 16px;
+        font-weight: 700;
         letter-spacing: 0.3px;
         opacity: 0;
         transition: opacity 0.18s ease;
       }
 
-      .pt-hero-thumb-link:hover .pt-hero-thumb-overlay {
+      .poke-hero-thumb-link:hover .poke-hero-thumb-overlay,
+      .poke-hero-thumb-link:active .poke-hero-thumb-overlay,
+      .poke-hero-thumb-link:focus-visible .poke-hero-thumb-overlay {
         opacity: 1;
       }
 
-      .pt-hero-title {
+      .poke-hero-title {
         margin: 0 0 14px 0;
         font-size: 28px;
         font-weight: 700;
@@ -278,7 +266,7 @@
         word-break: break-word;
       }
 
-      .pt-hero-author {
+      .poke-hero-author {
         display: flex;
         align-items: center;
         gap: 10px;
@@ -286,20 +274,11 @@
         width: fit-content;
       }
 
-      .pt-hero-author-avatar {
+      .poke-hero-author-fallback {
         width: 24px;
         height: 24px;
         border-radius: 50%;
-        object-fit: cover;
-        background: rgba(255, 255, 255, 0.15);
-        flex-shrink: 0;
-      }
-
-      .pt-hero-author-fallback {
-        width: 24px;
-        height: 24px;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.16);
+        background: rgba(255, 255, 255, 0.18);
         color: #fff;
         display: inline-flex;
         align-items: center;
@@ -309,59 +288,56 @@
         flex-shrink: 0;
       }
 
-      .pt-hero-author-name {
+      .poke-hero-author-name {
         font-size: 14px;
         font-weight: 500;
         color: #ffffff;
       }
 
-      .pt-hero-author:hover .pt-hero-author-name {
+      .poke-hero-author:hover .poke-hero-author-name {
         text-decoration: underline;
       }
 
-      /* Metadata Line */
-      .pt-hero-stats {
+      .poke-hero-stats {
         font-size: 12px;
         line-height: 1.5;
-        color: rgba(255, 255, 255, 0.72);
+        color: rgba(255, 255, 255, 0.78);
         margin-bottom: 14px;
       }
 
-      /* Description */
-      .pt-hero-description {
+      .poke-hero-description {
         font-size: 13px;
         line-height: 1.5;
-        color: rgba(255, 255, 255, 0.8);
+        color: rgba(255, 255, 255, 0.85);
         margin-bottom: 20px;
         white-space: pre-wrap;
         word-break: break-word;
       }
 
-      .pt-hero-description a {
+      .poke-hero-description a {
         color: #ffffff;
         text-decoration: underline;
       }
 
-      .pt-hero-description.is-empty {
-        color: rgba(255, 255, 255, 0.45);
+      .poke-hero-description.is-empty {
+        color: rgba(255, 255, 255, 0.5);
         font-style: italic;
       }
 
-      /* Action Buttons Row */
-      .pt-hero-actions {
+      .poke-hero-actions {
         display: flex;
         align-items: center;
         gap: 8px;
         margin-top: 2px;
       }
 
-      .pt-btn-play-first {
+      .poke-btn-play-first {
         flex: 1;
         height: 36px;
         padding: 0 20px;
         border-radius: 9999px;
-        background: var(--pt-pill-bg);
-        color: var(--pt-pill-text);
+        background: var(--poke-pill-bg);
+        color: var(--poke-pill-text);
         font-size: 14px;
         font-weight: 600;
         display: inline-flex;
@@ -374,16 +350,16 @@
         white-space: nowrap;
       }
 
-      .pt-btn-play-first:hover {
-        background: var(--pt-pill-hover);
-        color: var(--pt-pill-text);
+      .poke-btn-play-first:hover {
+        background: var(--poke-pill-hover);
+        color: var(--poke-pill-text);
       }
 
-      .pt-btn-circle {
+      .poke-btn-circle {
         width: 36px;
         height: 36px;
         border-radius: 50%;
-        background: var(--pt-icon-btn-bg);
+        background: var(--poke-icon-btn-bg);
         color: #ffffff;
         border: none;
         display: inline-flex;
@@ -395,11 +371,11 @@
         transition: background-color 0.15s ease;
       }
 
-      .pt-btn-circle:hover {
-        background: var(--pt-icon-btn-hover);
+      .poke-btn-circle:hover {
+        background: var(--poke-icon-btn-hover);
       }
 
-      .pt-playlist-videos {
+      .poke-playlist-videos {
         flex: 1;
         min-width: 0;
         display: flex;
@@ -407,7 +383,7 @@
         gap: 2px;
       }
 
-      .pt-video-row {
+      .poke-video-row {
         display: flex;
         align-items: flex-start;
         padding: 8px 10px;
@@ -416,11 +392,11 @@
         position: relative;
       }
 
-      .pt-video-row:hover {
-        background-color: var(--pt-hover);
+      .poke-video-row:hover {
+        background-color: var(--poke-hover);
       }
 
-      .pt-video-thumb-wrap {
+      .poke-video-thumb-wrap {
         position: relative;
         width: 168px;
         aspect-ratio: 16 / 9;
@@ -431,14 +407,14 @@
         display: block;
       }
 
-      .pt-video-thumb-wrap img {
+      .poke-video-thumb-wrap img {
         width: 100%;
         height: 100%;
         object-fit: cover;
         display: block;
       }
 
-      .pt-video-duration {
+      .poke-video-duration {
         position: absolute;
         bottom: 4px;
         right: 4px;
@@ -452,7 +428,7 @@
         letter-spacing: 0.2px;
       }
 
-      .pt-video-meta {
+      .poke-video-meta {
         flex: 1;
         min-width: 0;
         margin-left: 16px;
@@ -462,11 +438,11 @@
         gap: 4px;
       }
 
-      .pt-video-title {
+      .poke-video-title {
         font-size: 16px;
         font-weight: 600;
         line-height: 1.35;
-        color: var(--pt-text-primary);
+        color: var(--poke-text-primary);
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
@@ -474,32 +450,32 @@
         word-break: break-word;
       }
 
-      .pt-video-byline {
+      .poke-video-byline {
         display: flex;
         align-items: center;
         flex-wrap: wrap;
         gap: 6px;
         font-size: 12px;
-        color: var(--pt-text-secondary);
+        color: var(--poke-text-secondary);
         line-height: 1.4;
       }
 
-      .pt-video-author {
-        color: var(--pt-text-secondary);
+      .poke-video-author {
+        color: var(--poke-text-secondary);
         transition: color 0.12s ease;
       }
 
-      .pt-video-author:hover {
-        color: var(--pt-text-primary);
+      .poke-video-author:hover {
+        color: var(--poke-text-primary);
       }
 
-      .pt-video-menu-btn {
+      .poke-video-share-btn {
         width: 36px;
         height: 36px;
         border-radius: 50%;
         background: transparent;
         border: none;
-        color: var(--pt-text-primary);
+        color: var(--poke-text-primary);
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -509,12 +485,12 @@
         transition: background-color 0.15s ease, opacity 0.15s ease;
       }
 
-      .pt-video-menu-btn:hover {
+      .poke-video-share-btn:hover {
         background: rgba(255, 255, 255, 0.12);
         opacity: 1;
       }
- 
-       .pt-toast {
+
+      .poke-toast {
         position: fixed;
         bottom: 24px;
         left: 24px;
@@ -532,24 +508,24 @@
         z-index: 9999;
       }
 
-      .pt-toast.show {
+      .poke-toast.show {
         opacity: 1;
         transform: translateY(0);
       }
 
-      /* Error State */
       .playlist-error {
         margin: 0 auto;
         max-width: 640px;
         padding: 96px 24px;
         color: #fff;
+        background: #000000;
       }
 
       .playlist-error-box {
-        background: #181818;
-        border: 1px solid #303030;
-        border-radius: 16px;
-        padding: 28px;
+        background: transparent;
+        border: none;
+        border-radius: 0;
+        padding: 0;
       }
 
       .playlist-error-box h1 {
@@ -574,15 +550,14 @@
         font-size: 14px;
       }
 
-      /* Responsive */
       @media (max-width: 1024px) {
-        .pt-playlist-shell {
+        .poke-playlist-shell {
           flex-direction: column;
           padding: 16px;
           gap: 20px;
         }
 
-        .pt-playlist-hero {
+        .poke-playlist-hero {
           position: relative;
           top: 0;
           width: 100%;
@@ -590,21 +565,21 @@
           max-height: none;
         }
 
-        .pt-playlist-videos {
+        .poke-playlist-videos {
           width: 100%;
         }
       }
 
       @media (max-width: 600px) {
-        .pt-video-thumb-wrap {
+        .poke-video-thumb-wrap {
           width: 136px;
         }
 
-        .pt-video-title {
+        .poke-video-title {
           font-size: 14px;
         }
 
-        .pt-hero-title {
+        .poke-hero-title {
           font-size: 22px;
         }
       }
@@ -633,125 +608,115 @@
     </nav>
 
 <% if (hasPlaylist) { %>
-<main class="pt-playlist-shell">
-  <!-- Left Sticky Playlist Info Card -->
-  <aside class="pt-playlist-hero" style="--hero-bg: url('<%= heroThumbUrl %>');">
-    <div class="pt-hero-scroll">
+<main class="poke-playlist-shell">
+  <aside class="poke-playlist-hero" style="--hero-bg: url('<%= heroThumbUrl %>');">
+    <div class="poke-hero-scroll">
       <% if (firstVideoId) { %>
-        <a href="/watch?v=<%= encodeURIComponent(firstVideoId) %>" class="pt-hero-thumb-link">
+        <a href="/watch?v=<%= encodeURIComponent(firstVideoId) %>" class="poke-hero-thumb-link">
           <img src="<%= heroThumbUrl %>" alt="<%= playlistTitle %>" loading="eager">
-          <span class="pt-hero-thumb-overlay">
-            <i class="fa-solid fa-play"></i>
-            <span>Play first</span>
+          <span class="poke-hero-thumb-overlay">
+            <span>Watch :3</span>
           </span>
         </a>
       <% } else if (heroThumbUrl) { %>
-        <div class="pt-hero-thumb-link">
+        <div class="poke-hero-thumb-link">
           <img src="<%= heroThumbUrl %>" alt="<%= playlistTitle %>" loading="eager">
         </div>
       <% } %>
 
-      <h1 class="pt-hero-title"><%= playlistTitle %></h1>
+      <h1 class="poke-hero-title"><%= playlistTitle %></h1>
 
       <% if (playlistAuthorId) { %>
-        <a href="/channel?id=<%= encodeURIComponent(playlistAuthorId) %>" class="pt-hero-author">
-          <% if (authorAvatarUrl) { %>
-            <img class="pt-hero-author-avatar" src="<%= authorAvatarUrl %>" alt="<%= playlistAuthor %>">
-          <% } else { %>
-            <span class="pt-hero-author-fallback"><%= playlistAuthor.charAt(0).toUpperCase() %></span>
-          <% } %>
-          <span class="pt-hero-author-name"><%= playlistAuthor %></span>
+        <a href="/channel?id=<%= encodeURIComponent(playlistAuthorId) %>" class="poke-hero-author">
+          <span class="poke-hero-author-fallback"><%= playlistAuthor.charAt(0).toUpperCase() %></span>
+          <span class="poke-hero-author-name"><%= playlistAuthor %></span>
         </a>
       <% } else { %>
-        <div class="pt-hero-author">
-          <% if (authorAvatarUrl) { %>
-            <img class="pt-hero-author-avatar" src="<%= authorAvatarUrl %>" alt="<%= playlistAuthor %>">
-          <% } else { %>
-            <span class="pt-hero-author-fallback"><%= playlistAuthor.charAt(0).toUpperCase() %></span>
-          <% } %>
-          <span class="pt-hero-author-name"><%= playlistAuthor %></span>
+        <div class="poke-hero-author">
+          <span class="poke-hero-author-fallback"><%= playlistAuthor.charAt(0).toUpperCase() %></span>
+          <span class="poke-hero-author-name"><%= playlistAuthor %></span>
         </div>
       <% } %>
 
-      <div class="pt-hero-stats">
+      <div class="poke-hero-stats">
         Playlist • <%= playlistVideoCount.toLocaleString() %> <%= playlistVideoCount === 1 ? "video" : "videos" %> • <%= playlistViewCountText %><% if (updatedText) { %> • Updated <%= updatedText %><% } %>
       </div>
 
       <% if (hasDescription) { %>
-        <div class="pt-hero-description"><%- playlistDescriptionHtml ? playlistDescriptionHtml : playlistDescription %></div>
+        <div class="poke-hero-description"><%- playlistDescriptionHtml ? playlistDescriptionHtml : playlistDescription %></div>
       <% } else { %>
-        <div class="pt-hero-description is-empty">No description provided for this playlist.</div>
+        <div class="poke-hero-description is-empty">No description provided for this playlist.</div>
       <% } %>
 
-      <div class="pt-hero-actions">
+      <div class="poke-hero-actions">
         <% if (firstVideoId) { %>
-          <a href="/watch?v=<%= encodeURIComponent(firstVideoId) %>" class="pt-btn-play-first">
+          <a href="/watch?v=<%= encodeURIComponent(firstVideoId) %>" class="poke-btn-play-first">
             <i class="fa-solid fa-play"></i>
             <span>Play first</span>
           </a>
         <% } %>
 
-        <% if (playlistVideos.length > 1) { %>
-          <button type="button" class="pt-btn-circle" id="shufflePlaylistBtn" title="Shuffle">
+        <% if (validVideoIds.length > 1 && randomVideoId) { %>
+          <a href="/watch?v=<%= encodeURIComponent(randomVideoId) %>" class="poke-btn-circle" title="Shuffle">
             <i class="fa-solid fa-shuffle"></i>
-          </button>
+          </a>
         <% } %>
 
-        <button type="button" class="pt-btn-circle" id="sharePlaylistBtn" title="Copy playlist link">
+        <button type="button" class="poke-btn-circle" id="sharePlaylistBtn" title="Copy playlist link">
           <i class="fa-solid fa-share"></i>
         </button>
       </div>
     </div>
   </aside>
- 
-   <section class="pt-playlist-videos" aria-label="Playlist videos">
-    <% playlistVideos.forEach((video, idx) => { 
+
+  <section class="poke-playlist-videos" aria-label="Playlist videos">
+    <% playlistVideos.forEach((video) => { 
       const vidId = video && video.videoId ? video.videoId : "";
       const vidTitle = video && video.title ? video.title : "Untitled video";
       const vidAuthor = video && video.author ? video.author : "Unknown";
       const vidAuthorId = video && video.authorId ? video.authorId : "";
-      const vidThumb = getVideoThumbnail(video);
+      const vidThumb = proxyImgUrl(vidId);
       const vidDuration = formatDuration(video && video.lengthSeconds);
       const vidWatchUrl = `/watch?v=${encodeURIComponent(vidId)}`;
     %>
-      <div class="pt-video-row">
-        <a href="<%= vidWatchUrl %>" class="pt-video-thumb-wrap">
+      <div class="poke-video-row">
+        <a href="<%= vidWatchUrl %>" class="poke-video-thumb-wrap">
           <img src="<%= vidThumb %>" alt="<%= vidTitle %>" loading="lazy">
           <% if (vidDuration) { %>
-            <span class="pt-video-duration"><%= vidDuration %></span>
+            <span class="poke-video-duration"><%= vidDuration %></span>
           <% } %>
         </a>
 
-        <div class="pt-video-meta">
-          <a href="<%= vidWatchUrl %>" class="pt-video-title"><%= vidTitle %></a>
-          <div class="pt-video-byline">
+        <div class="poke-video-meta">
+          <a href="<%= vidWatchUrl %>" class="poke-video-title"><%= vidTitle %></a>
+          <div class="poke-video-byline">
             <% if (vidAuthorId) { %>
-              <a href="/channel?id=<%= encodeURIComponent(vidAuthorId) %>" class="pt-video-author"><%= vidAuthor %></a>
+              <a href="/channel?id=<%= encodeURIComponent(vidAuthorId) %>" class="poke-video-author"><%= vidAuthor %></a>
             <% } else { %>
-              <span class="pt-video-author"><%= vidAuthor %></span>
+              <span class="poke-video-author"><%= vidAuthor %></span>
             <% } %>
           </div>
         </div>
 
         <button
           type="button"
-          class="pt-video-menu-btn"
-          title="Copy video link"
+          class="poke-video-share-btn"
+          title="Share video link"
           data-copy-video="<%= vidWatchUrl %>"
-          aria-label="Copy link to <%= vidTitle %>"
+          aria-label="Share link to <%= vidTitle %>"
         >
-          <i class="fa-solid fa-ellipsis-vertical"></i>
+          <i class="fa-solid fa-share"></i>
         </button>
       </div>
     <% }) %>
   </section>
 </main>
 
-<div id="ytToast" class="pt-toast" role="status" aria-live="polite"></div>
+<div id="pokeToast" class="poke-toast" role="status" aria-live="polite"></div>
 
 <script>
   (function () {
-    const toastEl = document.getElementById("ytToast");
+    const toastEl = document.getElementById("pokeToast");
     let toastTimer = null;
 
     function showToast(msg) {
@@ -780,16 +745,6 @@
     if (shareBtn) {
       shareBtn.addEventListener("click", () => {
         copyText(window.location.href, "Playlist link copied to clipboard");
-      });
-    }
-
-    const shuffleBtn = document.getElementById("shufflePlaylistBtn");
-    if (shuffleBtn) {
-      const videoIds = <%- JSON.stringify(playlistVideos.map((v) => v && v.videoId).filter(Boolean)) %>;
-      shuffleBtn.addEventListener("click", () => {
-        if (!videoIds.length) return;
-        const randomId = videoIds[Math.floor(Math.random() * videoIds.length)];
-        window.location.href = "/watch?v=" + encodeURIComponent(randomId);
       });
     }
 
