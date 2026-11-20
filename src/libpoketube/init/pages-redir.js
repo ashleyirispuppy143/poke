@@ -66,11 +66,14 @@ module.exports = function (app, config, renderTemplate) {
     res.redirect("/customize");
   });
 
-  app.get("/results", (req, res) => {
-    if (!req.query.search_query) {
-      return res.redirect("/");
-    }
+app.get("/results", (req, res) => {
+  const query = req.query.search_query || req.query.q || req.query.query || req.query.s;
 
-    return res.redirect("/search?query=" + req.query.search_query);
-  });
+  if (!query) {
+    return res.redirect("/");
+  }
+
+  return res.redirect("/search?query=" + encodeURIComponent(query));
+});
+  
 };
