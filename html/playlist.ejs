@@ -20,7 +20,6 @@
 <%
   const playlist = typeof p !== "undefined" && p !== null && typeof p === "object" ? p : null;
   const hasPlaylist = playlist !== null;
-  const isMobile = typeof isMobile !== "undefined" && Boolean(isMobile);
 
   const safeMediaProxy = typeof mediaproxy !== "undefined" && mediaproxy ? mediaproxy : "";
   const proxyBase = safeMediaProxy ? `${safeMediaProxy}/proxy?url=` : "/proxy?url=";
