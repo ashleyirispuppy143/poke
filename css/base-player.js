@@ -104,28 +104,28 @@ window.SyncLevel = SyncLevel;
   }
 
   var config = {
-    minPlayBuffer: 0.25,
-    minResumeBuffer: 0.55,
+    minPlayBuffer: 0.5,
+    minResumeBuffer: 0.85,
     longVideoThresholdSec: 600,
     ultraLongVideoThresholdSec: 1800,
-    longMinPlayBuffer: 0.65,
-    longMinResumeBuffer: 1.35,
-    ultraLongMinPlayBuffer: 0.95,
-    ultraLongMinResumeBuffer: 1.85,
-    highResMinPlayBuffer: 0.75,
-    highResMinResumeBuffer: 1.5,
+    longMinPlayBuffer: 0.85,
+    longMinResumeBuffer: 1.5,
+    ultraLongMinPlayBuffer: 1.1,
+    ultraLongMinResumeBuffer: 2.0,
+    highResMinPlayBuffer: 0.9,
+    highResMinResumeBuffer: 1.6,
     endTolerance: 0.85,
-    alignThreshold: 0.005,
-    maxStartDesyncSec: 0.02,
-    driftTolerance: 0.026,
-    heavyDriftTolerance: 0.026,
-    hardSeekDrift: 0.22,
-    heavyHardSeekDrift: 0.22,
-    syncCooldownMs: 350,
-    longSyncCooldownMs: 450,
+    alignThreshold: 0.035,
+    maxStartDesyncSec: 0.045,
+    driftTolerance: 0.045,
+    heavyDriftTolerance: 0.055,
+    hardSeekDrift: 0.08,
+    heavyHardSeekDrift: 0.085,
+    syncCooldownMs: 1500,
+    longSyncCooldownMs: 2000,
     watchdogMs: 110,
     tickMs: 25,
-    seekTimeoutMs: 2500,
+    seekTimeoutMs: 2800,
     longSeekTimeoutMs: 5500,
     highResSeekTimeoutMs: 6500,
     startupProtectionMs: 5500
@@ -251,7 +251,7 @@ window.SyncLevel = SyncLevel;
         if (media.seeking) return false;
         var cur = readTime();
         if (targetTime !== undefined && isFinite(targetTime) && media.duration && isFinite(media.duration)) {
-          if (Math.abs(cur - targetTime) > 0.45) {
+          if (Math.abs(cur - targetTime) > 0.15) {
             return false;
           }
         }
@@ -4940,19 +4940,18 @@ window.SyncLevel = SyncLevel;
       var lead = this.ahead(media, t);
       if (rState < 2) return false;
 
-      if (rState >= 4 && lead >= requiredLead * 0.45) return true;
+      if (rState >= 4 && lead >= Math.max(0.25, requiredLead * 0.65)) return true;
 
       var dynamicLead = requiredLead;
-      if (timeBufferingMs > 3000) {
-        if (rState >= 2 && lead >= 0.14) return true;
-        if (timeBufferingMs > 4500 && rState >= 2 && lead >= 0.08) return true;
-        dynamicLead = Math.max(0.08, Math.min(0.14, requiredLead));
-      } else if (timeBufferingMs > 1000) {
-        dynamicLead = Math.max(0.12, requiredLead * 0.4);
+      if (timeBufferingMs > 5000) {
+        if (rState >= 2 && lead >= 0.15) return true;
+        dynamicLead = Math.max(0.15, Math.min(0.25, requiredLead));
+      } else if (timeBufferingMs > 2500) {
+        dynamicLead = Math.max(0.25, requiredLead * 0.55);
       }
 
       if (rState >= 3 && lead >= dynamicLead) return true;
-      if (rState === 2 && lead >= Math.max(dynamicLead, 0.22)) return true;
+      if (rState === 2 && lead >= Math.max(dynamicLead, 0.5)) return true;
 
       return false;
     }
@@ -5165,6 +5164,9 @@ window.SyncLevel = SyncLevel;
         wantPlaying: false,
         loopEnabled: initialLoopState,
         userSeeking: false,
+        seekAudioRetried: false,
+        seekVideoRetried: false,
+        seekAlignRetried: false,
         internalVideoSeeking: false,
         internalAudioSeeking: false,
         internalVSeekUntil: 0,
@@ -5176,34 +5178,25 @@ window.SyncLevel = SyncLevel;
         endStallSince: 0,
         savedDuration: 0,
         liveSnapUntil: 0,
-        wakeSnapRetries: 0,
-        wakeSnapStartedAt: 0,
         seekTarget: 0,
         lastSeekAt: 0,
         savedMasterTime: 0,
-        maxPlayedVideoTime: 0,
-        maxPlayedAudioTime: 0,
         frozenDisplayTime: 0,
         bufferStartTime: 0,
         buffering: false,
         launchingPlay: false,
         launchPollTimer: 0,
         launchRvfId: 0,
-        primingDecoder: false,
-        primeToken: 0,
-        primeTimer: 0,
-        primeRvfId: 0,
-        cancelPrimeSeekWait: null,
         holdingVideoForSync: false,
         holdTimer: 0,
-        holdCalTimer: 0,
-        vResumeLatency: 0.020,
-        aResumeLatency: 0.014,
+        wakeSyncing: false,
+        cancelWakeSync: null,
+        wakeFrameTimer: 0,
+        wakeFrameRvfId: 0,
+        alignAttemptCount: 0,
+        alignAttemptAnchor: -1,
         alignedForAnchor: null,
-        needsWakeReprime: false,
         hiddenAt: 0,
-        wakeFrameCheckTimer: 0,
-        wakeRvfId: 0,
         starveTicks: 0,
         steadyPlaybackSince: 0,
         playGraceUntil: 0,
@@ -5212,15 +5205,14 @@ window.SyncLevel = SyncLevel;
         awaitingGestureUnlock: false,
         hasUserGesture: false,
         tabWakeUntil: 0,
-        lastHiddenSyncAt: 0,
         hidden: Boolean(document.hidden),
         hasStartedPlayback: false,
         internalDepth: 0,
         sequence: 0,
         lastCorrectionAt: 0,
-        driftCount: 0,
         avgDrift: 0,
-        highDriftSince: 0,
+        aheadDriftSince: 0,
+        behindDriftSince: 0,
         vStallSince: 0,
         aStallSince: 0,
         prevVideoTime: -1,
@@ -5289,6 +5281,23 @@ window.SyncLevel = SyncLevel;
 
       function isLoopActive() {
         return Boolean(state.loopEnabled || (typeof player.loop === 'function' && player.loop()));
+      }
+
+      function getTargetPlaybackRate() {
+        return (typeof window.Alabaster._targetPlaybackRate === 'number' && window.Alabaster._targetPlaybackRate > 0)
+          ? window.Alabaster._targetPlaybackRate
+          : (videoEl.playbackRate || player.playbackRate() || 1);
+      }
+
+      function isInPiP() {
+        return Boolean(
+          document.pictureInPictureElement === videoEl ||
+          videoEl.webkitPresentationMode === 'picture-in-picture'
+        );
+      }
+
+      function isEffectivelyHidden() {
+        return Boolean(state.hidden && !isInPiP());
       }
 
       function getAuthoritativeDuration() {
@@ -5428,7 +5437,7 @@ window.SyncLevel = SyncLevel;
         if (state.userSeeking || audioEl.seeking) return false;
         var sinceSeekMs = compat.now() - state.lastSeekAt;
         if (sinceSeekMs < 2000) {
-          var curRate = Math.max(1, Number(window.Alabaster._targetPlaybackRate || audioEl.playbackRate || 1) || 1);
+          var curRate = Math.max(1, Number(getTargetPlaybackRate()) || 1);
           var maxAllowedFromSeek = ((sinceSeekMs / 1000) * curRate * 2.0) + 2.0;
           if (aCur < state.seekTarget - 0.5 || aCur > state.seekTarget + maxAllowedFromSeek) {
             return false;
@@ -5456,7 +5465,7 @@ window.SyncLevel = SyncLevel;
         if (state.endedCompleted) return true;
         var vEnded = nativeGetVEnded();
         var aEnded = Boolean(audioEl.ended);
-        if (isVideoBypassed() || state.hidden) {
+        if (isVideoBypassed() || isEffectivelyHidden()) {
           return aEnded;
         }
         return vEnded && aEnded;
@@ -5474,13 +5483,10 @@ window.SyncLevel = SyncLevel;
       function cancelVideoHold() {
         state.holdingVideoForSync = false;
         state.avgDrift = 0;
+        state.aheadDriftSince = 0;
         if (state.holdTimer) {
           clearTimeout(state.holdTimer);
           state.holdTimer = 0;
-        }
-        if (state.holdCalTimer) {
-          clearTimeout(state.holdCalTimer);
-          state.holdCalTimer = 0;
         }
       }
 
@@ -5495,65 +5501,59 @@ window.SyncLevel = SyncLevel;
         }
       }
 
-      function clearWakeFrameCheck() {
-        if (state.wakeFrameCheckTimer) {
-          clearTimeout(state.wakeFrameCheckTimer);
-          state.wakeFrameCheckTimer = 0;
-        }
-        if (state.wakeRvfId && typeof videoEl.cancelVideoFrameCallback === 'function') {
-          try { videoEl.cancelVideoFrameCallback(state.wakeRvfId); } catch (_) {}
-          state.wakeRvfId = 0;
+      function cancelWakeSync() {
+        state.wakeSyncing = false;
+        if (state.cancelWakeSync) {
+          var cancel = state.cancelWakeSync;
+          state.cancelWakeSync = null;
+          cancel();
         }
       }
 
-      function scheduleWakeFrameLivenessCheck() {
+      function clearWakeFrameCheck() {
+        if (state.wakeFrameTimer) {
+          clearTimeout(state.wakeFrameTimer);
+          state.wakeFrameTimer = 0;
+        }
+        if (state.wakeFrameRvfId && typeof videoEl.cancelVideoFrameCallback === 'function') {
+          try { videoEl.cancelVideoFrameCallback(state.wakeFrameRvfId); } catch (_) {}
+          state.wakeFrameRvfId = 0;
+        }
+      }
+
+      function verifyPostWakeFramePaint() {
         clearWakeFrameCheck();
-        if (state.hidden || !state.wantPlaying || isVideoBypassed() || state.userSeeking || state.buffering || state.holdingVideoForSync) return;
-        var framesBefore = readRawVideoFrameCounters(videoEl).total;
-        var vTimeBefore = nativeGetVTime();
-        var rvfPainted = false;
+        if (isEffectivelyHidden() || !state.wantPlaying || isVideoBypassed() || state.userSeeking || state.buffering || state.holdingVideoForSync || state.wakeSyncing) return;
+        var startFrames = readRawVideoFrameCounters(videoEl).total;
+        var painted = false;
+        var checkSeq = state.sequence;
         if (typeof videoEl.requestVideoFrameCallback === 'function') {
           try {
-            state.wakeRvfId = videoEl.requestVideoFrameCallback(function() {
-              state.wakeRvfId = 0;
-              rvfPainted = true;
+            state.wakeFrameRvfId = videoEl.requestVideoFrameCallback(function() {
+              state.wakeFrameRvfId = 0;
+              painted = true;
             });
           } catch (_) {}
         }
-        state.wakeFrameCheckTimer = setTimeout(function() {
-          state.wakeFrameCheckTimer = 0;
-          if (state.wakeRvfId && typeof videoEl.cancelVideoFrameCallback === 'function') {
-            try { videoEl.cancelVideoFrameCallback(state.wakeRvfId); } catch (_) {}
-            state.wakeRvfId = 0;
+        state.wakeFrameTimer = setTimeout(function() {
+          state.wakeFrameTimer = 0;
+          if (state.wakeFrameRvfId && typeof videoEl.cancelVideoFrameCallback === 'function') {
+            try { videoEl.cancelVideoFrameCallback(state.wakeFrameRvfId); } catch (_) {}
+            state.wakeFrameRvfId = 0;
           }
-          if (state.hidden || !state.wantPlaying || isVideoBypassed() || state.userSeeking || state.buffering || videoEl.seeking || nativeGetAPaused() || state.holdingVideoForSync || state.launchingPlay || isLiveSnapping()) {
+          if (checkSeq !== state.sequence || isEffectivelyHidden() || !state.wantPlaying || isVideoBypassed() || state.userSeeking || state.buffering || state.holdingVideoForSync || state.launchingPlay || state.wakeSyncing || nativeGetAPaused() || videoEl.seeking || isStreamNearItsEnd(videoEl, true)) {
             return;
           }
-          var framesNow = readRawVideoFrameCounters(videoEl).total;
-          var vTimeNow = nativeGetVTime();
+          var curFrames = readRawVideoFrameCounters(videoEl).total;
+          if (painted || curFrames > startFrames) {
+            return;
+          }
           var liveA = nativeGetATime();
-          if (rvfPainted || framesNow > framesBefore || vTimeNow > vTimeBefore + 0.03) {
-            return;
-          }
-          if (vTimeNow >= liveA - 0.35 && videoEl.readyState >= 3) {
-            if (vTimeNow > liveA + 0.035) {
-              holdVideoUntilAudioCatchesUp(0.022);
-            }
-            return;
-          }
-          var baseRate = (typeof window.Alabaster._targetPlaybackRate === 'number' && window.Alabaster._targetPlaybackRate > 0) ? window.Alabaster._targetPlaybackRate : (videoEl.playbackRate || player.playbackRate() || 1);
+          var baseRate = getTargetPlaybackRate();
           if (videoEl.readyState === 0) {
-            reprimeEvictedVideo(liveA);
-          } else if (videoEl.readyState >= 2 && bufferMonitor.ahead(videoEl, liveA) >= 0.25) {
-            var snapDest = Math.max(liveA + ((isHeavyStream() ? 0.50 : 0.35) * baseRate), state.maxPlayedVideoTime);
-            if (vTimeNow < snapDest - 0.05) {
-              pauseVideoOnly();
-              var snapWin = Math.max(2000, getSeekTimeout());
-              snapVideoToAudioLive(snapDest, snapWin);
-              state.tabWakeUntil = Math.max(state.tabWakeUntil, state.liveSnapUntil + 200);
-            } else if (nativeGetVPaused()) {
-              runInternal(function() { compat.safePlay(nativeVideoPlay); });
-            }
+            reprimeEvictedVideo(liveA, true);
+          } else if (bufferMonitor.isTimeBuffered(videoEl, liveA, 0.25)) {
+            snapVideoToAudioLive(liveA + (0.04 * baseRate), 1200);
           } else {
             setBufferSpinner(true);
             freezeBothStreams();
@@ -5561,143 +5561,145 @@ window.SyncLevel = SyncLevel;
               syncPlaybackState();
             });
           }
-        }, 900);
+        }, 380);
       }
 
-      function cancelDecoderPrime() {
-        state.primeToken++;
-        if (state.primeTimer) {
-          clearTimeout(state.primeTimer);
-          state.primeTimer = 0;
-        }
-        if (state.primeRvfId && typeof videoEl.cancelVideoFrameCallback === 'function') {
-          try { videoEl.cancelVideoFrameCallback(state.primeRvfId); } catch (_) {}
-          state.primeRvfId = 0;
-        }
-        if (state.cancelPrimeSeekWait) {
-          var cancelWait = state.cancelPrimeSeekWait;
-          state.cancelPrimeSeekWait = null;
-          cancelWait();
-        }
-        state.primingDecoder = false;
-      }
-
-      function primePausedVideoDecoder(targetTime) {
-        if (state.primingDecoder || state.wantPlaying || isVideoBypassed() || state.hidden || state.userSeeking || isPlaybackCompleted()) return;
-        var anchor = Math.max(0, Number(targetTime !== undefined ? targetTime : getMasterAnchorTime()) || 0);
-        if (videoEl.readyState === 0) {
-          if (anchor > 0.05) reprimeEvictedVideo(anchor);
+      function resyncVideoToLiveAudioOnWake(attempt) {
+        cancelWakeSync();
+        clearWakeFrameCheck();
+        if (!state.wantPlaying || isEffectivelyHidden() || isVideoBypassed() || state.userSeeking || isPlaybackCompleted()) {
           return;
         }
-        cancelDecoderPrime();
-        state.primingDecoder = true;
-        var primeToken = state.primeToken;
-        var startFrames = readRawVideoFrameCounters(videoEl).total;
-        var rvfFired = false;
-        var primeStart = compat.now();
-
-        if (typeof videoEl.requestVideoFrameCallback === 'function') {
-          try {
-            state.primeRvfId = videoEl.requestVideoFrameCallback(function() {
-              state.primeRvfId = 0;
-              rvfFired = true;
-            });
-          } catch (_) {}
+        if (audioEl.ended) {
+          onStreamEnded();
+          return;
+        }
+        if (nativeGetAPaused() || audioEl.seeking || audioEl.readyState < 2) {
+          syncPlaybackState();
+          return;
+        }
+        if (videoEl.readyState === 0) {
+          state.tabWakeUntil = compat.now() + 3000;
+          reprimeEvictedVideo(nativeGetATime(), true);
+          return;
         }
 
-        var finishPrimeAndRealign = function() {
-          if (primeToken !== state.primeToken) return;
-          if (state.primeRvfId && typeof videoEl.cancelVideoFrameCallback === 'function') {
-            try { videoEl.cancelVideoFrameCallback(state.primeRvfId); } catch (_) {}
-            state.primeRvfId = 0;
+        var tryNum = attempt || 0;
+        var aNow = nativeGetATime();
+        var vNow = nativeGetVTime();
+        var baseRate = getTargetPlaybackRate();
+        var dur = getAuthoritativeDuration() || 0;
+
+        if (Math.abs(vNow - aNow) <= 0.06 && videoEl.readyState >= 3 && !videoEl.seeking && bufferMonitor.ahead(videoEl, vNow) >= 0.25) {
+          state.tabWakeUntil = 0;
+          state.liveSnapUntil = 0;
+          state.playGraceUntil = compat.now() + 450;
+          state.steadyPlaybackSince = compat.now() + 180;
+          state.lastCorrectionAt = compat.now();
+          if (nativeGetVPaused() && !nativeGetVEnded()) {
+            runInternal(function() { compat.safePlay(nativeVideoPlay); });
           }
-          if (state.wantPlaying) {
-            state.primingDecoder = false;
-            state.needsWakeReprime = false;
+          verifyPostWakeFramePaint();
+          return;
+        }
+
+        var isBufferedAtAudio = bufferMonitor.isTimeBuffered(videoEl, aNow, 0.35);
+        var leadSec = isBufferedAtAudio ? (0.045 * baseRate) : (0.25 * baseRate);
+        var dest = aNow + leadSec;
+        if (dur > 0 && isFinite(dur) && dest >= dur - 0.06) {
+          dest = Math.max(0, dur - 0.06);
+        }
+
+        state.wakeSyncing = true;
+        var wakeSeq = state.sequence;
+        var seekWin = Math.max(1800, getSeekTimeout());
+        state.tabWakeUntil = compat.now() + seekWin + 600;
+        pauseVideoOnly();
+        setVideoTimeInternally(dest);
+
+        state.cancelWakeSync = compat.onSeekSettled(videoEl, function() {
+          state.cancelWakeSync = null;
+          if (wakeSeq !== state.sequence) return;
+          state.wakeSyncing = false;
+          state.internalVideoSeeking = false;
+          if (!state.userSeeking && !state.buffering) {
+            player.removeClass('vjs-seeking');
+            player.removeClass('vjs-waiting');
+          }
+          if (!state.wantPlaying || isEffectivelyHidden() || isVideoBypassed() || state.userSeeking) {
+            return;
+          }
+          if (isPlaybackCompleted() || audioEl.ended) {
+            onStreamEnded();
+            return;
+          }
+          if (nativeGetAPaused() || audioEl.seeking) {
             syncPlaybackState();
             return;
           }
-          var destAnchor = (!nativeGetAPaused() && nativeGetATime() > 0.02) ? nativeGetATime() : (getMasterAnchorTime() || anchor);
-          destAnchor = Math.max(destAnchor, state.maxPlayedVideoTime);
-          runInternal(function() {
-            if (!nativeGetVPaused()) {
-              try { nativeVideoPause(); } catch (_) {}
+
+          var aAfter = nativeGetATime();
+          var vAfter = nativeGetVTime();
+          var delta = vAfter - aAfter;
+
+          if (delta >= -0.085 && delta <= 0.065 && videoEl.readyState >= 2) {
+            state.tabWakeUntil = 0;
+            state.liveSnapUntil = 0;
+            state.playGraceUntil = compat.now() + 450;
+            state.steadyPlaybackSince = compat.now() + 180;
+            state.lastCorrectionAt = compat.now();
+            if (nativeGetVPaused() && !nativeGetVEnded()) {
+              runInternal(function() { compat.safePlay(nativeVideoPlay); });
             }
-            state.internalVideoSeeking = true;
-            state.internalVSeekUntil = compat.now() + 1000;
-            try { nativeSetVTime(destAnchor); } catch (_) {}
+            verifyPostWakeFramePaint();
+            return;
+          }
+
+          if (delta < -0.085 && tryNum < 2 && bufferMonitor.isTimeBuffered(videoEl, aAfter, 0.25)) {
+            resyncVideoToLiveAudioOnWake(tryNum + 1);
+            return;
+          }
+
+          if (delta > 0.14 && tryNum < 2 && bufferMonitor.isTimeBuffered(videoEl, aAfter, 0.25)) {
+            resyncVideoToLiveAudioOnWake(tryNum + 1);
+            return;
+          }
+
+          if (delta > 0.065 && delta <= 1.5 && videoEl.readyState >= 2) {
+            state.tabWakeUntil = 0;
+            state.liveSnapUntil = 0;
+            holdVideoUntilAudioCatchesUp(0.05);
+            return;
+          }
+
+          if (videoEl.readyState >= 2 && bufferMonitor.ahead(videoEl, vAfter) >= 0.25 && Math.abs(delta) <= 0.18) {
+            state.tabWakeUntil = 0;
+            state.liveSnapUntil = 0;
+            state.playGraceUntil = compat.now() + 450;
+            state.steadyPlaybackSince = compat.now() + 180;
+            if (nativeGetVPaused() && !nativeGetVEnded()) {
+              runInternal(function() { compat.safePlay(nativeVideoPlay); });
+            }
+            verifyPostWakeFramePaint();
+            return;
+          }
+
+          state.tabWakeUntil = 0;
+          state.liveSnapUntil = 0;
+          setBufferSpinner(true);
+          freezeBothStreams();
+          seekVideoAndWait(aAfter, function() {
+            syncPlaybackState();
           });
-
-          state.cancelPrimeSeekWait = compat.onSeekSettled(videoEl, function() {
-            state.cancelPrimeSeekWait = null;
-            if (primeToken !== state.primeToken) return;
-            state.internalVideoSeeking = false;
-            state.primingDecoder = false;
-            state.needsWakeReprime = false;
-            state.alignedForAnchor = destAnchor;
-            if (!state.userSeeking && !state.buffering) {
-              player.removeClass('vjs-seeking');
-              player.removeClass('vjs-waiting');
-            }
-            if (state.wantPlaying && !state.userSeeking) {
-              syncPlaybackState();
-            }
-          }, Math.max(1200, getSeekTimeout()), nativeGetVTime, destAnchor);
-        };
-
-        runInternal(function() {
-          if (nativeGetVPaused()) {
-            var p = nativeVideoPlay();
-            if (p && typeof p.catch === 'function') {
-              p.catch(function() {
-                if (primeToken === state.primeToken) {
-                  state.primingDecoder = false;
-                  state.needsWakeReprime = false;
-                  if (state.wantPlaying && !state.userSeeking) {
-                    syncPlaybackState();
-                  }
-                }
-              });
-            }
-          }
-        });
-
-        var checkPrimeProgress = function() {
-          state.primeTimer = 0;
-          if (primeToken !== state.primeToken) return;
-          if (state.userSeeking || state.hidden || isVideoBypassed()) {
-            cancelDecoderPrime();
-            return;
-          }
-          if (state.wantPlaying) {
-            state.primingDecoder = false;
-            state.needsWakeReprime = false;
-            if (state.primeRvfId && typeof videoEl.cancelVideoFrameCallback === 'function') {
-              try { videoEl.cancelVideoFrameCallback(state.primeRvfId); } catch (_) {}
-              state.primeRvfId = 0;
-            }
-            syncPlaybackState();
-            return;
-          }
-          var curFrames = readRawVideoFrameCounters(videoEl).total;
-          var vDelta = Math.abs(nativeGetVTime() - anchor);
-          var elapsed = compat.now() - primeStart;
-          if (rvfFired || curFrames > startFrames || vDelta >= 0.015 || elapsed >= 200 || nativeGetVPaused()) {
-            finishPrimeAndRealign();
-            return;
-          }
-          state.primeTimer = setTimeout(checkPrimeProgress, 4);
-        };
-
-        state.primeTimer = setTimeout(checkPrimeProgress, 4);
+        }, seekWin, nativeGetVTime, dest);
       }
 
-      function reprimeEvictedVideo(targetTime) {
+      function reprimeEvictedVideo(targetTime, force) {
         var now = compat.now();
-        if (now - state.reprimingVideoAt < 1800) return;
+        if (!force && now - state.reprimingVideoAt < 1800) return;
         state.reprimingVideoAt = now;
         state.internalVSeekUntil = now + 2000;
-        var seekDest = Math.max(0, Number(targetTime) || getMasterAnchorTime() || 0, state.maxPlayedVideoTime);
+        var seekDest = Math.max(0, Number(targetTime !== undefined ? targetTime : getMasterAnchorTime()) || 0);
         runInternal(function() {
           if (state.reprimeMetaHandler) {
             videoEl.removeEventListener('loadedmetadata', state.reprimeMetaHandler, false);
@@ -5713,41 +5715,24 @@ window.SyncLevel = SyncLevel;
             if (state.reprimeMetaHandler === onMeta) {
               state.reprimeMetaHandler = null;
             }
+            if (state.userSeeking) {
+              setVideoTimeInternally(state.seekTarget);
+              completeUserSeek();
+              return;
+            }
             var latestTarget = (!nativeGetAPaused() && nativeGetATime() > 0.05) ? nativeGetATime() : (getMasterAnchorTime() || seekDest);
-            latestTarget = Math.max(latestTarget, state.maxPlayedVideoTime);
             if (!state.wantPlaying) {
               if (latestTarget > 0.05) {
-                seekVideoAndWait(latestTarget, function() {
-                  if (!state.wantPlaying && !state.hidden && videoEl.readyState >= 2) {
-                    primePausedVideoDecoder(latestTarget);
-                  }
-                });
+                setVideoTimeInternally(latestTarget);
               }
               return;
             }
-            if (state.hidden || isVideoBypassed()) {
+            if (isEffectivelyHidden() || isVideoBypassed()) {
               return;
             }
             if (!nativeGetAPaused()) {
-              var baseR = (typeof window.Alabaster._targetPlaybackRate === 'number' && window.Alabaster._targetPlaybackRate > 0) ? window.Alabaster._targetPlaybackRate : (videoEl.playbackRate || player.playbackRate() || 1);
-              if (bufferMonitor.ahead(videoEl, latestTarget) >= 0.25) {
-                var winMs = Math.max(2000, getSeekTimeout());
-                var snapDest = Math.max(latestTarget + ((isHeavyStream() ? 0.50 : 0.35) * baseR), state.maxPlayedVideoTime);
-                if (nativeGetVTime() < snapDest - 0.05) {
-                  pauseVideoOnly();
-                  snapVideoToAudioLive(snapDest, winMs);
-                  state.tabWakeUntil = Math.max(state.tabWakeUntil, state.liveSnapUntil + 200);
-                } else if (nativeGetVPaused()) {
-                  runInternal(function() { compat.safePlay(nativeVideoPlay); });
-                }
-              } else {
-                setBufferSpinner(true);
-                freezeBothStreams();
-                seekVideoAndWait(latestTarget, function() {
-                  syncPlaybackState();
-                });
-              }
-            } else if (latestTarget > 0.05 && Math.abs(nativeGetVTime() - latestTarget) > 0.08) {
+              resyncVideoToLiveAudioOnWake(0);
+            } else if (latestTarget > 0.05 && Math.abs(nativeGetVTime() - latestTarget) > 0.05) {
               seekVideoAndWait(latestTarget, function() {
                 syncPlaybackState();
               });
@@ -5765,53 +5750,54 @@ window.SyncLevel = SyncLevel;
       }
 
       function setVideoTimeInternally(seconds) {
-        var safeTarget = (!state.userSeeking && !state.endedCompleted && state.maxPlayedVideoTime > 0)
-          ? Math.max(seconds, state.maxPlayedVideoTime)
-          : seconds;
+        var dur = getAuthoritativeDuration() || 0;
+        var dest = Math.max(0, Number(seconds) || 0);
+        if (dur > 0 && isFinite(dur) && dest > dur) {
+          dest = Math.max(0, dur - 0.05);
+        }
         state.internalVideoSeeking = true;
-        state.internalVSeekUntil = compat.now() + 1000;
+        state.internalVSeekUntil = compat.now() + 1400;
         state.steadyPlaybackSince = 0;
         runInternal(function() {
-          if (videoEl.readyState === 0 && safeTarget > 0.1 && !state.hidden && !isVideoBypassed()) {
-            reprimeEvictedVideo(safeTarget);
+          if (videoEl.readyState === 0 && dest > 0.05 && !isEffectivelyHidden() && !isVideoBypassed()) {
+            reprimeEvictedVideo(dest, true);
             return;
           }
-          try { nativeSetVTime(safeTarget); } catch (_) {}
+          try { nativeSetVTime(dest); } catch (_) {}
         });
       }
 
       function snapVideoToAudioLive(targetSeconds, customWindowMs) {
-        var safeTarget = (!state.userSeeking && !state.endedCompleted && state.maxPlayedVideoTime > 0)
-          ? Math.max(targetSeconds, state.maxPlayedVideoTime)
-          : targetSeconds;
-        if (videoEl.readyState >= 1 && nativeGetVTime() >= safeTarget - 0.05) {
-          state.liveSnapUntil = 0;
-          return;
+        var dur = getAuthoritativeDuration() || 0;
+        var dest = Math.max(0, Number(targetSeconds) || 0);
+        if (dur > 0 && isFinite(dur) && dest >= dur - 0.06) {
+          dest = Math.max(0, dur - 0.06);
         }
-        var winDuration = Math.max(getSeekTimeout(), customWindowMs || 450);
-        state.wakeSnapStartedAt = compat.now();
+        var winDuration = Math.max(1200, customWindowMs || getSeekTimeout());
         state.internalVideoSeeking = true;
         state.internalVSeekUntil = compat.now() + winDuration + 400;
         state.liveSnapUntil = compat.now() + winDuration;
         state.steadyPlaybackSince = 0;
         runInternal(function() {
-          if (videoEl.readyState === 0 && safeTarget > 0.1 && !state.hidden && !isVideoBypassed()) {
-            reprimeEvictedVideo(safeTarget);
+          if (videoEl.readyState === 0 && dest > 0.05 && !isEffectivelyHidden() && !isVideoBypassed()) {
+            reprimeEvictedVideo(dest, true);
             return;
           }
-          try { nativeSetVTime(safeTarget); } catch (_) {}
+          try { nativeSetVTime(dest); } catch (_) {}
         });
       }
 
       function setAudioTimeInternally(seconds) {
-        var safeTarget = (!state.userSeeking && !state.endedCompleted && state.maxPlayedAudioTime > 0)
-          ? Math.max(seconds, state.maxPlayedAudioTime)
-          : seconds;
+        var dur = getAuthoritativeDuration() || 0;
+        var dest = Math.max(0, Number(seconds) || 0);
+        if (dur > 0 && isFinite(dur) && dest > dur) {
+          dest = Math.max(0, dur - 0.05);
+        }
         state.internalAudioSeeking = true;
-        state.internalASeekUntil = compat.now() + 1000;
-        state.savedMasterTime = safeTarget;
+        state.internalASeekUntil = compat.now() + 1400;
+        state.savedMasterTime = dest;
         runInternal(function() {
-          try { nativeSetATime(safeTarget); } catch (_) {}
+          try { nativeSetATime(dest); } catch (_) {}
         });
       }
 
@@ -5832,31 +5818,27 @@ window.SyncLevel = SyncLevel;
       }
 
       function holdVideoUntilAudioCatchesUp(customMinLead) {
-        if (state.holdingVideoForSync || state.primingDecoder || !state.wantPlaying || state.userSeeking || state.buffering || isVideoBypassed() || state.hidden) return;
+        if (state.holdingVideoForSync || state.wakeSyncing || !state.wantPlaying || state.userSeeking || state.buffering || isVideoBypassed() || isEffectivelyHidden()) return;
         if (nativeGetAPaused() || audioEl.seeking || audioEl.readyState < 2) return;
-        var baseRate = (typeof window.Alabaster._targetPlaybackRate === 'number' && window.Alabaster._targetPlaybackRate > 0) ? window.Alabaster._targetPlaybackRate : (videoEl.playbackRate || player.playbackRate() || 1);
+        var baseRate = getTargetPlaybackRate();
         var vTarget = nativeGetVTime();
         var aCur = nativeGetATime();
-        var resumeCompSec = state.vResumeLatency * baseRate + 0.003;
-        var minLead = typeof customMinLead === 'number' ? customMinLead : 0.016;
+        var resumeCompSec = 0.025 * baseRate;
+        var minLead = typeof customMinLead === 'number' ? customMinLead : 0.065;
         var lead = vTarget - aCur;
-        if (lead <= minLead || lead > 6.0 || lead <= resumeCompSec * 0.55) return;
+        if (lead <= minLead || lead > 6.0 || lead <= resumeCompSec) return;
 
-        if (state.holdCalTimer) {
-          clearTimeout(state.holdCalTimer);
-          state.holdCalTimer = 0;
-        }
         state.holdingVideoForSync = true;
         var holdStart = compat.now();
         var lastAudioPos = aCur;
         var lastAudioAdvanceAt = holdStart;
-        var maxHoldMs = Math.min(6500, Math.max(80, Math.round((Math.max(0, lead - resumeCompSec) / baseRate) * 1000) + 450));
+        var maxHoldMs = Math.min(6500, Math.max(120, Math.round((Math.max(0, lead - resumeCompSec) / baseRate) * 1000) + 550));
 
         pauseVideoOnly();
 
         var checkCatchUp = function() {
           if (!state.holdingVideoForSync) return;
-          if (!state.wantPlaying || state.userSeeking || state.buffering || isVideoBypassed() || state.hidden) {
+          if (!state.wantPlaying || state.userSeeking || state.buffering || isVideoBypassed() || isEffectivelyHidden()) {
             cancelVideoHold();
             return;
           }
@@ -5869,7 +5851,7 @@ window.SyncLevel = SyncLevel;
           }
           var elapsed = now - holdStart;
           var audioCaughtUp = aNow >= vNow - resumeCompSec;
-          var audioStalledWhileHolding = !audioCaughtUp && (nativeGetAPaused() || audioEl.seeking || (now - lastAudioAdvanceAt >= 380) || elapsed >= maxHoldMs);
+          var audioStalledWhileHolding = !audioCaughtUp && (nativeGetAPaused() || audioEl.seeking || (now - lastAudioAdvanceAt >= 650) || elapsed >= maxHoldMs);
 
           if (audioStalledWhileHolding) {
             cancelVideoHold();
@@ -5884,25 +5866,13 @@ window.SyncLevel = SyncLevel;
               clearTimeout(state.holdTimer);
               state.holdTimer = 0;
             }
-            state.lastCorrectionAt = now;
-            state.playGraceUntil = Math.max(state.playGraceUntil, now + 900);
             var finishVideoResume = function() {
               if (!state.holdingVideoForSync) return;
               cancelVideoHold();
-              state.lastCorrectionAt = compat.now();
-              state.playGraceUntil = Math.max(state.playGraceUntil, compat.now() + 900);
-              state.steadyPlaybackSince = compat.now() + 180;
-              var vCalSeq = state.sequence;
-              var vCalRate = baseRate;
-              state.holdCalTimer = setTimeout(function() {
-                state.holdCalTimer = 0;
-                if (vCalSeq !== state.sequence || !state.wantPlaying || state.buffering || state.userSeeking || state.holdingVideoForSync || state.launchingPlay || isVideoBypassed() || state.hidden) return;
-                if (nativeGetVPaused() || nativeGetAPaused() || videoEl.seeking || audioEl.seeking) return;
-                var postSignedV = nativeGetVTime() - nativeGetATime();
-                if (Math.abs(postSignedV) < 0.12) {
-                  state.vResumeLatency = Math.max(0.004, Math.min(0.048, state.vResumeLatency - ((postSignedV - 0.003) / vCalRate) * 0.55));
-                }
-              }, 110);
+              var resumeNow = compat.now();
+              state.lastCorrectionAt = resumeNow;
+              state.playGraceUntil = Math.max(state.playGraceUntil, resumeNow + 450);
+              state.steadyPlaybackSince = resumeNow + 180;
             };
             if (state.wantPlaying && !state.userSeeking && !state.buffering && !isVideoBypassed() && nativeGetVPaused() && !nativeGetVEnded()) {
               var pResumeV = null;
@@ -5918,45 +5888,41 @@ window.SyncLevel = SyncLevel;
             }
             return;
           }
-          state.holdTimer = setTimeout(checkCatchUp, 4);
+          state.holdTimer = setTimeout(checkCatchUp, 8);
         };
 
-        state.holdTimer = setTimeout(checkCatchUp, 4);
+        state.holdTimer = setTimeout(checkCatchUp, 8);
       }
 
       function seekVideoAndWait(targetSeconds, callback) {
         clearWatchdog();
         clearPendingWait();
-        var safeTarget = (!state.userSeeking && !state.endedCompleted && state.maxPlayedVideoTime > 0)
-          ? Math.max(targetSeconds, state.maxPlayedVideoTime)
-          : targetSeconds;
-        if (videoEl.readyState === 0 && !state.hidden && !isVideoBypassed()) {
-          reprimeEvictedVideo(safeTarget);
+        var dest = Math.max(0, Number(targetSeconds) || 0);
+        if (videoEl.readyState === 0 && !isEffectivelyHidden() && !isVideoBypassed()) {
+          reprimeEvictedVideo(dest, true);
           return;
         }
-        setVideoTimeInternally(safeTarget);
+        setVideoTimeInternally(dest);
         state.cancelSeekWait = compat.onSeekSettled(videoEl, function() {
           state.cancelSeekWait = null;
           state.internalVideoSeeking = false;
-          if (Math.abs(nativeGetVTime() - safeTarget) <= 0.25) {
-            state.alignedForAnchor = safeTarget;
+          if (Math.abs(nativeGetVTime() - dest) <= 0.12) {
+            state.alignedForAnchor = dest;
           }
           callback();
-        }, getSeekTimeout(), nativeGetVTime, safeTarget);
+        }, getSeekTimeout(), nativeGetVTime, dest);
       }
 
       function seekAudioAndWait(targetSeconds, callback) {
         clearWatchdog();
         clearPendingWait();
-        var safeTarget = (!state.userSeeking && !state.endedCompleted && state.maxPlayedAudioTime > 0)
-          ? Math.max(targetSeconds, state.maxPlayedAudioTime)
-          : targetSeconds;
-        setAudioTimeInternally(safeTarget);
+        var dest = Math.max(0, Number(targetSeconds) || 0);
+        setAudioTimeInternally(dest);
         state.cancelSeekWait = compat.onSeekSettled(audioEl, function() {
           state.cancelSeekWait = null;
           state.internalAudioSeeking = false;
           callback();
-        }, getSeekTimeout(), nativeGetATime, safeTarget);
+        }, getSeekTimeout(), nativeGetATime, dest);
       }
 
       function waitVideoSettled(callback) {
@@ -5970,7 +5936,7 @@ window.SyncLevel = SyncLevel;
       function applyBlockedAutoplayPauseState() {
         cancelVideoHold();
         clearLaunchPoll();
-        cancelDecoderPrime();
+        cancelWakeSync();
         clearWakeFrameCheck();
         state.wantPlaying = false;
         state.initialAutoplayAttempt = false;
@@ -5978,10 +5944,18 @@ window.SyncLevel = SyncLevel;
         state.startupShieldUntil = 0;
         state.launchingPlay = false;
         state.alignedForAnchor = null;
+        state.alignAttemptCount = 0;
         setBufferSpinner(false);
         clearWatchdog();
         clearPendingWait();
         freezeBothStreams({ alignToAnchor: true });
+        if (!state.hasStartedPlayback && state.savedMasterTime < 0.25) {
+          runInternal(function() {
+            try { nativeSetVTime(0); } catch (_) {}
+            try { nativeSetATime(0); } catch (_) {}
+          });
+          state.savedMasterTime = 0;
+        }
         shield.deactivate();
         if (!state.hasStartedPlayback) {
           player.removeClass('vjs-has-started');
@@ -5998,7 +5972,7 @@ window.SyncLevel = SyncLevel;
         if (state.endedCompleted && state.endedAtTime > 0) return state.endedAtTime;
         var aCur = nativeGetATime();
         var vCur = nativeGetVTime();
-        if (audioEl.ended && !nativeGetVEnded() && !isVideoBypassed() && !state.hidden && typeof vCur === 'number' && !isNaN(vCur) && isFinite(vCur)) {
+        if (audioEl.ended && !nativeGetVEnded() && !isVideoBypassed() && !isEffectivelyHidden() && typeof vCur === 'number' && !isNaN(vCur) && isFinite(vCur)) {
           var tailCur = Math.max(aCur || 0, vCur);
           if (tailCur > state.savedMasterTime) state.savedMasterTime = tailCur;
           return tailCur;
@@ -6007,7 +5981,6 @@ window.SyncLevel = SyncLevel;
           if (!nativeGetAPaused() || aCur > 0.02) {
             if (canAcceptLiveAudioAdvance(aCur)) {
               state.savedMasterTime = aCur;
-              state.maxPlayedAudioTime = Math.max(state.maxPlayedAudioTime, aCur);
             }
             return state.savedMasterTime;
           }
@@ -6030,7 +6003,7 @@ window.SyncLevel = SyncLevel;
             if (state.endedCompleted && state.endedAtTime > 0) return state.endedAtTime;
             if (state.buffering && state.frozenDisplayTime >= 0 && state.bufferStartTime > 0) return state.frozenDisplayTime;
             var master = getMasterAnchorTime();
-            if (state.wantPlaying || state.primingDecoder || state.hidden || isTabWaking() || isVideoBypassed() || compat.now() - state.lastSeekAt < 1400) {
+            if (state.wantPlaying || state.wakeSyncing || isEffectivelyHidden() || isTabWaking() || isVideoBypassed() || compat.now() - state.lastSeekAt < 1400) {
               return master;
             }
             return master > 0.02 ? master : nativeGetVTime();
@@ -6070,7 +6043,7 @@ window.SyncLevel = SyncLevel;
       window.Alabaster.onAudioOnlyChange = function(active) {
         cancelVideoHold();
         clearLaunchPoll();
-        cancelDecoderPrime();
+        cancelWakeSync();
         clearWakeFrameCheck();
         player[active ? 'addClass' : 'removeClass']('vjs-audio-only-mode');
         if (active) {
@@ -6088,21 +6061,17 @@ window.SyncLevel = SyncLevel;
             onStreamEnded();
             return;
           }
-          state.tabWakeUntil = compat.now() + 1800;
-          state.playGraceUntil = Math.max(state.playGraceUntil, compat.now() + 1400);
-          var master = getMasterAnchorTime();
-          var baseRate = (typeof window.Alabaster._targetPlaybackRate === 'number' && window.Alabaster._targetPlaybackRate > 0) ? window.Alabaster._targetPlaybackRate : (videoEl.playbackRate || player.playbackRate() || 1);
-          var snapTargetAO = Math.max(master + (!nativeGetAPaused() ? ((isHeavyStream() ? 0.50 : 0.35) * baseRate) : 0), state.maxPlayedVideoTime);
-          if (videoEl.readyState === 0) {
-            reprimeEvictedVideo(master);
-          } else if (nativeGetVTime() < snapTargetAO - 0.05) {
-            pauseVideoOnly();
-            snapVideoToAudioLive(snapTargetAO, 1400);
-          } else if (state.wantPlaying && nativeGetVPaused() && videoEl.readyState >= 2) {
-            runInternal(function() { compat.safePlay(nativeVideoPlay); });
-          }
-          if (state.wantPlaying && nativeGetAPaused()) {
+          if (state.wantPlaying && !nativeGetAPaused() && !isEffectivelyHidden()) {
+            resyncVideoToLiveAudioOnWake(0);
+          } else if (state.wantPlaying) {
             syncPlaybackState();
+          } else {
+            var masterAO = getMasterAnchorTime();
+            if (videoEl.readyState === 0 && masterAO > 0.05) {
+              reprimeEvictedVideo(masterAO, true);
+            } else if (videoEl.readyState >= 1 && Math.abs(nativeGetVTime() - masterAO) > 0.05) {
+              setVideoTimeInternally(masterAO);
+            }
           }
         }
       };
@@ -6227,18 +6196,21 @@ window.SyncLevel = SyncLevel;
         var opts = options || {};
         cancelVideoHold();
         clearLaunchPoll();
-        cancelDecoderPrime();
+        cancelWakeSync();
         clearWakeFrameCheck();
         state.freezeToken++;
         state.sequence++;
         state.launchingPlay = false;
         state.isFrozen = true;
         state.liveSnapUntil = 0;
+        state.tabWakeUntil = 0;
         state.steadyPlaybackSince = 0;
         state.vStallSince = 0;
         state.aStallSince = 0;
         state.endStallSince = 0;
         state.avgDrift = 0;
+        state.aheadDriftSince = 0;
+        state.behindDriftSince = 0;
         state.starveTicks = 0;
         clearPendingWait();
 
@@ -6246,16 +6218,9 @@ window.SyncLevel = SyncLevel;
           var aCur = nativeGetATime();
           if (!state.endedCompleted && canAcceptLiveAudioAdvance(aCur)) {
             state.savedMasterTime = aCur;
-            if (!state.userSeeking) {
-              state.maxPlayedAudioTime = Math.max(state.maxPlayedAudioTime, aCur);
-            }
-          }
-          var vCurFreeze = nativeGetVTime();
-          if (!state.endedCompleted && !state.userSeeking && !videoEl.seeking && typeof vCurFreeze === 'number' && !isNaN(vCurFreeze) && isFinite(vCurFreeze) && vCurFreeze <= Math.max(state.maxPlayedVideoTime, state.savedMasterTime) + 5.0) {
-            state.maxPlayedVideoTime = Math.max(state.maxPlayedVideoTime, vCurFreeze);
           }
 
-          var baseRate = (typeof window.Alabaster._targetPlaybackRate === 'number' && window.Alabaster._targetPlaybackRate > 0) ? window.Alabaster._targetPlaybackRate : (videoEl.playbackRate || player.playbackRate() || 1);
+          var baseRate = getTargetPlaybackRate();
           if (videoEl.playbackRate !== baseRate) videoEl.playbackRate = baseRate;
           if (audioEl.playbackRate !== baseRate) audioEl.playbackRate = baseRate;
 
@@ -6272,17 +6237,19 @@ window.SyncLevel = SyncLevel;
             var aPausedTime = (audioEl.readyState >= 1 && !audioEl.seeking && aAccept) ? aAfterPause : state.savedMasterTime;
             if (aPausedTime >= 0) {
               state.savedMasterTime = aPausedTime;
-              state.maxPlayedAudioTime = Math.max(state.maxPlayedAudioTime, aPausedTime);
               var vPausedTime = nativeGetVTime();
-              if (typeof vPausedTime === 'number' && !isNaN(vPausedTime) && isFinite(vPausedTime) && !videoEl.seeking && vPausedTime <= Math.max(state.maxPlayedVideoTime, aPausedTime) + 5.0) {
-                state.maxPlayedVideoTime = Math.max(state.maxPlayedVideoTime, vPausedTime);
-              }
-              var vPauseDiff = vPausedTime - aPausedTime;
-              if (!isVideoBypassed() && !state.hidden && videoEl.readyState >= 1 && !videoEl.seeking && vPauseDiff < -0.18) {
-                var alignTarget = Math.max(aPausedTime, state.maxPlayedVideoTime);
-                state.internalVideoSeeking = true;
-                state.internalVSeekUntil = compat.now() + 1000;
-                try { nativeSetVTime(alignTarget); } catch (_) {}
+              if (!isVideoBypassed() && !isEffectivelyHidden() && videoEl.readyState >= 1 && !videoEl.seeking) {
+                var vPauseDiff = Math.abs(vPausedTime - aPausedTime);
+                if (vPauseDiff > 0.045 && vPauseDiff <= 0.35 && vPausedTime >= 0 && bufferMonitor.isTimeBuffered(audioEl, vPausedTime, 0.2)) {
+                  state.savedMasterTime = vPausedTime;
+                  state.internalAudioSeeking = true;
+                  state.internalASeekUntil = compat.now() + 1200;
+                  try { nativeSetATime(vPausedTime); } catch (_) {}
+                } else if (vPauseDiff > 0.35) {
+                  state.internalVideoSeeking = true;
+                  state.internalVSeekUntil = compat.now() + 1200;
+                  try { nativeSetVTime(aPausedTime); } catch (_) {}
+                }
               }
             }
           }
@@ -6290,9 +6257,7 @@ window.SyncLevel = SyncLevel;
       }
 
       function enforceRateAndVolume() {
-        var baseRate = (typeof window.Alabaster._targetPlaybackRate === 'number' && window.Alabaster._targetPlaybackRate > 0)
-          ? window.Alabaster._targetPlaybackRate
-          : (videoEl.playbackRate || player.playbackRate() || 1);
+        var baseRate = getTargetPlaybackRate();
         if (videoEl.playbackRate !== baseRate) {
           videoEl.playbackRate = baseRate;
         }
@@ -6333,7 +6298,7 @@ window.SyncLevel = SyncLevel;
         try {
           var dur = getAuthoritativeDuration() || 0;
           var pos = getAuthoritativeTime();
-          var rate = (typeof window.Alabaster._targetPlaybackRate === 'number' && window.Alabaster._targetPlaybackRate > 0) ? window.Alabaster._targetPlaybackRate : (videoEl.playbackRate || player.playbackRate() || 1);
+          var rate = getTargetPlaybackRate();
           if (dur > 0 && isFinite(dur) && pos >= 0 && pos <= dur) {
             navigator.mediaSession.setPositionState({
               duration: dur,
@@ -6350,15 +6315,13 @@ window.SyncLevel = SyncLevel;
         if (state.endedCompleted && state.endedAtTime > 0) {
           vCur = state.endedAtTime;
           aCur = state.endedAtTime;
-        } else if (state.primingDecoder && !state.wantPlaying) {
-          vCur = state.savedMasterTime || aCur;
-          aCur = vCur;
         } else if ((nativeGetVEnded() && !audioEl.ended) || (audioEl.ended && !nativeGetVEnded())) {
           var maxEndCur = Math.max(vCur, aCur);
           vCur = maxEndCur;
           aCur = maxEndCur;
         }
-        var dSec = (isVideoBypassed() || state.hidden) ? 0 : Math.abs(vCur - aCur);
+        var hiddenEffective = isEffectivelyHidden();
+        var dSec = (isVideoBypassed() || hiddenEffective) ? 0 : Math.abs(vCur - aCur);
         var dMs = Math.round(dSec * 1000);
         SyncLevel.videoTime = Number(vCur.toFixed(3));
         SyncLevel.audioTime = Number(aCur.toFixed(3));
@@ -6371,7 +6334,7 @@ window.SyncLevel = SyncLevel;
         SyncLevel.buffering = Boolean(state.buffering);
         SyncLevel.longVideoMode = isLongVideo();
         SyncLevel.highResMode = isHighResVideo();
-        SyncLevel.synced = (isVideoBypassed() || state.hidden) ? true : (dSec <= getDriftTolerance());
+        SyncLevel.synced = (isVideoBypassed() || hiddenEffective) ? true : (dSec <= getDriftTolerance());
         if (window.Alabaster.testErrorActive) {
           SyncLevel.status = 'error-test-ui';
         } else if (state.userSeeking) {
@@ -6380,7 +6343,7 @@ window.SyncLevel = SyncLevel;
           SyncLevel.status = 'buffering-locked';
         } else if (!state.wantPlaying) {
           SyncLevel.status = 'paused';
-        } else if (isVideoBypassed() || state.hidden) {
+        } else if (isVideoBypassed() || hiddenEffective) {
           SyncLevel.status = 'background-audio';
         } else {
           SyncLevel.status = SyncLevel.synced ? 'playing-synced' : 'correcting-drift';
@@ -6412,7 +6375,7 @@ window.SyncLevel = SyncLevel;
             if (!state.wantPlaying) return;
             if (mediaEl === videoEl) {
               state.reprimingVideoAt = 0;
-              reprimeEvictedVideo(resumeAt);
+              reprimeEvictedVideo(resumeAt, true);
               return;
             }
             runInternal(function() {
@@ -6451,22 +6414,22 @@ window.SyncLevel = SyncLevel;
         state.watchdogTimer = setTimeout(function() {
           state.watchdogTimer = 0;
           if (!state.wantPlaying && !state.userSeeking) return;
-          if (state.primingDecoder || state.cancelSeekWait || state.launchingPlay || state.holdingVideoForSync) return;
+          if (state.wakeSyncing || state.cancelSeekWait || state.launchingPlay || state.holdingVideoForSync) return;
 
           if (isPlaybackCompleted()) {
             onStreamEnded();
             return;
           }
 
-          if ((videoEl.networkState === 0 || (videoEl.readyState === 0 && videoEl.networkState !== 2 && !videoEl.seeking)) && !isVideoBypassed() && !state.hidden) {
-            reprimeEvictedVideo(getMasterAnchorTime());
+          if ((videoEl.networkState === 0 || (videoEl.readyState === 0 && videoEl.networkState !== 2 && !videoEl.seeking)) && !isVideoBypassed() && !isEffectivelyHidden()) {
+            reprimeEvictedVideo(state.userSeeking ? state.seekTarget : getMasterAnchorTime(), false);
           }
           if (audioEl.networkState === 0) {
             try { audioEl.load(); } catch (_) {}
           }
 
           if (state.userSeeking) {
-            if ((!isVideoBypassed() && !state.hidden && videoEl.seeking) || audioEl.seeking) {
+            if ((!isVideoBypassed() && !isEffectivelyHidden() && videoEl.seeking) || audioEl.seeking) {
               armNetworkWatchdog();
               return;
             }
@@ -6476,7 +6439,7 @@ window.SyncLevel = SyncLevel;
 
           var timeBuf = state.buffering ? (compat.now() - state.bufferStartTime) : 0;
           var needed = state.buffering ? getMinResumeBuffer() : getMinPlayBuffer();
-          var vReady = isVideoBypassed() || state.hidden || bufferMonitor.canPlayCleanly(videoEl, needed, timeBuf, nativeGetVTime());
+          var vReady = isVideoBypassed() || isEffectivelyHidden() || bufferMonitor.canPlayCleanly(videoEl, needed, timeBuf, nativeGetVTime());
           var aReady = bufferMonitor.canPlayCleanly(audioEl, needed, timeBuf, nativeGetATime());
 
           if (vReady && aReady) {
@@ -6491,10 +6454,11 @@ window.SyncLevel = SyncLevel;
 
       function prepareCleanAudioResume() {
         var now = compat.now();
-        state.playGraceUntil = Math.max(state.playGraceUntil, now + 900);
+        state.playGraceUntil = Math.max(state.playGraceUntil, now + 500);
         state.lastCorrectionAt = 0;
-        state.driftCount = 0;
         state.avgDrift = 0;
+        state.aheadDriftSince = 0;
+        state.behindDriftSince = 0;
         try {
           var ctx = window.audioCtx || window.audioContext || window._alabasterAudioCtx || (window.Alabaster && window.Alabaster.audioCtx);
           if (ctx && ctx.state === 'suspended' && typeof ctx.resume === 'function') {
@@ -6505,7 +6469,7 @@ window.SyncLevel = SyncLevel;
 
       function startLockstepPlayback() {
         if (!state.wantPlaying || state.userSeeking) return;
-        if (state.launchingPlay || state.holdingVideoForSync || state.primingDecoder || state.cancelSeekWait) return;
+        if (state.launchingPlay || state.holdingVideoForSync || state.wakeSyncing || state.cancelSeekWait) return;
 
         if (isPlaybackCompleted()) {
           onStreamEnded();
@@ -6562,7 +6526,7 @@ window.SyncLevel = SyncLevel;
           return;
         }
 
-        if (state.hidden) {
+        if (isEffectivelyHidden()) {
           var timeBufHidden = state.buffering ? (compat.now() - state.bufferStartTime) : 0;
           var neededHidden = state.buffering ? getMinResumeBuffer() : getMinPlayBuffer();
           var aReadyHidden = bufferMonitor.canPlayCleanly(audioEl, neededHidden, timeBufHidden, nativeGetATime());
@@ -6576,8 +6540,8 @@ window.SyncLevel = SyncLevel;
           setBufferSpinner(false);
           clearWatchdog();
           runInternal(function() {
-            if (nativeGetVPaused() && !nativeGetVEnded() && !videoEl.seeking && videoEl.readyState >= 2 && bufferMonitor.ahead(videoEl, nativeGetVTime()) >= 0.25) {
-              compat.safePlay(nativeVideoPlay);
+            if (!nativeGetVPaused()) {
+              try { nativeVideoPause(); } catch (_) {}
             }
             if (nativeGetAPaused() && !audioEl.ended) {
               prepareCleanAudioResume();
@@ -6618,7 +6582,7 @@ window.SyncLevel = SyncLevel;
           return;
         }
 
-        if (!nativeGetAPaused() && !nativeGetVPaused() && !videoEl.seeking && !audioEl.seeking && Math.abs(nativeGetVTime() - nativeGetATime()) <= 0.22) {
+        if (!nativeGetAPaused() && !nativeGetVPaused() && !videoEl.seeking && !audioEl.seeking && Math.abs(nativeGetVTime() - nativeGetATime()) <= 0.12) {
           state.hasStartedPlayback = true;
           state.initialAutoplayAttempt = false;
           state.isFrozen = false;
@@ -6635,10 +6599,8 @@ window.SyncLevel = SyncLevel;
           return;
         }
 
-        if (!nativeGetAPaused() && (isTabWaking() || isLiveSnapping())) {
-          if (!isLiveSnapping() && nativeGetVPaused() && !videoEl.seeking && videoEl.readyState >= 2) {
-            runInternal(function() { compat.safePlay(nativeVideoPlay); });
-          }
+        if (!nativeGetAPaused()) {
+          resyncVideoToLiveAudioOnWake(0);
           return;
         }
 
@@ -6647,56 +6609,48 @@ window.SyncLevel = SyncLevel;
         var vCurNow = nativeGetVTime();
 
         if (videoEl.readyState === 0) {
-          reprimeEvictedVideo(Math.max(aCurNow, masterAnchor, state.maxPlayedVideoTime));
-          if (!nativeGetAPaused() && isTabWaking()) {
-            return;
-          }
+          reprimeEvictedVideo(Math.max(aCurNow, masterAnchor), false);
           setBufferSpinner(true);
           armNetworkWatchdog();
           return;
         }
 
         if (!audioEl.seeking && nativeGetAPaused()) {
-          if (aCurNow > masterAnchor + 0.05 && aCurNow <= Math.max(masterAnchor, state.maxPlayedAudioTime) + 5.0) {
+          if (aCurNow > masterAnchor + 0.05 && aCurNow <= masterAnchor + 2.0) {
             state.savedMasterTime = aCurNow;
-            state.maxPlayedAudioTime = Math.max(state.maxPlayedAudioTime, aCurNow);
             masterAnchor = aCurNow;
-          } else if (aCurNow < masterAnchor - 0.3 || aCurNow > Math.max(masterAnchor, state.maxPlayedAudioTime) + 5.0) {
+          } else if (Math.abs(aCurNow - masterAnchor) > 0.25) {
             freezeBothStreams();
             setBufferSpinner(true);
-            seekAudioAndWait(Math.max(masterAnchor, state.maxPlayedAudioTime), function() {
+            seekAudioAndWait(masterAnchor, function() {
               syncPlaybackState();
             });
             return;
           }
         }
 
-        state.needsWakeReprime = false;
-        var targetSyncTime = aCurNow;
-        var vDiffFromTarget = vCurNow - targetSyncTime;
-        var canLetAudioCatchUpToVideo = vDiffFromTarget > 0 && vDiffFromTarget <= 5.0;
-        var alreadyAlignedHere = state.alignedForAnchor !== null && Math.abs(state.alignedForAnchor - targetSyncTime) < 0.08 && Math.abs(vDiffFromTarget) <= 0.25;
-        if (!alreadyAlignedHere && !canLetAudioCatchUpToVideo && (vDiffFromTarget < -0.22 || vDiffFromTarget > 5.0)) {
-          if (!nativeGetAPaused() && isTabWaking()) {
-            var baseRateWake = (typeof window.Alabaster._targetPlaybackRate === 'number' && window.Alabaster._targetPlaybackRate > 0) ? window.Alabaster._targetPlaybackRate : (videoEl.playbackRate || player.playbackRate() || 1);
-            var wakeSnapDest = Math.max(targetSyncTime + ((isHeavyStream() ? 0.50 : 0.35) * baseRateWake), state.maxPlayedVideoTime);
-            if (vCurNow < wakeSnapDest - 0.05) {
-              pauseVideoOnly();
-              snapVideoToAudioLive(wakeSnapDest, Math.max(2000, getSeekTimeout()));
-              state.tabWakeUntil = Math.max(state.tabWakeUntil, state.liveSnapUntil + 200);
-            }
-            return;
-          } else if (nativeGetAPaused() && vDiffFromTarget < -0.22) {
-            freezeBothStreams();
-            setBufferSpinner(true);
-            seekVideoAndWait(Math.max(targetSyncTime, state.maxPlayedVideoTime), function() {
+        var vDiffFromAudio = vCurNow - aCurNow;
+        if (Math.abs(state.alignAttemptAnchor - aCurNow) > 0.1) {
+          state.alignAttemptAnchor = aCurNow;
+          state.alignAttemptCount = 0;
+        }
+        if (Math.abs(vDiffFromAudio) > config.maxStartDesyncSec && state.alignAttemptCount < 2) {
+          state.alignAttemptCount++;
+          freezeBothStreams();
+          setBufferSpinner(true);
+          if (Math.abs(vDiffFromAudio) <= 0.45 && videoEl.readyState >= 2 && vCurNow >= 0 && bufferMonitor.isTimeBuffered(audioEl, vCurNow, 0.25)) {
+            seekAudioAndWait(vCurNow, function() {
               syncPlaybackState();
             });
-            return;
+          } else {
+            seekVideoAndWait(aCurNow, function() {
+              syncPlaybackState();
+            });
           }
+          return;
         }
 
-        if ((videoEl.seeking && !isLiveSnapping() && !isTabWaking()) || audioEl.seeking) {
+        if (videoEl.seeking || audioEl.seeking) {
           setBufferSpinner(true);
           if (!nativeGetAPaused() || !nativeGetVPaused()) freezeBothStreams();
           var waitFn = videoEl.seeking ? waitVideoSettled : waitAudioSettled;
@@ -6712,9 +6666,6 @@ window.SyncLevel = SyncLevel;
         var timeBuf = state.buffering ? (compat.now() - state.bufferStartTime) : 0;
         var neededLead = state.buffering ? getMinResumeBuffer() : getMinPlayBuffer();
         if (!bufferMonitor.canPlayCleanly(videoEl, neededLead, timeBuf, nativeGetVTime()) || !bufferMonitor.canPlayCleanly(audioEl, neededLead, timeBuf, nativeGetATime())) {
-          if (!nativeGetAPaused() && (isTabWaking() || isLiveSnapping()) && bufferMonitor.canPlayCleanly(audioEl, neededLead, timeBuf, nativeGetATime())) {
-            return;
-          }
           setBufferSpinner(true);
           if (!nativeGetAPaused() || !nativeGetVPaused()) freezeBothStreams();
           armNetworkWatchdog();
@@ -6729,26 +6680,24 @@ window.SyncLevel = SyncLevel;
             return;
           }
 
-          if (!isVideoBypassed() && !state.hidden && (videoEl.readyState < 2 || (videoEl.seeking && !isLiveSnapping() && !isTabWaking()) || audioEl.readyState < 2 || audioEl.seeking)) {
+          if (!isVideoBypassed() && !isEffectivelyHidden() && (videoEl.readyState < 2 || videoEl.seeking || audioEl.readyState < 2 || audioEl.seeking)) {
             setBufferSpinner(true);
             if (!nativeGetAPaused() || !nativeGetVPaused()) freezeBothStreams();
             armNetworkWatchdog();
             return;
           }
 
-          var v0Init = nativeGetVTime();
-          var a0Init = nativeGetATime();
-          var baseRateInit = (typeof window.Alabaster._targetPlaybackRate === 'number' && window.Alabaster._targetPlaybackRate > 0) ? window.Alabaster._targetPlaybackRate : (videoEl.playbackRate || player.playbackRate() || 1);
-          var leadBudgetMs = v0Init > a0Init ? Math.round(((v0Init - a0Init) / baseRateInit) * 1000) : 0;
-
           clearLaunchPoll();
           state.launchingPlay = true;
           state.isFrozen = false;
           state.alignedForAnchor = null;
+          state.alignAttemptCount = 0;
           prepareCleanAudioResume();
-          state.playGraceUntil = compat.now() + Math.max(1100, leadBudgetMs + 900);
+          state.playGraceUntil = compat.now() + 600;
           state.vStallSince = 0;
           state.aStallSince = 0;
+          state.aheadDriftSince = 0;
+          state.behindDriftSince = 0;
           setBufferSpinner(false);
           clearWatchdog();
 
@@ -6758,37 +6707,36 @@ window.SyncLevel = SyncLevel;
             var v0 = nativeGetVTime();
             var a0 = nativeGetATime();
             var launchStart = compat.now();
-            var baseRate = (typeof window.Alabaster._targetPlaybackRate === 'number' && window.Alabaster._targetPlaybackRate > 0) ? window.Alabaster._targetPlaybackRate : (videoEl.playbackRate || player.playbackRate() || 1);
-            var audioAlreadyRunning = !nativeGetAPaused();
-            var videoLeadsAudio = v0 > a0 + 0.015;
-            var audioFirstMode = audioAlreadyRunning || videoLeadsAudio;
             var vPlayCalled = false;
             var aPlayCalled = false;
             var vResolved = false;
             var aResolved = false;
             var vStarted = false;
             var aStarted = false;
-            var vFramePainted = false;
-            var vHeld = false;
-            var vResuming = false;
-            var vHeldOnce = false;
-            var vAtAudioCall = 0;
+            var rvfFramesSeen = 0;
+            var vFrameAdvanced = false;
+            var hasRvf = typeof videoEl.requestVideoFrameCallback === 'function';
             var audioCalledAt = 0;
-            var videoCalledAt = 0;
-            var settledAt = 0;
             var finished = false;
             var uiMarked = false;
 
-            if (typeof videoEl.requestVideoFrameCallback === 'function') {
+            var scheduleLaunchRvf = function() {
+              if (finished || currentSeq !== state.sequence || !hasRvf) return;
               try {
                 state.launchRvfId = videoEl.requestVideoFrameCallback(function(nowTs, meta) {
                   state.launchRvfId = 0;
-                  if (meta && typeof meta.mediaTime === 'number' && meta.mediaTime > v0 + 0.001) {
-                    vFramePainted = true;
+                  if (finished || currentSeq !== state.sequence) return;
+                  rvfFramesSeen++;
+                  if ((meta && typeof meta.mediaTime === 'number' && meta.mediaTime > v0 + 0.001) || rvfFramesSeen >= 2) {
+                    vFrameAdvanced = true;
+                  } else {
+                    scheduleLaunchRvf();
                   }
                 });
               } catch (_) {}
-            }
+            };
+
+            scheduleLaunchRvf();
 
             var markStartedOnce = function() {
               if (uiMarked) return;
@@ -6815,7 +6763,7 @@ window.SyncLevel = SyncLevel;
               if (currentSeq !== state.sequence) return;
               state.launchingPlay = false;
 
-              if (!isVideoBypassed() && !state.hidden && (nativeGetVPaused() || nativeGetAPaused())) {
+              if (!isVideoBypassed() && !isEffectivelyHidden() && (nativeGetVPaused() || nativeGetAPaused())) {
                 if (state.initialAutoplayAttempt) {
                   applyBlockedAutoplayPauseState();
                   return;
@@ -6826,30 +6774,66 @@ window.SyncLevel = SyncLevel;
                 return;
               }
 
-              state.needsWakeReprime = false;
-              state.playGraceUntil = compat.now() + 900;
-              state.steadyPlaybackSince = compat.now() + 250;
+              var finishNow = compat.now();
+              state.playGraceUntil = finishNow + 450;
+              state.steadyPlaybackSince = finishNow + 200;
               setBufferSpinner(false);
               clearWatchdog();
               state.lastCorrectionAt = 0;
-              state.driftCount = 0;
               state.avgDrift = 0;
-              state.highDriftSince = 0;
+              state.aheadDriftSince = 0;
+              state.behindDriftSince = 0;
               state.vStallSince = 0;
               state.aStallSince = 0;
               shield.activate();
               markStartedOnce();
             };
 
+            var startAudioStream = function() {
+              if (aPlayCalled || finished || currentSeq !== state.sequence) return;
+              aPlayCalled = true;
+              audioCalledAt = compat.now();
+              var pA = nativeGetAPaused() ? runInternal(nativeAudioPlay) : Promise.resolve();
+              if (!pA || typeof pA.then !== 'function') pA = Promise.resolve();
+              pA.then(function() {
+                if (finished || currentSeq !== state.sequence || !state.wantPlaying || state.userSeeking) return;
+                if (nativeGetAPaused()) {
+                  finished = true;
+                  clearTimeout(launchTimer);
+                  clearLaunchPoll();
+                  state.launchingPlay = false;
+                  applyBlockedAutoplayPauseState();
+                  return;
+                }
+                aResolved = true;
+                if (vResolved) markStartedOnce();
+                if (!state.launchPollTimer) pollLaunchSync();
+              }).catch(function(err) {
+                if (finished || currentSeq !== state.sequence) return;
+                var errName = err && err.name;
+                if (errName === 'AbortError') return;
+                finished = true;
+                clearTimeout(launchTimer);
+                clearLaunchPoll();
+                state.launchingPlay = false;
+                if (errName === 'NotAllowedError' || state.initialAutoplayAttempt) {
+                  applyBlockedAutoplayPauseState();
+                } else {
+                  freezeBothStreams();
+                  setBufferSpinner(true);
+                  armNetworkWatchdog();
+                }
+              });
+            };
+
             var startVideoStream = function() {
               if (vPlayCalled || finished || currentSeq !== state.sequence) return;
               vPlayCalled = true;
-              videoCalledAt = compat.now();
               var pV = (!isVideoBypassed() && nativeGetVPaused()) ? runInternal(nativeVideoPlay) : Promise.resolve();
               if (!pV || typeof pV.then !== 'function') pV = Promise.resolve();
               pV.then(function() {
                 if (finished || currentSeq !== state.sequence || !state.wantPlaying || state.userSeeking) return;
-                if (nativeGetVPaused() && !vHeld) {
+                if (nativeGetVPaused()) {
                   finished = true;
                   clearTimeout(launchTimer);
                   clearLaunchPoll();
@@ -6884,47 +6868,9 @@ window.SyncLevel = SyncLevel;
               });
             };
 
-            var startAudioStream = function() {
-              if (aPlayCalled || finished || currentSeq !== state.sequence) return;
-              aPlayCalled = true;
-              audioCalledAt = compat.now();
-              vAtAudioCall = nativeGetVTime();
-              var pA = nativeGetAPaused() ? runInternal(nativeAudioPlay) : Promise.resolve();
-              if (!pA || typeof pA.then !== 'function') pA = Promise.resolve();
-              pA.then(function() {
-                if (finished || currentSeq !== state.sequence || !state.wantPlaying || state.userSeeking) return;
-                if (nativeGetAPaused()) {
-                  finished = true;
-                  clearTimeout(launchTimer);
-                  clearLaunchPoll();
-                  state.launchingPlay = false;
-                  applyBlockedAutoplayPauseState();
-                  return;
-                }
-                aResolved = true;
-                if (vResolved) markStartedOnce();
-                if (!state.launchPollTimer) pollLaunchSync();
-              }).catch(function(err) {
-                if (finished || currentSeq !== state.sequence) return;
-                var errName = err && err.name;
-                if (errName === 'AbortError') return;
-                finished = true;
-                clearTimeout(launchTimer);
-                clearLaunchPoll();
-                state.launchingPlay = false;
-                if (errName === 'NotAllowedError' || state.initialAutoplayAttempt) {
-                  applyBlockedAutoplayPauseState();
-                } else {
-                  freezeBothStreams();
-                  setBufferSpinner(true);
-                  armNetworkWatchdog();
-                }
-              });
-            };
-
             var pollLaunchSync = function() {
               state.launchPollTimer = 0;
-              if (finished || currentSeq !== state.sequence || !state.wantPlaying || state.userSeeking || isVideoBypassed() || state.hidden) {
+              if (finished || currentSeq !== state.sequence || !state.wantPlaying || state.userSeeking || isVideoBypassed() || isEffectivelyHidden()) {
                 return;
               }
               if (nativeGetVEnded() || audioEl.ended || isPlaybackCompleted()) {
@@ -6941,23 +6887,23 @@ window.SyncLevel = SyncLevel;
               var vNow = nativeGetVTime();
               var aNow = nativeGetATime();
 
-              if (!vStarted && vPlayCalled && (vFramePainted || vNow > v0 + 0.002)) {
-                vStarted = true;
+              if (!vStarted && vPlayCalled) {
+                if (hasRvf) {
+                  if (vFrameAdvanced || (rvfFramesSeen >= 1 && vNow > v0 + 0.002) || vNow > v0 + 0.025 || isStreamNearItsEnd(videoEl, true)) {
+                    vStarted = true;
+                  }
+                } else if (vNow > v0 + 0.002 || isStreamNearItsEnd(videoEl, true)) {
+                  vStarted = true;
+                }
               }
-              if (!aStarted && aPlayCalled && (audioAlreadyRunning || aNow > a0 + 0.002)) {
+              if (!aStarted && aPlayCalled && (aNow > a0 + 0.002 || isStreamNearItsEnd(audioEl, false))) {
                 aStarted = true;
               }
 
-              var curRate = (typeof window.Alabaster._targetPlaybackRate === 'number' && window.Alabaster._targetPlaybackRate > 0) ? window.Alabaster._targetPlaybackRate : (videoEl.playbackRate || baseRate || 1);
-              var vResumeLead = state.vResumeLatency * curRate + 0.003;
-              var aResumeLead = state.aResumeLatency * curRate;
-              var catchupBudgetMs = Math.max(850, Math.round((Math.max(0, v0 - a0) / curRate) * 1000) + 550);
-
-              if (!audioFirstMode && !aPlayCalled) {
-                if (vStarted && (vNow >= a0 - aResumeLead || elapsed > 500)) {
+              if (!aPlayCalled) {
+                if (vStarted) {
                   startAudioStream();
-                }
-                if (elapsed > 850 && !aPlayCalled) {
+                } else if (videoEl.readyState < 2 || elapsed > 3000) {
                   finished = true;
                   clearTimeout(launchTimer);
                   clearLaunchPoll();
@@ -6967,101 +6913,19 @@ window.SyncLevel = SyncLevel;
                   armNetworkWatchdog();
                   return;
                 }
-                state.launchPollTimer = setTimeout(pollLaunchSync, 4);
+                state.launchPollTimer = setTimeout(pollLaunchSync, 6);
                 return;
               }
 
-              if (audioFirstMode && !vPlayCalled) {
-                if (aStarted && aNow >= v0 - vResumeLead) {
-                  startVideoStream();
-                }
-                if (((!aStarted && elapsed > 850) || elapsed > catchupBudgetMs) && !vPlayCalled) {
-                  finished = true;
-                  clearTimeout(launchTimer);
-                  clearLaunchPoll();
-                  state.launchingPlay = false;
-                  setBufferSpinner(true);
-                  freezeBothStreams();
-                  armNetworkWatchdog();
-                  return;
-                }
-                state.launchPollTimer = setTimeout(pollLaunchSync, 4);
-                return;
-              }
-
-              var signed = vNow - aNow;
-
-              if (!audioFirstMode && aPlayCalled && vStarted && !vHeld && !vHeldOnce && ((!aStarted && signed > 0.035) || (!(vResolved && aResolved) && signed > 0.07))) {
-                vHeld = true;
-                settledAt = 0;
-                pauseVideoOnly();
-                state.launchPollTimer = setTimeout(pollLaunchSync, 4);
-                return;
-              }
-
-              if (vHeld) {
-                if (aStarted && aNow >= vNow - vResumeLead) {
-                  vHeld = false;
-                  vHeldOnce = true;
-                  vResuming = true;
-                  settledAt = now + 70;
-                  var pResumeLaunch = null;
-                  runInternal(function() { pResumeLaunch = compat.safePlay(nativeVideoPlay); });
-                  if (pResumeLaunch && typeof pResumeLaunch.then === 'function') {
-                    pResumeLaunch.then(function() { vResuming = false; }, function() { vResuming = false; });
-                  } else {
-                    vResuming = false;
-                  }
-                } else if (elapsed > Math.max(950, catchupBudgetMs)) {
-                  finished = true;
-                  clearTimeout(launchTimer);
-                  clearLaunchPoll();
-                  state.launchingPlay = false;
-                  setBufferSpinner(true);
-                  freezeBothStreams();
-                  armNetworkWatchdog();
-                  return;
-                }
-                state.launchPollTimer = setTimeout(pollLaunchSync, 4);
-                return;
-              }
-
-              if (vResuming) {
-                if (!nativeGetVPaused() || elapsed > Math.max(1050, catchupBudgetMs + 150)) {
-                  vResuming = false;
-                }
-                state.launchPollTimer = setTimeout(pollLaunchSync, 4);
-                return;
-              }
-
-              if (vResolved && aResolved && vStarted && aStarted && !nativeGetVPaused() && !nativeGetAPaused()) {
-                if (!settledAt) {
-                  settledAt = now + 55;
-                }
-                if (now >= settledAt || elapsed > Math.max(1050, catchupBudgetMs + 150)) {
-                  if (!audioFirstMode && !vHeldOnce && audioCalledAt > 0) {
-                    var estALat = (signed - (vAtAudioCall - a0)) / curRate;
-                    if (estALat > 0 && estALat < 0.12) {
-                      state.aResumeLatency = Math.max(0.004, Math.min(0.048, state.aResumeLatency * 0.5 + estALat * 0.5));
-                    }
-                  } else if (vHeldOnce && Math.abs(signed) < 0.12) {
-                    state.vResumeLatency = Math.max(0.004, Math.min(0.048, state.vResumeLatency - ((signed - 0.003) / curRate) * 0.55));
-                  }
-                  if (signed > 0.045 && signed <= 5.0 && !vHeldOnce && elapsed <= Math.max(900, catchupBudgetMs)) {
-                    vHeld = true;
-                    settledAt = 0;
-                    pauseVideoOnly();
-                    state.launchPollTimer = setTimeout(pollLaunchSync, 4);
-                    return;
-                  }
+              if (vResolved && aResolved && !nativeGetVPaused() && !nativeGetAPaused()) {
+                if (vStarted && (aStarted || (audioCalledAt > 0 && now - audioCalledAt >= 450))) {
                   finishLaunch();
                   return;
                 }
               }
 
-              var maxLaunchWait = Math.max(1100, catchupBudgetMs + 250, (audioCalledAt ? (audioCalledAt - launchStart + 450) : 0), (videoCalledAt ? (videoCalledAt - launchStart + 450) : 0));
-              if (elapsed > maxLaunchWait) {
-                if (vResolved && aResolved && !nativeGetVPaused() && !nativeGetAPaused() && vStarted && aStarted) {
+              if (elapsed > 3500) {
+                if (vResolved && aResolved && !nativeGetVPaused() && !nativeGetAPaused()) {
                   finishLaunch();
                 } else {
                   finished = true;
@@ -7075,7 +6939,7 @@ window.SyncLevel = SyncLevel;
                 return;
               }
 
-              state.launchPollTimer = setTimeout(pollLaunchSync, 4);
+              state.launchPollTimer = setTimeout(pollLaunchSync, 6);
             };
 
             var launchTimer = setTimeout(function() {
@@ -7087,18 +6951,15 @@ window.SyncLevel = SyncLevel;
                   applyBlockedAutoplayPauseState();
                   return;
                 }
-                if (!isVideoBypassed() && !state.hidden && (nativeGetVPaused() || nativeGetAPaused() || videoEl.seeking || audioEl.seeking || videoEl.readyState < 2 || audioEl.readyState < 2)) {
+                if (!isVideoBypassed() && !isEffectivelyHidden() && (nativeGetVPaused() || nativeGetAPaused() || videoEl.seeking || audioEl.seeking || videoEl.readyState < 2 || audioEl.readyState < 2)) {
                   freezeBothStreams();
                 }
                 syncPlaybackState();
               }
-            }, Math.max(1800, leadBudgetMs + 1400));
+            }, 4000);
 
-            if (audioFirstMode) {
-              startAudioStream();
-            } else {
-              startVideoStream();
-            }
+            startVideoStream();
+            state.launchPollTimer = setTimeout(pollLaunchSync, 6);
           });
         };
 
@@ -7109,10 +6970,6 @@ window.SyncLevel = SyncLevel;
         if (state.syncingState) return;
         state.syncingState = true;
         try {
-          if (state.primingDecoder && !state.userSeeking) {
-            return;
-          }
-
           if (!state.wantPlaying) {
             if (state.userSeeking) {
               armNetworkWatchdog();
@@ -7137,7 +6994,7 @@ window.SyncLevel = SyncLevel;
             return;
           }
 
-          if (state.launchingPlay || state.holdingVideoForSync || state.cancelSeekWait) {
+          if (state.launchingPlay || state.holdingVideoForSync || state.wakeSyncing || state.cancelSeekWait) {
             return;
           }
 
@@ -7193,8 +7050,10 @@ window.SyncLevel = SyncLevel;
             return;
           }
 
-          if (!state.hidden && videoEl.readyState === 0) {
-            reprimeEvictedVideo(Math.max(getMasterAnchorTime(), state.maxPlayedVideoTime));
+          var hiddenEffective = isEffectivelyHidden();
+
+          if (!hiddenEffective && videoEl.readyState === 0) {
+            reprimeEvictedVideo(getMasterAnchorTime(), false);
             if (!nativeGetAPaused() && isTabWaking()) {
               return;
             }
@@ -7204,7 +7063,7 @@ window.SyncLevel = SyncLevel;
           }
 
           var audioReady = bufferMonitor.canPlayCleanly(audioEl, neededLead, timeBuf, nativeGetATime());
-          var videoReady = state.hidden || bufferMonitor.canPlayCleanly(videoEl, neededLead, timeBuf, nativeGetVTime());
+          var videoReady = hiddenEffective || bufferMonitor.canPlayCleanly(videoEl, neededLead, timeBuf, nativeGetVTime());
 
           if (!audioReady || !videoReady) {
             if (!nativeGetAPaused() && audioReady && (isTabWaking() || isLiveSnapping())) {
@@ -7233,22 +7092,24 @@ window.SyncLevel = SyncLevel;
         }
         cancelVideoHold();
         clearLaunchPoll();
-        cancelDecoderPrime();
+        cancelWakeSync();
         clearWakeFrameCheck();
         state.endedCompleted = false;
         state.endedAtTime = 0;
         state.endStallSince = 0;
         state.alignedForAnchor = null;
+        state.alignAttemptCount = 0;
         player.removeClass('vjs-ended');
         state.userSeeking = true;
+        state.seekAudioRetried = false;
+        state.seekVideoRetried = false;
+        state.seekAlignRetried = false;
         state.internalVideoSeeking = false;
         state.internalAudioSeeking = false;
         state.launchingPlay = false;
         state.seekTarget = clamped;
         state.lastSeekAt = compat.now();
         state.savedMasterTime = clamped;
-        state.maxPlayedAudioTime = clamped;
-        state.maxPlayedVideoTime = clamped;
         state.frozenDisplayTime = clamped;
         state.sequence++;
         state.seekStartTime = compat.now();
@@ -7259,17 +7120,17 @@ window.SyncLevel = SyncLevel;
 
         freezeBothStreams();
         runInternal(function() {
-          if (!isVideoBypassed() && !state.hidden) {
+          if (!isVideoBypassed() && !isEffectivelyHidden()) {
             if (videoEl.readyState === 0) {
-              reprimeEvictedVideo(clamped);
+              reprimeEvictedVideo(clamped, true);
             } else {
               state.internalVideoSeeking = true;
-              state.internalVSeekUntil = compat.now() + 1200;
+              state.internalVSeekUntil = compat.now() + 2000;
               try { nativeSetVTime(clamped); } catch (_) {}
             }
           }
           state.internalAudioSeeking = true;
-          state.internalASeekUntil = compat.now() + 1200;
+          state.internalASeekUntil = compat.now() + 2000;
           try { nativeSetATime(clamped); } catch (_) {}
         });
 
@@ -7279,9 +7140,23 @@ window.SyncLevel = SyncLevel;
 
       function completeUserSeek() {
         if (!state.userSeeking) return;
-        if ((!isVideoBypassed() && !state.hidden && videoEl.seeking) || audioEl.seeking) {
+        var hiddenEffective = isEffectivelyHidden();
+        var bypassVideo = isVideoBypassed() || hiddenEffective;
+
+        if ((!bypassVideo && videoEl.seeking) || audioEl.seeking) {
           setBufferSpinner(true);
           if (!nativeGetAPaused() || !nativeGetVPaused()) freezeBothStreams();
+          armNetworkWatchdog();
+          return;
+        }
+
+        var timeSinceSeek = compat.now() - state.seekStartTime;
+        var maxWait = getSeekTimeout();
+
+        if (((!bypassVideo && videoEl.readyState < 2) || audioEl.readyState < 2) && timeSinceSeek < maxWait) {
+          if (!bypassVideo && videoEl.readyState === 0) {
+            reprimeEvictedVideo(state.seekTarget, false);
+          }
           armNetworkWatchdog();
           return;
         }
@@ -7289,47 +7164,54 @@ window.SyncLevel = SyncLevel;
         var aNow = nativeGetATime();
         var vNow = nativeGetVTime();
         var dest = state.seekTarget;
-        var timeSinceSeek = compat.now() - state.seekStartTime;
-        var maxWait = getSeekTimeout();
 
-        if (Math.abs(aNow - dest) > 0.25 && timeSinceSeek < maxWait) {
-          if (audioEl.readyState >= 1 && !audioEl.seeking && timeSinceSeek < 900) {
+        if (Math.abs(aNow - dest) > 0.08 && timeSinceSeek < maxWait) {
+          if (audioEl.readyState >= 1 && !audioEl.seeking && !state.seekAudioRetried) {
+            state.seekAudioRetried = true;
             setAudioTimeInternally(dest);
           }
           armNetworkWatchdog();
           return;
         }
 
-        if (!isVideoBypassed() && !state.hidden && Math.abs(vNow - dest) > 0.25 && timeSinceSeek < maxWait) {
-          if (videoEl.readyState >= 1 && !videoEl.seeking && timeSinceSeek < 900) {
+        if (!bypassVideo && Math.abs(vNow - dest) > 0.08 && timeSinceSeek < maxWait) {
+          if (videoEl.readyState >= 1 && !videoEl.seeking && !state.seekVideoRetried) {
+            state.seekVideoRetried = true;
             setVideoTimeInternally(dest);
           } else if (videoEl.readyState === 0) {
-            reprimeEvictedVideo(dest);
+            reprimeEvictedVideo(dest, false);
           }
           armNetworkWatchdog();
           return;
         }
 
-        var finalAnchor = Math.abs(aNow - dest) <= 0.45 ? aNow : dest;
-        if (!isVideoBypassed() && !state.hidden && Math.abs(vNow - finalAnchor) > 0.20 && timeSinceSeek < Math.min(450, maxWait)) {
-          setVideoTimeInternally(finalAnchor);
+        if (!bypassVideo && Math.abs(vNow - aNow) > 0.035 && timeSinceSeek < maxWait && !state.seekAlignRetried) {
+          state.seekAlignRetried = true;
+          if (Math.abs(vNow - dest) <= 0.15 && vNow >= 0) {
+            setAudioTimeInternally(vNow);
+          } else {
+            setVideoTimeInternally(aNow);
+          }
           armNetworkWatchdog();
           return;
         }
 
+        var finalAnchor = Math.abs(aNow - dest) <= 0.2 ? aNow : dest;
         state.seekTarget = finalAnchor;
         state.savedMasterTime = finalAnchor;
-        state.maxPlayedAudioTime = finalAnchor;
-        state.maxPlayedVideoTime = (!isVideoBypassed() && !state.hidden && Math.abs(vNow - finalAnchor) <= 1.0) ? Math.max(finalAnchor, vNow) : finalAnchor;
         state.frozenDisplayTime = finalAnchor;
-        state.alignedForAnchor = Math.abs(vNow - finalAnchor) <= 0.15 ? finalAnchor : null;
+        state.alignedForAnchor = Math.abs(vNow - finalAnchor) <= 0.06 ? finalAnchor : null;
+        state.alignAttemptCount = 0;
         state.lastSeekAt = compat.now();
         state.userSeeking = false;
+        state.seekAudioRetried = false;
+        state.seekVideoRetried = false;
+        state.seekAlignRetried = false;
         state.internalVideoSeeking = false;
         state.internalAudioSeeking = false;
-        state.driftCount = 0;
         state.avgDrift = 0;
-        state.highDriftSince = 0;
+        state.aheadDriftSince = 0;
+        state.behindDriftSince = 0;
         state.vStallSince = 0;
         state.aStallSince = 0;
         state.seekStartTime = 0;
@@ -7354,14 +7236,13 @@ window.SyncLevel = SyncLevel;
         state.endStallSince = 0;
         state.wantPlaying = true;
         state.savedMasterTime = 0;
-        state.maxPlayedAudioTime = 0;
-        state.maxPlayedVideoTime = 0;
         state.seekTarget = 0;
         state.frozenDisplayTime = 0;
         state.alignedForAnchor = null;
-        state.driftCount = 0;
+        state.alignAttemptCount = 0;
         state.avgDrift = 0;
-        state.highDriftSince = 0;
+        state.aheadDriftSince = 0;
+        state.behindDriftSince = 0;
         state.vStallSince = 0;
         state.aStallSince = 0;
         player.removeClass('vjs-ended');
@@ -7371,10 +7252,6 @@ window.SyncLevel = SyncLevel;
       videoEl.play = function() {
         if (state.internalDepth > 0) return nativeVideoPlay();
         if (window.Alabaster.testErrorActive) window.Alabaster.DisableTestUI();
-        if (state.primingDecoder) {
-          cancelDecoderPrime();
-          state.needsWakeReprime = false;
-        }
         if (state.hasUserGesture || state.hasStartedPlayback) {
           state.initialAutoplayAttempt = false;
         }
@@ -7404,8 +7281,6 @@ window.SyncLevel = SyncLevel;
           state.endedAtTime = 0;
           state.endStallSince = 0;
           state.savedMasterTime = 0;
-          state.maxPlayedAudioTime = 0;
-          state.maxPlayedVideoTime = 0;
           state.wantPlaying = true;
           shield.activate();
           markPlayerStartedUI(player);
@@ -7415,8 +7290,8 @@ window.SyncLevel = SyncLevel;
           if (navigator.mediaSession) navigator.mediaSession.playbackState = 'playing';
           beginExternalUserSeek(0);
           return window.Promise ? Promise.resolve() : undefined;
-        } else if (!isVideoBypassed() && !state.hidden && videoEl.readyState === 0) {
-          reprimeEvictedVideo(Math.max(currentAnchor, state.maxPlayedVideoTime));
+        } else if (!isVideoBypassed() && !isEffectivelyHidden() && videoEl.readyState === 0) {
+          reprimeEvictedVideo(currentAnchor, true);
         }
         state.wantPlaying = true;
         setBufferSpinner(false);
@@ -7436,7 +7311,7 @@ window.SyncLevel = SyncLevel;
 
       videoEl.pause = function() {
         if (state.internalDepth > 0) return nativeVideoPause();
-        if ((state.hidden || document.hidden || isTabWaking()) && !hasExplicitUserPauseIntent()) {
+        if ((isEffectivelyHidden() || isTabWaking()) && !hasExplicitUserPauseIntent()) {
           state.hidden = Boolean(document.hidden);
           return;
         }
@@ -7450,13 +7325,14 @@ window.SyncLevel = SyncLevel;
         }
         cancelVideoHold();
         clearLaunchPoll();
-        cancelDecoderPrime();
+        cancelWakeSync();
         clearWakeFrameCheck();
         window.Alabaster._forceUserPause = false;
         state.explicitPauseTokenUntil = 0;
         state.initialAutoplayAttempt = false;
         state.wantPlaying = false;
         state.alignedForAnchor = null;
+        state.alignAttemptCount = 0;
         state.lastPausedAt = compat.now();
         state.sequence++;
         syncPlaybackState();
@@ -7509,26 +7385,16 @@ window.SyncLevel = SyncLevel;
         }
       }, true);
 
-      listen(videoEl, ['playing', 'timeupdate'], function(evt) {
-        if (state.primingDecoder && !state.wantPlaying) {
-          evt.stopImmediatePropagation();
-        }
-      }, true);
-
       listen(videoEl, 'pause', function(evt) {
-        if (state.primingDecoder) {
-          evt.stopImmediatePropagation();
-          return;
-        }
-        var becomingHidden = Boolean(document.hidden || state.hidden);
+        var becomingHidden = Boolean((document.hidden || state.hidden) && !isInPiP());
         var vEndedNow = isStreamNearItsEnd(videoEl, true);
         if (state.endedCompleted || isPlaybackCompleted() || vEndedNow) {
           evt.stopImmediatePropagation();
           return;
         }
-        if (becomingHidden) {
+        if (becomingHidden || state.wakeSyncing) {
           evt.stopImmediatePropagation();
-          if (state.wantPlaying && !state.buffering && !state.userSeeking && !state.launchingPlay && !state.cancelSeekWait && !isVideoBypassed() && nativeGetAPaused() && !audioEl.ended && audioEl.readyState >= 2 && bufferMonitor.ahead(audioEl, nativeGetATime()) >= 0.08) {
+          if (becomingHidden && state.wantPlaying && !state.buffering && !state.userSeeking && !state.launchingPlay && !state.cancelSeekWait && !isVideoBypassed() && nativeGetAPaused() && !audioEl.ended && audioEl.readyState >= 2 && bufferMonitor.ahead(audioEl, nativeGetATime()) >= 0.08) {
             runInternal(function() { compat.safePlay(nativeAudioPlay); });
           }
           return;
@@ -7544,68 +7410,36 @@ window.SyncLevel = SyncLevel;
 
         evt.stopImmediatePropagation();
         state.hidden = Boolean(document.hidden);
-        if (state.hidden) {
+        if (isEffectivelyHidden()) {
           if (!state.buffering && !state.userSeeking && nativeGetAPaused() && !audioEl.ended && audioEl.readyState >= 2 && bufferMonitor.ahead(audioEl, nativeGetATime()) >= 0.08) {
             runInternal(function() { compat.safePlay(nativeAudioPlay); });
           }
           return;
         }
-        if (!state.buffering && !state.userSeeking && !state.cancelSeekWait && !state.launchingPlay && !state.holdingVideoForSync && !isVideoBypassed() && !state.hidden) {
+        if (!state.buffering && !state.userSeeking && !state.cancelSeekWait && !state.launchingPlay && !state.holdingVideoForSync && !state.wakeSyncing && !isVideoBypassed()) {
           syncPlaybackState();
         }
       }, true);
 
-      listen(videoEl, 'play', function(evt) {
-        if (state.primingDecoder) {
-          if (!state.wantPlaying) evt.stopImmediatePropagation();
-          return;
-        }
-        if (isVideoBypassed()) {
+      listen(videoEl, 'play', function() {
+        if (isVideoBypassed() || isEffectivelyHidden()) {
           pauseVideoOnly();
           return;
         }
-        if (state.hidden) {
-          if (!state.wantPlaying || state.buffering || state.userSeeking || (nativeGetAPaused() && !audioEl.ended)) {
-            pauseVideoOnly();
-          }
-          return;
-        }
-        if (state.launchingPlay || state.holdingVideoForSync || isTabWaking() || isLiveSnapping() || isInPlayGrace()) return;
-        var timeBuf = state.buffering ? (compat.now() - state.bufferStartTime) : 0;
-        var needed = state.buffering ? getMinResumeBuffer() : getMinPlayBuffer();
-        var aReady = audioEl.ended || isStreamNearItsEnd(audioEl, false) || bufferMonitor.canPlayCleanly(audioEl, needed, timeBuf, nativeGetATime());
-        var vReady = isStreamNearItsEnd(videoEl, true) || bufferMonitor.canPlayCleanly(videoEl, needed, timeBuf, nativeGetVTime());
-        var inSync = audioEl.ended || isStreamNearItsEnd(audioEl, false) || Math.abs(nativeGetVTime() - nativeGetATime()) <= 0.22;
-        if (!state.wantPlaying || state.buffering || state.userSeeking || (nativeGetAPaused() && !audioEl.ended) || audioEl.seeking || videoEl.seeking || !aReady || !vReady || !inSync) {
+        if (!state.wantPlaying || state.buffering || state.userSeeking) {
           pauseVideoOnly();
         }
       }, true);
 
       listen(audioEl, 'play', function() {
-        if (isVideoBypassed()) return;
-        if (state.launchingPlay || state.holdingVideoForSync || isTabWaking() || isLiveSnapping() || isInPlayGrace()) return;
-        var timeBuf = state.buffering ? (compat.now() - state.bufferStartTime) : 0;
-        var needed = state.buffering ? getMinResumeBuffer() : getMinPlayBuffer();
-        var aReady = isStreamNearItsEnd(audioEl, false) || bufferMonitor.canPlayCleanly(audioEl, needed, timeBuf, nativeGetATime());
-        if (state.hidden || document.hidden) {
-          state.hidden = true;
-          if (!state.wantPlaying || state.buffering || state.userSeeking || !aReady) {
-            pauseAudioOnly();
-          }
-          return;
-        }
-        var vEndedNow = isStreamNearItsEnd(videoEl, true);
-        if (vEndedNow) return;
-        var vReady = bufferMonitor.canPlayCleanly(videoEl, needed, timeBuf, nativeGetVTime());
-        var inSync = Math.abs(nativeGetVTime() - nativeGetATime()) <= 0.22;
-        if (!state.wantPlaying || state.buffering || state.userSeeking || nativeGetVPaused() || (videoEl.seeking && !isLiveSnapping() && !isTabWaking()) || audioEl.seeking || !vReady || !aReady || (!isLiveSnapping() && !inSync)) {
+        if (!state.wantPlaying || state.buffering || state.userSeeking) {
           pauseAudioOnly();
         }
       }, true);
 
       listen(videoEl, 'seeking', function() {
         state.steadyPlaybackSince = 0;
-        if (state.endedCompleted || state.primingDecoder || (!state.userSeeking && !state.buffering)) {
+        if (state.endedCompleted || (!state.userSeeking && !state.buffering)) {
           player.removeClass('vjs-seeking');
           player.removeClass('vjs-waiting');
           if (state.endedCompleted) player.addClass('vjs-ended');
@@ -7613,13 +7447,12 @@ window.SyncLevel = SyncLevel;
         if (
           state.internalDepth > 0 ||
           state.internalVideoSeeking ||
-          state.primingDecoder ||
+          state.wakeSyncing ||
           state.cancelSeekWait ||
           compat.now() < state.internalVSeekUntil ||
           isLiveSnapping() ||
           isVideoBypassed() ||
-          state.hidden ||
-          document.hidden ||
+          isEffectivelyHidden() ||
           isTabWaking() ||
           state.userSeeking ||
           state.launchingPlay ||
@@ -7629,22 +7462,21 @@ window.SyncLevel = SyncLevel;
         }
         var vTarget = nativeGetVTime();
         var master = getMasterAnchorTime();
-        var safeFloor = Math.max(master, state.maxPlayedVideoTime);
         var dur = getAuthoritativeDuration() || 0;
-        if (vTarget < 0.05 && safeFloor > 0.5) {
-          if (isLoopActive() && dur > 0 && safeFloor >= dur - 1.2) {
+        if (vTarget < 0.05 && master > 0.5) {
+          if (isLoopActive() && dur > 0 && master >= dur - 1.2) {
             restartLoopFromBeginning();
             return;
           }
-          setVideoTimeInternally(safeFloor);
+          setVideoTimeInternally(master);
           return;
         }
         if (Math.abs(vTarget - master) < 0.08) {
           return;
         }
         if (!videoEl.controls) {
-          if (vTarget < safeFloor - 0.22) {
-            setVideoTimeInternally(safeFloor);
+          if (Math.abs(vTarget - master) > 0.22) {
+            setVideoTimeInternally(master);
           }
           return;
         }
@@ -7663,40 +7495,23 @@ window.SyncLevel = SyncLevel;
           player.removeClass('vjs-waiting');
           if (state.endedCompleted) player.addClass('vjs-ended');
         }
-        if (state.primingDecoder) {
+        if (state.wakeSyncing) {
           return;
         }
-        if (isLiveSnapping() || isTabWaking()) {
-          var wasLiveSnap = isLiveSnapping();
+        if (isLiveSnapping()) {
           state.liveSnapUntil = 0;
-          if (!state.hidden && videoEl.readyState >= 2) {
-            state.tabWakeUntil = Math.min(state.tabWakeUntil, compat.now() + 250);
-          }
-          if (state.wantPlaying && !isVideoBypassed() && videoEl.readyState >= 2) {
-            var wakeDrift = nativeGetVTime() - nativeGetATime();
-            if (!state.hidden && wakeDrift > 0.035 && wakeDrift <= 5.0) {
-              holdVideoUntilAudioCatchesUp(0.022);
-            } else if (!state.hidden && wasLiveSnap && wakeDrift < -0.28 && state.wakeSnapRetries < 1) {
-              state.wakeSnapRetries++;
-              var seekElapsedSec = Math.min(2.0, Math.max(0.15, (compat.now() - (state.wakeSnapStartedAt || compat.now())) / 1000));
-              var baseRWake = (typeof window.Alabaster._targetPlaybackRate === 'number' && window.Alabaster._targetPlaybackRate > 0) ? window.Alabaster._targetPlaybackRate : (videoEl.playbackRate || player.playbackRate() || 1);
-              var retryDest = Math.max(nativeGetATime() + ((seekElapsedSec + 0.25) * baseRWake), state.maxPlayedVideoTime);
-              pauseVideoOnly();
-              snapVideoToAudioLive(retryDest, Math.max(2000, getSeekTimeout()));
-              state.tabWakeUntil = Math.max(state.tabWakeUntil, state.liveSnapUntil + 200);
-            } else {
-              state.playGraceUntil = Math.max(state.playGraceUntil, compat.now() + 1000);
-              state.steadyPlaybackSince = compat.now() + 200;
-              if (nativeGetVPaused()) {
-                runInternal(function() { compat.safePlay(nativeVideoPlay); });
-              }
-            }
+          var snapNow = compat.now();
+          state.lastCorrectionAt = snapNow;
+          state.playGraceUntil = Math.max(state.playGraceUntil, snapNow + 450);
+          state.steadyPlaybackSince = snapNow + 180;
+          if (state.wantPlaying && !isVideoBypassed() && !isEffectivelyHidden() && nativeGetVPaused() && !nativeGetVEnded() && videoEl.readyState >= 2) {
+            runInternal(function() { compat.safePlay(nativeVideoPlay); });
           }
           return;
         }
         if (state.userSeeking) {
           completeUserSeek();
-        } else if (state.wantPlaying && !state.cancelSeekWait && !state.launchingPlay && !state.holdingVideoForSync) {
+        } else if (state.wantPlaying && !state.cancelSeekWait && !state.launchingPlay && !state.holdingVideoForSync && !state.wakeSyncing) {
           syncPlaybackState();
         }
       }, false);
@@ -7705,8 +7520,7 @@ window.SyncLevel = SyncLevel;
         if (state.internalAudioSeeking) {
           state.internalAudioSeeking = false;
         }
-        if (isLiveSnapping() || isTabWaking()) {
-          state.liveSnapUntil = 0;
+        if (state.wakeSyncing || isLiveSnapping() || isTabWaking()) {
           return;
         }
         if (state.userSeeking) {
@@ -7717,10 +7531,10 @@ window.SyncLevel = SyncLevel;
       }, false);
 
       listen(audioEl, 'timeupdate', function() {
-        var currentlyHidden = Boolean(state.hidden || document.hidden);
-        if (currentlyHidden) state.hidden = true;
+        var currentlyHidden = Boolean((state.hidden || document.hidden) && !isInPiP());
+        if (document.hidden) state.hidden = true;
         var vEndedOrNearEnd = isStreamNearItsEnd(videoEl, true);
-        if (!isVideoBypassed() && !currentlyHidden && !isTabWaking() && !isLiveSnapping() && !isInPlayGrace() && !state.launchingPlay && !state.holdingVideoForSync && !state.primingDecoder && !vEndedOrNearEnd) {
+        if (!isVideoBypassed() && !currentlyHidden && !state.wakeSyncing && !isTabWaking() && !isLiveSnapping() && !isInPlayGrace() && !state.launchingPlay && !state.holdingVideoForSync && !vEndedOrNearEnd) {
           if (!state.wantPlaying || state.buffering || state.userSeeking || nativeGetVPaused() || videoEl.seeking) {
             pauseAudioOnly();
             return;
@@ -7731,7 +7545,6 @@ window.SyncLevel = SyncLevel;
         if (aCur > 0.05) {
           if (canAcceptLiveAudioAdvance(aCur)) {
             state.savedMasterTime = aCur;
-            state.maxPlayedAudioTime = Math.max(state.maxPlayedAudioTime, aCur);
           }
           state.hasStartedPlayback = true;
           state.initialAutoplayAttempt = false;
@@ -7751,7 +7564,7 @@ window.SyncLevel = SyncLevel;
 
       listen(videoEl, 'waiting', function() {
         state.steadyPlaybackSince = 0;
-        if (isVideoBypassed() || state.primingDecoder || state.hidden || document.hidden || isTabWaking() || isLiveSnapping() || isInPlayGrace() || state.launchingPlay || !state.wantPlaying || state.userSeeking || state.endedCompleted || isPlaybackCompleted() || isStreamNearItsEnd(videoEl, true)) {
+        if (isVideoBypassed() || isEffectivelyHidden() || state.wakeSyncing || isTabWaking() || isLiveSnapping() || isInPlayGrace() || state.launchingPlay || !state.wantPlaying || state.userSeeking || state.endedCompleted || isPlaybackCompleted() || isStreamNearItsEnd(videoEl, true)) {
           if (!state.buffering && !state.userSeeking) {
             player.removeClass('vjs-waiting');
             player.removeClass('vjs-seeking');
@@ -7784,17 +7597,13 @@ window.SyncLevel = SyncLevel;
         if (videoEl.readyState >= 2 && audioEl.readyState >= 2) {
           clearErrorOverlayOnHealthyStream();
         }
-        if (state.primingDecoder) return;
         if (state.userSeeking) return completeUserSeek();
         if (!state.wantPlaying || isPlaybackCompleted()) return;
-        if (state.cancelSeekWait || state.launchingPlay || state.holdingVideoForSync) return;
+        if (state.cancelSeekWait || state.launchingPlay || state.holdingVideoForSync || state.wakeSyncing) return;
         if (!nativeGetAPaused() && (isTabWaking() || isLiveSnapping())) {
-          if (!isLiveSnapping() && !state.hidden && !isVideoBypassed() && nativeGetVPaused() && !videoEl.seeking && videoEl.readyState >= 2) {
-            runInternal(function() { compat.safePlay(nativeVideoPlay); });
-          }
           return;
         }
-        if (state.buffering || (!isVideoBypassed() && !state.hidden && nativeGetVPaused() && !nativeGetVEnded()) || (nativeGetAPaused() && !audioEl.ended)) {
+        if (state.buffering || (!isVideoBypassed() && !isEffectivelyHidden() && nativeGetVPaused() && !nativeGetVEnded()) || (nativeGetAPaused() && !audioEl.ended)) {
           syncPlaybackState();
         }
       };
@@ -7831,9 +7640,10 @@ window.SyncLevel = SyncLevel;
         }
         enforceRateAndVolume();
         updateMediaSessionPosition();
-        state.playGraceUntil = Math.max(state.playGraceUntil, compat.now() + 120);
-        state.driftCount = 0;
+        state.playGraceUntil = Math.max(state.playGraceUntil, compat.now() + 250);
         state.avgDrift = 0;
+        state.aheadDriftSince = 0;
+        state.behindDriftSince = 0;
       });
 
       var onStreamEnded = function(evt) {
@@ -7851,7 +7661,7 @@ window.SyncLevel = SyncLevel;
             }
           }
         }
-        if (evt && evt.target === audioEl && !nativeGetVEnded() && !isVideoBypassed() && !state.hidden) {
+        if (evt && evt.target === audioEl && !nativeGetVEnded() && !isVideoBypassed() && !isEffectivelyHidden()) {
           var rawVDur = (nativeGetVDur ? nativeGetVDur() : 0) || getAuthoritativeDuration() || 0;
           var vCurCheck = nativeGetVTime() || 0;
           if (rawVDur > 0 && vCurCheck < rawVDur - 0.06) {
@@ -7867,7 +7677,7 @@ window.SyncLevel = SyncLevel;
         try {
           cancelVideoHold();
           clearLaunchPoll();
-          cancelDecoderPrime();
+          cancelWakeSync();
           clearWakeFrameCheck();
           var loopEnabled = isLoopActive();
           clearPendingWait();
@@ -7925,44 +7735,41 @@ window.SyncLevel = SyncLevel;
         state.steadyPlaybackSince = 0;
         cancelVideoHold();
         clearLaunchPoll();
-        cancelDecoderPrime();
+        cancelWakeSync();
         clearWakeFrameCheck();
+
+        if (isInPiP()) {
+          return;
+        }
 
         if (currentlyHidden) {
           state.hiddenAt = compat.now();
-          if (!state.wantPlaying) {
-            state.needsWakeReprime = true;
-          }
           var aCur = nativeGetATime();
           if (canAcceptLiveAudioAdvance(aCur)) {
             state.savedMasterTime = aCur;
-            state.maxPlayedAudioTime = Math.max(state.maxPlayedAudioTime, aCur);
           }
           getAuthoritativeDuration();
-          state.lastHiddenSyncAt = compat.now();
           if (state.wantPlaying && !state.userSeeking && !isPlaybackCompleted() && !state.buffering) {
             shield.activate();
+            pauseVideoOnly();
             runInternal(function() {
-              if (nativeGetAPaused() && audioEl.readyState >= 2 && bufferMonitor.ahead(audioEl, nativeGetATime()) >= 0.08) {
+              if (nativeGetAPaused() && !audioEl.ended && audioEl.readyState >= 2 && bufferMonitor.ahead(audioEl, nativeGetATime()) >= 0.08) {
                 compat.safePlay(nativeAudioPlay);
-              }
-              if (!isVideoBypassed() && nativeGetVPaused() && !nativeGetVEnded() && videoEl.readyState >= 2 && bufferMonitor.ahead(videoEl, nativeGetVTime()) >= 0.20) {
-                compat.safePlay(nativeVideoPlay);
               }
             });
           }
           return;
         }
 
-        var hiddenDuration = state.hiddenAt ? (compat.now() - state.hiddenAt) : 0;
         state.hiddenAt = 0;
         state.vStallSince = 0;
         state.aStallSince = 0;
-        state.driftCount = 0;
         state.avgDrift = 0;
-        state.highDriftSince = 0;
+        state.aheadDriftSince = 0;
+        state.behindDriftSince = 0;
         state.starveTicks = 0;
         state.alignedForAnchor = null;
+        state.alignAttemptCount = 0;
         getAuthoritativeDuration();
 
         if (isPlaybackCompleted() || audioEl.ended) {
@@ -7994,21 +7801,9 @@ window.SyncLevel = SyncLevel;
           clearWatchdog();
           clearPendingWait();
           if (videoEl.readyState === 0 && master > 0.05) {
-            state.needsWakeReprime = true;
-            reprimeEvictedVideo(master);
-          } else if (videoEl.readyState >= 2 && videoEl.videoWidth > 0 && Math.abs(nativeGetVTime() - master) <= 0.20 && hiddenDuration < 15000) {
-            state.needsWakeReprime = false;
-            state.alignedForAnchor = master;
-          } else if (videoEl.readyState >= 2 && bufferMonitor.ahead(videoEl, master) >= 0.10) {
-            state.needsWakeReprime = true;
-            primePausedVideoDecoder(master);
-          } else if (videoEl.readyState >= 1) {
-            state.needsWakeReprime = true;
-            seekVideoAndWait(Math.max(master, state.maxPlayedVideoTime), function() {
-              if (!state.wantPlaying && !state.hidden && videoEl.readyState >= 2) {
-                primePausedVideoDecoder(master);
-              }
-            });
+            reprimeEvictedVideo(master, true);
+          } else if (videoEl.readyState >= 1 && Math.abs(nativeGetVTime() - master) > 0.05) {
+            setVideoTimeInternally(master);
           }
           runInternal(function() {
             player.trigger('durationchange');
@@ -8017,88 +7812,10 @@ window.SyncLevel = SyncLevel;
           return;
         }
 
-        state.wakeSnapRetries = 0;
-        state.tabWakeUntil = compat.now() + 1800;
-        state.playGraceUntil = Math.max(state.playGraceUntil, compat.now() + 1400);
-        state.steadyPlaybackSince = compat.now() + 250;
-        state.lastCorrectionAt = 0;
         shield.activate();
 
-        var liveA = nativeGetATime();
-        var wakeTarget = (!nativeGetAPaused() && liveA > 0.02) ? liveA : master;
-
-        if (videoEl.readyState === 0) {
-          reprimeEvictedVideo(Math.max(wakeTarget, state.maxPlayedVideoTime));
-          runInternal(function() {
-            player.trigger('durationchange');
-            player.trigger('timeupdate');
-          });
-          return;
-        }
-
-        var wakeVTime = nativeGetVTime();
-        var wakeSignedDiff = wakeVTime - wakeTarget;
-        var baseRate = (typeof window.Alabaster._targetPlaybackRate === 'number' && window.Alabaster._targetPlaybackRate > 0) ? window.Alabaster._targetPlaybackRate : (videoEl.playbackRate || player.playbackRate() || 1);
-
         if (!nativeGetAPaused()) {
-          var hasVideoBufAtWake = videoEl.readyState >= 2 && bufferMonitor.ahead(videoEl, Math.max(wakeTarget, wakeVTime)) >= 0.20;
-          if (!hasVideoBufAtWake) {
-            setBufferSpinner(true);
-            freezeBothStreams();
-            seekVideoAndWait(Math.max(wakeTarget, state.maxPlayedVideoTime), function() {
-              syncPlaybackState();
-            });
-            return;
-          }
-          if (videoEl.seeking && isLiveSnapping()) {
-            state.tabWakeUntil = Math.max(state.tabWakeUntil, state.liveSnapUntil + 200);
-            runInternal(function() {
-              player.trigger('durationchange');
-              player.trigger('timeupdate');
-            });
-            return;
-          }
-          if (wakeSignedDiff >= -0.15 && wakeSignedDiff <= 0.035) {
-            if (nativeGetVPaused() && !videoEl.seeking) {
-              runInternal(function() { compat.safePlay(nativeVideoPlay); });
-            }
-            if (hiddenDuration >= 1200) {
-              scheduleWakeFrameLivenessCheck();
-            }
-            runInternal(function() {
-              player.trigger('durationchange');
-              player.trigger('timeupdate');
-            });
-            return;
-          }
-          if (wakeSignedDiff > 0.035 && wakeSignedDiff <= 5.0) {
-            holdVideoUntilAudioCatchesUp(0.022);
-            runInternal(function() {
-              player.trigger('durationchange');
-              player.trigger('timeupdate');
-            });
-            return;
-          }
-          if (wakeVTime >= state.maxPlayedVideoTime - 0.05 && wakeSignedDiff >= 0) {
-            if (nativeGetVPaused()) {
-              runInternal(function() { compat.safePlay(nativeVideoPlay); });
-            }
-            runInternal(function() {
-              player.trigger('durationchange');
-              player.trigger('timeupdate');
-            });
-            return;
-          }
-          var wakeLeadSec = (isHeavyStream() ? 0.50 : 0.35) * baseRate;
-          var snapDestWake = Math.max(wakeTarget + wakeLeadSec, state.maxPlayedVideoTime);
-          if (wakeVTime < snapDestWake - 0.05) {
-            pauseVideoOnly();
-            var snapWin = Math.max(2000, getSeekTimeout());
-            snapVideoToAudioLive(snapDestWake, snapWin);
-            state.tabWakeUntil = Math.max(state.tabWakeUntil, state.liveSnapUntil + 200);
-          } else if (nativeGetVPaused()) {
-            runInternal(function() { compat.safePlay(nativeVideoPlay); });
-          }
+          resyncVideoToLiveAudioOnWake(0);
           runInternal(function() {
             player.trigger('durationchange');
             player.trigger('timeupdate');
@@ -8110,15 +7827,27 @@ window.SyncLevel = SyncLevel;
       };
 
       listen(document, 'visibilitychange', handleTabVisibility, false);
+      listen(videoEl, 'leavepictureinpicture', function() {
+        if (document.hidden && state.wantPlaying && !state.userSeeking && !state.buffering && !isVideoBypassed()) {
+          pauseVideoOnly();
+        }
+      }, false);
+      listen(videoEl, 'enterpictureinpicture', function() {
+        if (state.wantPlaying && !state.userSeeking && !state.buffering && !isVideoBypassed() && !nativeGetAPaused() && nativeGetVPaused()) {
+          resyncVideoToLiveAudioOnWake(0);
+        }
+      }, false);
       listen(window, 'pagehide', function() {
         var aCur = nativeGetATime();
         if (canAcceptLiveAudioAdvance(aCur)) {
           state.savedMasterTime = aCur;
-          state.maxPlayedAudioTime = Math.max(state.maxPlayedAudioTime, aCur);
         }
         state.hidden = true;
         if (!state.hiddenAt) state.hiddenAt = compat.now();
         clearWakeFrameCheck();
+        if (state.wantPlaying && !isInPiP()) {
+          pauseVideoOnly();
+        }
       }, false);
       listen(window, 'pageshow', function() {
         if (document.hidden !== state.hidden) handleTabVisibility();
@@ -8132,6 +7861,7 @@ window.SyncLevel = SyncLevel;
         getAuthoritativeDuration();
         updateSyncTelemetry();
 
+        var hiddenEffective = isEffectivelyHidden();
         var vPaused = nativeGetVPaused();
         var aPaused = nativeGetAPaused();
         var vEndedNative = nativeGetVEnded();
@@ -8145,22 +7875,18 @@ window.SyncLevel = SyncLevel;
           !vEndedNative &&
           !aEndedNative &&
           videoEl.readyState >= 3 &&
-          !state.hidden &&
+          !hiddenEffective &&
           !state.buffering &&
           !state.userSeeking &&
           !state.launchingPlay &&
           !state.holdingVideoForSync &&
-          !state.primingDecoder &&
+          !state.wakeSyncing &&
           !isTabWaking() &&
           !isLiveSnapping() &&
           state.steadyPlaybackSince > 0 &&
           now >= state.steadyPlaybackSince
         );
         sampleVideoFrameStats(videoEl, isSteadyNow);
-
-        if (state.primingDecoder && !state.userSeeking) {
-          return;
-        }
 
         if (state.wantPlaying && isPlaybackCompleted()) {
           onStreamEnded();
@@ -8178,12 +7904,12 @@ window.SyncLevel = SyncLevel;
 
         if (state.buffering && bufferPctEl) {
           var needed = getMinResumeBuffer();
-          if (timeBuf > 3000) needed = Math.max(0.08, Math.min(0.14, needed));
-          else if (timeBuf > 1000) needed = Math.max(0.12, needed * 0.4);
+          if (timeBuf > 5000) needed = Math.max(0.15, Math.min(0.25, needed));
+          else if (timeBuf > 2500) needed = Math.max(0.25, needed * 0.55);
 
           var aLead = bufferMonitor.ahead(audioEl, nativeGetATime());
           var vLead = bufferMonitor.ahead(videoEl, nativeGetVTime());
-          var minLead = (isVideoBypassed() || state.hidden) ? aLead : Math.min(aLead, vLead);
+          var minLead = (isVideoBypassed() || hiddenEffective) ? aLead : Math.min(aLead, vLead);
 
           var pct = Math.floor((minLead / needed) * 100);
           if (isNaN(pct) || !isFinite(pct) || pct < 0) pct = 0;
@@ -8196,13 +7922,13 @@ window.SyncLevel = SyncLevel;
         }
 
         if (state.userSeeking) {
-          state.driftCount = 0;
           state.avgDrift = 0;
-          state.highDriftSince = 0;
+          state.aheadDriftSince = 0;
+          state.behindDriftSince = 0;
           state.starveTicks = 0;
           state.endStallSince = 0;
           if (!aPaused || !vPaused) freezeBothStreams();
-          if ((!isVideoBypassed() && !state.hidden && videoEl.seeking) || audioEl.seeking) {
+          if ((!isVideoBypassed() && !hiddenEffective && videoEl.seeking) || audioEl.seeking) {
             return;
           }
           completeUserSeek();
@@ -8210,13 +7936,13 @@ window.SyncLevel = SyncLevel;
         }
 
         if (!state.wantPlaying) {
-          state.driftCount = 0;
           state.avgDrift = 0;
-          state.highDriftSince = 0;
+          state.aheadDriftSince = 0;
+          state.behindDriftSince = 0;
           state.starveTicks = 0;
           state.endStallSince = 0;
           if (state.buffering) setBufferSpinner(false);
-          if (!state.primingDecoder && !vPaused) pauseVideoOnly();
+          if (!vPaused) pauseVideoOnly();
           if (!aPaused) pauseAudioOnly();
           if (player.hasClass && (player.hasClass('vjs-playing') || player.hasClass('vjs-waiting') || player.hasClass('vjs-seeking'))) {
             markPlayerPausedUI(player);
@@ -8242,17 +7968,10 @@ window.SyncLevel = SyncLevel;
         if (!state.userSeeking && !state.buffering && !audioEl.seeking && !aPaused && liveAudio > 0.05) {
           if (canAcceptLiveAudioAdvance(liveAudio)) {
             state.savedMasterTime = liveAudio;
-            state.maxPlayedAudioTime = Math.max(state.maxPlayedAudioTime, liveAudio);
           }
           state.hasStartedPlayback = true;
           state.initialAutoplayAttempt = false;
           clearErrorOverlayOnHealthyStream();
-        }
-
-        if (!state.userSeeking && !videoEl.seeking && !state.primingDecoder && !state.internalVideoSeeking && now >= state.internalVSeekUntil && !isLiveSnapping() && !isVideoBypassed() && !state.hidden && liveVideo > 0.05) {
-          if (liveVideo > state.maxPlayedVideoTime && liveVideo <= Math.max(state.maxPlayedVideoTime, liveAudio) + 5.0) {
-            state.maxPlayedVideoTime = liveVideo;
-          }
         }
 
         if (vFinishedAtEnd && aFinishedAtEnd) {
@@ -8261,7 +7980,7 @@ window.SyncLevel = SyncLevel;
           return;
         }
 
-        if ((isVideoBypassed() || state.hidden) && aFinishedAtEnd) {
+        if ((isVideoBypassed() || hiddenEffective) && aFinishedAtEnd) {
           state.endStallSince = 0;
           onStreamEnded();
           return;
@@ -8287,7 +8006,7 @@ window.SyncLevel = SyncLevel;
           return;
         }
 
-        if (aFinishedAtEnd && !vFinishedAtEnd && !isVideoBypassed() && !state.hidden) {
+        if (aFinishedAtEnd && !vFinishedAtEnd && !isVideoBypassed() && !hiddenEffective) {
           setBufferSpinner(false);
           var vNotMovingEnd = Math.abs(liveVideo - state.prevVideoTime) < 0.0005;
           state.prevVideoTime = liveVideo;
@@ -8311,42 +8030,44 @@ window.SyncLevel = SyncLevel;
           return;
         }
 
+        if (state.wakeSyncing) {
+          var aNearWake = isStreamNearItsEnd(audioEl, false);
+          if (!aNearWake && !aPaused && (audioEl.readyState < 2 || bufferMonitor.ahead(audioEl, liveAudio) < 0.05)) {
+            cancelWakeSync();
+            setBufferSpinner(true);
+            freezeBothStreams();
+            armNetworkWatchdog();
+          }
+          return;
+        }
+
         if (isLiveSnapping()) {
           if (videoEl.seeking || audioEl.seeking || videoEl.readyState < 2) {
             return;
           }
           state.liveSnapUntil = 0;
-          if (vPaused && videoEl.readyState >= 2) {
-            var snapWakeDrift = liveVideo - liveAudio;
-            if (snapWakeDrift > 0.035 && snapWakeDrift <= 5.0) {
-              holdVideoUntilAudioCatchesUp(0.022);
-            } else {
-              state.playGraceUntil = Math.max(state.playGraceUntil, now + 1000);
-              state.steadyPlaybackSince = now + 200;
-              runInternal(function() { compat.safePlay(nativeVideoPlay); });
-            }
+          state.lastCorrectionAt = now;
+          state.playGraceUntil = Math.max(state.playGraceUntil, now + 450);
+          state.steadyPlaybackSince = now + 180;
+          if (vPaused && !vEndedNative && videoEl.readyState >= 2) {
+            runInternal(function() { compat.safePlay(nativeVideoPlay); });
           }
-          if (aPaused && audioEl.readyState >= 2 && !audioEl.seeking) {
+          if (aPaused && !aEndedNative && audioEl.readyState >= 2 && !audioEl.seeking) {
             runInternal(function() { compat.safePlay(nativeAudioPlay); });
           }
           return;
         }
 
         if (isTabWaking()) {
-          state.driftCount = 0;
           state.avgDrift = 0;
-          state.highDriftSince = 0;
+          state.aheadDriftSince = 0;
+          state.behindDriftSince = 0;
           state.starveTicks = 0;
           if (!aPaused) {
             if (videoEl.readyState === 0) {
-              reprimeEvictedVideo(Math.max(liveAudio, state.maxPlayedVideoTime));
-            } else if (vPaused && !state.holdingVideoForSync && !videoEl.seeking && videoEl.readyState >= 2 && bufferMonitor.ahead(videoEl, liveVideo) >= 0.15) {
-              var tabWakeDrift = liveVideo - liveAudio;
-              if (tabWakeDrift > 0.035 && tabWakeDrift <= 5.0) {
-                holdVideoUntilAudioCatchesUp(0.022);
-              } else {
-                runInternal(function() { compat.safePlay(nativeVideoPlay); });
-              }
+              reprimeEvictedVideo(liveAudio, false);
+            } else if (vPaused && !videoEl.seeking && videoEl.readyState >= 2) {
+              resyncVideoToLiveAudioOnWake(0);
             }
             return;
           }
@@ -8359,9 +8080,9 @@ window.SyncLevel = SyncLevel;
         var vNearEndNow = isStreamNearItsEnd(videoEl, true);
         var aNearEndNow = isStreamNearItsEnd(audioEl, false);
 
-        if (!isVideoBypassed() && !state.hidden && !isInPlayGrace() && !isTabWaking() && !vNearEndNow && !aNearEndNow) {
+        if (!isVideoBypassed() && !hiddenEffective && !isInPlayGrace() && !isTabWaking() && !vNearEndNow && !aNearEndNow) {
           if (videoEl.readyState === 0) {
-            reprimeEvictedVideo(Math.max(liveAudio || getMasterAnchorTime(), state.maxPlayedVideoTime));
+            reprimeEvictedVideo(liveAudio || getMasterAnchorTime(), false);
             return;
           }
           if (vPaused || videoEl.seeking) {
@@ -8373,9 +8094,9 @@ window.SyncLevel = SyncLevel;
         }
 
         if (isVideoBypassed()) {
-          state.driftCount = 0;
           state.avgDrift = 0;
-          state.highDriftSince = 0;
+          state.aheadDriftSince = 0;
+          state.behindDriftSince = 0;
           state.starveTicks = 0;
           if (aPaused && !aEndedNative && !audioEl.seeking && audioEl.readyState >= 2) {
             setBufferSpinner(false);
@@ -8384,11 +8105,12 @@ window.SyncLevel = SyncLevel;
           return;
         }
 
-        if (state.hidden) {
-          state.driftCount = 0;
+        if (hiddenEffective) {
           state.avgDrift = 0;
-          state.highDriftSince = 0;
+          state.aheadDriftSince = 0;
+          state.behindDriftSince = 0;
           state.starveTicks = 0;
+          if (!vPaused) pauseVideoOnly();
           if (state.buffering) {
             syncPlaybackState();
             return;
@@ -8408,9 +8130,9 @@ window.SyncLevel = SyncLevel;
         }
 
         if (state.buffering) {
-          state.driftCount = 0;
           state.avgDrift = 0;
-          state.highDriftSince = 0;
+          state.aheadDriftSince = 0;
+          state.behindDriftSince = 0;
           state.starveTicks = 0;
           if (!aPaused || !vPaused) freezeBothStreams();
           syncPlaybackState();
@@ -8423,20 +8145,17 @@ window.SyncLevel = SyncLevel;
         var vAhead = bufferMonitor.ahead(videoEl, vNow);
         var aAhead = bufferMonitor.ahead(audioEl, aNow);
 
-        var minStarveLead = isLongVideo() ? 0.06 : 0.03;
+        var minStarveLead = isLongVideo() ? 0.08 : 0.04;
         var videoStarved = !vNearEndNow && (videoEl.seeking || (videoEl.readyState < 2 && vAhead < 0.15) || (videoEl.readyState < 3 && vAhead < minStarveLead));
         var audioStarved = !aNearEndNow && (audioEl.seeking || (audioEl.readyState < 2 && aAhead < 0.15) || (audioEl.readyState < 3 && aAhead < minStarveLead));
 
         if (videoStarved || audioStarved) {
           state.starveTicks++;
-          if (audioStarved && !vPaused && (vNow - aNow) >= 0.02) {
-            holdVideoUntilAudioCatchesUp(0.016);
-          }
           if (videoEl.seeking || audioEl.seeking || state.starveTicks >= 5) {
             state.starveTicks = 0;
-            state.driftCount = 0;
             state.avgDrift = 0;
-            state.highDriftSince = 0;
+            state.aheadDriftSince = 0;
+            state.behindDriftSince = 0;
             setBufferSpinner(true);
             if (!aPaused || !vPaused) freezeBothStreams();
             armNetworkWatchdog();
@@ -8446,9 +8165,9 @@ window.SyncLevel = SyncLevel;
         state.starveTicks = 0;
 
         if (vPaused || aPaused) {
-          state.driftCount = 0;
           state.avgDrift = 0;
-          state.highDriftSince = 0;
+          state.aheadDriftSince = 0;
+          state.behindDriftSince = 0;
           if (isInPlayGrace()) {
             return;
           }
@@ -8481,23 +8200,16 @@ window.SyncLevel = SyncLevel;
         var vStalledDur = state.vStallSince ? (now - state.vStallSince) : 0;
         var aStalledDur = state.aStallSince ? (now - state.aStallSince) : 0;
 
-        if (aNotMoving && !vNotMoving && aStalledDur >= 75 && (vNow - aNow) >= 0.022) {
-          state.prevVideoTime = vNow;
-          state.prevAudioTime = aNow;
-          holdVideoUntilAudioCatchesUp(0.016);
-          return;
-        }
-
         if (!inGrace) {
-          var stallLimitMs = isHeavyStream() ? 650 : 480;
+          var stallLimitMs = isHeavyStream() ? 750 : 550;
 
           if ((vStalledDur >= stallLimitMs && (videoEl.readyState < 3 || vAhead < 0.25)) ||
               (aStalledDur >= stallLimitMs && (audioEl.readyState < 3 || aAhead < 0.25))) {
             state.vStallSince = 0;
             state.aStallSince = 0;
-            state.driftCount = 0;
             state.avgDrift = 0;
-            state.highDriftSince = 0;
+            state.aheadDriftSince = 0;
+            state.behindDriftSince = 0;
             setBufferSpinner(true);
             freezeBothStreams();
             armNetworkWatchdog();
@@ -8509,9 +8221,9 @@ window.SyncLevel = SyncLevel;
               (aStalledDur >= graceStallLimitMs && !aPaused && (audioEl.readyState < 3 || aAhead < 0.2))) {
             state.vStallSince = 0;
             state.aStallSince = 0;
-            state.driftCount = 0;
             state.avgDrift = 0;
-            state.highDriftSince = 0;
+            state.aheadDriftSince = 0;
+            state.behindDriftSince = 0;
             setBufferSpinner(true);
             freezeBothStreams();
             armNetworkWatchdog();
@@ -8528,9 +8240,9 @@ window.SyncLevel = SyncLevel;
         }
 
         if (vEndedNative || aEndedNative || vNearEndNow || aNearEndNow) {
-          state.driftCount = 0;
           state.avgDrift = 0;
-          state.highDriftSince = 0;
+          state.aheadDriftSince = 0;
+          state.behindDriftSince = 0;
           if (player.hasClass && (player.hasClass('vjs-waiting') || player.hasClass('vjs-seeking'))) {
             player.removeClass('vjs-waiting');
             player.removeClass('vjs-seeking');
@@ -8552,53 +8264,49 @@ window.SyncLevel = SyncLevel;
         state.endStallSince = 0;
 
         if (inGrace || now < (window.Alabaster._rateChangeGraceUntil || 0)) {
-          state.driftCount = 0;
           state.avgDrift = 0;
-          state.highDriftSince = 0;
+          state.aheadDriftSince = 0;
+          state.behindDriftSince = 0;
           return;
         }
 
         var signedDrift = vNow - aNow;
-        state.avgDrift = state.avgDrift === 0 ? signedDrift : (state.avgDrift * 0.60 + signedDrift * 0.40);
+        state.avgDrift = state.avgDrift === 0 ? signedDrift : (state.avgDrift * 0.65 + signedDrift * 0.35);
         var smoothDrift = state.avgDrift;
         var sinceLastCorr = now - state.lastCorrectionAt;
 
-        if (signedDrift < -0.35) {
-          if (!state.highDriftSince) state.highDriftSince = now;
-          if (now - state.highDriftSince >= 1800) {
-            state.highDriftSince = 0;
-            state.driftCount = 0;
+        if (signedDrift < -0.080) {
+          state.aheadDriftSince = 0;
+          if (!state.behindDriftSince) state.behindDriftSince = now;
+          if (now - state.behindDriftSince >= 250 && smoothDrift < -0.075 && sinceLastCorr > 1500) {
+            state.behindDriftSince = 0;
             state.avgDrift = 0;
             state.lastCorrectionAt = now;
-            state.alignedForAnchor = null;
-            freezeBothStreams();
-            setBufferSpinner(true);
-            seekVideoAndWait(Math.max(aNow, state.maxPlayedVideoTime), function() {
-              syncPlaybackState();
-            });
+            var rateBehind = getTargetPlaybackRate();
+            if (bufferMonitor.isTimeBuffered(videoEl, aNow, 0.35) && videoEl.readyState >= 3) {
+              snapVideoToAudioLive(aNow + (0.04 * rateBehind), 1200);
+            } else {
+              state.alignedForAnchor = null;
+              freezeBothStreams();
+              setBufferSpinner(true);
+              seekVideoAndWait(aNow, function() {
+                syncPlaybackState();
+              });
+            }
+            return;
+          }
+        } else if (signedDrift > 0.085 && signedDrift <= 6.0) {
+          state.behindDriftSince = 0;
+          if (!state.aheadDriftSince) state.aheadDriftSince = now;
+          if (now - state.aheadDriftSince >= 300 && smoothDrift > 0.080 && sinceLastCorr > 2000) {
+            state.aheadDriftSince = 0;
+            state.avgDrift = 0;
+            holdVideoUntilAudioCatchesUp(0.065);
             return;
           }
         } else {
-          state.highDriftSince = 0;
-        }
-
-        if (signedDrift >= 0.025 && signedDrift <= 6.0) {
-          var vStep = signedDrift >= 0.028 ? 2 : 1;
-          state.driftCount = state.driftCount > 0 ? state.driftCount + vStep : vStep;
-          if (signedDrift >= 0.12 || (state.driftCount >= 3 && sinceLastCorr > 600)) {
-            state.driftCount = 0;
-            state.avgDrift = 0;
-            holdVideoUntilAudioCatchesUp(0.016);
-          }
-        } else if (smoothDrift > 0.019 && signedDrift > 0.017 && signedDrift <= 6.0) {
-          state.driftCount = state.driftCount > 0 ? state.driftCount + 1 : 1;
-          if (state.driftCount >= 4 && sinceLastCorr > 800) {
-            state.driftCount = 0;
-            state.avgDrift = 0;
-            holdVideoUntilAudioCatchesUp(0.016);
-          }
-        } else {
-          state.driftCount = 0;
+          state.aheadDriftSince = 0;
+          state.behindDriftSince = 0;
         }
       }, config.tickMs);
 
@@ -8650,7 +8358,7 @@ window.SyncLevel = SyncLevel;
       player.on('dispose', function() {
         cancelVideoHold();
         clearLaunchPoll();
-        cancelDecoderPrime();
+        cancelWakeSync();
         clearWakeFrameCheck();
         for (var i = 0; i < registeredEvents.length; i++) {
           var ev = registeredEvents[i];
