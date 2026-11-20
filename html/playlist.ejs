@@ -72,7 +72,12 @@
   const playlistTitle = hasPlaylist && playlist.title ? playlist.title : "Playlist unavailable";
   const playlistDescription = hasPlaylist && typeof playlist.description === "string" ? playlist.description : "";
   const playlistDescriptionHtml = hasPlaylist && typeof playlist.descriptionHtml === "string" ? playlist.descriptionHtml : "";
-  const hasDescriptionHtml = playlistDescriptionHtml.trim().length > 0;
+  const trimmedDescriptionHtml = playlistDescriptionHtml.trim();
+  const strippedDescriptionHtml = trimmedDescriptionHtml.replace(/<[^>]*>/g, "").trim();
+  const hasDescriptionHtml =
+    trimmedDescriptionHtml.length > 0 &&
+    trimmedDescriptionHtml !== "<p></p>" &&
+    strippedDescriptionHtml.length > 0;
   const hasDescriptionText = playlistDescription.trim().length > 0;
   const hasDescription = hasDescriptionHtml || hasDescriptionText;
 
