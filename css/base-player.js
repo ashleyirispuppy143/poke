@@ -681,6 +681,7 @@ window.SyncLevel = SyncLevel;
     }
 
     function create(width, height) {
+      //https://www.w3.org/Graphics/GIF/spec-gif89a.txt
       var bytes = [
         0x47, 0x49, 0x46, 0x38, 0x39, 0x61,
         width & 0xFF, (width >> 8) & 0xFF,
