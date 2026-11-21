@@ -170,16 +170,16 @@ window.SyncLevel = SyncLevel;
   }
 
   var config = {
-    minPlayBuffer: 0.30,
-    minResumeBuffer: 0.85,
+    minPlayBuffer: 0.25,
+    minResumeBuffer: 0.65,
     longVideoThresholdSec: 600,
     ultraLongVideoThresholdSec: 1800,
-    longMinPlayBuffer: 0.65,
-    longMinResumeBuffer: 1.45,
-    ultraLongMinPlayBuffer: 0.85,
-    ultraLongMinResumeBuffer: 1.9,
-    highResMinPlayBuffer: 0.85,
-    highResMinResumeBuffer: 1.85,
+    longMinPlayBuffer: 0.50,
+    longMinResumeBuffer: 1.05,
+    ultraLongMinPlayBuffer: 0.65,
+    ultraLongMinResumeBuffer: 1.35,
+    highResMinPlayBuffer: 0.65,
+    highResMinResumeBuffer: 1.25,
     endTolerance: 0.85,
     alignThreshold: 0.025,
     maxStartDesyncSec: 0.042,
@@ -187,8 +187,8 @@ window.SyncLevel = SyncLevel;
     heavyDriftTolerance: 0.045,
     hardSeekDrift: 0.06,
     heavyHardSeekDrift: 0.065,
-    syncCooldownMs: 2400,
-    longSyncCooldownMs: 2800,
+    syncCooldownMs: 2600,
+    longSyncCooldownMs: 3000,
     watchdogMs: 90,
     tickMs: 25,
     seekTimeoutMs: 1800,
@@ -414,10 +414,22 @@ window.SyncLevel = SyncLevel;
   };
 
   var gifEncoder = (function() {
-    function quantizeFrame(rgba, pixelCount) {
+    var bayer4 = [
+      -7,  1, -5,  3,
+       5, -3,  7, -1,
+      -4,  4, -6,  2,
+       8,  0,  6, -2
+    ];
+
+    function quantizeFrame(rgba, width, height, options) {
+      var opts = options || {};
+      var pixelCount = width * height;
+      var maxColors = Math.max(16, Math.min(256, opts.maxColors || 256));
+      var useDither = Boolean(opts.dither);
+      var step = opts.sampleStep || (pixelCount > 65536 ? 2 : 1);
+
       var histCounts = new Uint32Array(32768);
       var uniqueKeys = [];
-      var step = pixelCount > 65536 ? 2 : 1;
       for (var i = 0; i < pixelCount; i += step) {
         var o = i * 4;
         var k = ((rgba[o] >> 3) << 10) | ((rgba[o + 1] >> 3) << 5) | (rgba[o + 2] >> 3);
@@ -460,7 +472,7 @@ window.SyncLevel = SyncLevel;
       }
       boxes.push(makeBox(uniqueKeys));
 
-      while (boxes.length < 256) {
+      while (boxes.length < maxColors) {
         var bestIdx = -1;
         var bestScore = -1;
         for (var bIdx = 0; bIdx < boxes.length; bIdx++) {
@@ -521,32 +533,48 @@ window.SyncLevel = SyncLevel;
       lut.fill(-1);
       var indices = new Uint8Array(pixelCount);
 
-      for (var px = 0; px < pixelCount; px++) {
-        var po = px * 4;
-        var rVal = rgba[po];
-        var gVal = rgba[po + 1];
-        var bVal = rgba[po + 2];
-        var key555 = ((rVal >> 3) << 10) | ((gVal >> 3) << 5) | (bVal >> 3);
-        var mapped = lut[key555];
-        if (mapped === -1) {
-          var bestP = 0;
-          var bestDist = 1e9;
-          for (var c = 0; c < palCount; c++) {
-            var c3 = c * 3;
-            var dR = rVal - palette[c3];
-            var dG = gVal - palette[c3 + 1];
-            var dB = bVal - palette[c3 + 2];
-            var dist = dR * dR * 2 + dG * dG * 4 + dB * dB;
-            if (dist < bestDist) {
-              bestDist = dist;
-              bestP = c;
-              if (dist === 0) break;
-            }
+      var px = 0;
+      for (var y = 0; y < height; y++) {
+        var rowBase = (y & 3) << 2;
+        for (var x = 0; x < width; x++) {
+          var po = px * 4;
+          var rVal = rgba[po];
+          var gVal = rgba[po + 1];
+          var bVal = rgba[po + 2];
+          if (useDither) {
+            var d = bayer4[rowBase | (x & 3)];
+            rVal += d;
+            gVal += d;
+            bVal += d;
+            if (rVal < 0) rVal = 0;
+            else if (rVal > 255) rVal = 255;
+            if (gVal < 0) gVal = 0;
+            else if (gVal > 255) gVal = 255;
+            if (bVal < 0) bVal = 0;
+            else if (bVal > 255) bVal = 255;
           }
-          lut[key555] = bestP;
-          mapped = bestP;
+          var key555 = ((rVal >> 3) << 10) | ((gVal >> 3) << 5) | (bVal >> 3);
+          var mapped = lut[key555];
+          if (mapped === -1) {
+            var bestP = 0;
+            var bestDist = 1e9;
+            for (var c = 0; c < palCount; c++) {
+              var c3 = c * 3;
+              var dR = rVal - palette[c3];
+              var dG = gVal - palette[c3 + 1];
+              var dB = bVal - palette[c3 + 2];
+              var dist = dR * dR * 2 + dG * dG * 4 + dB * dB;
+              if (dist < bestDist) {
+                bestDist = dist;
+                bestP = c;
+                if (dist === 0) break;
+              }
+            }
+            lut[key555] = bestP;
+            mapped = bestP;
+          }
+          indices[px++] = mapped;
         }
-        indices[px] = mapped;
       }
 
       return { palette: palette, indices: indices };
@@ -664,9 +692,9 @@ window.SyncLevel = SyncLevel;
       ];
 
       return {
-        addFrame: function(rgba, delayCentisec) {
+        addFrame: function(rgba, delayCentisec, options) {
           var delay = Math.max(2, Math.round(delayCentisec || 8));
-          var q = quantizeFrame(rgba, width * height);
+          var q = quantizeFrame(rgba, width, height, options);
           bytes.push(
             0x21, 0xF9, 0x04, 0x04,
             delay & 0xFF, (delay >> 8) & 0xFF,
@@ -2020,6 +2048,69 @@ window.SyncLevel = SyncLevel;
       '}',
       '.video-js .alabaster-gif-input:focus, .alabaster-gif-input:focus {',
       '  border-color: #ffffff !important;',
+      '}',
+      '.alabaster-gif-quality-group {',
+      '  display: flex !important;',
+      '  flex-direction: column !important;',
+      '  gap: 5px !important;',
+      '  width: 100% !important;',
+      '  box-sizing: border-box !important;',
+      '  flex-shrink: 0 !important;',
+      '}',
+      '.alabaster-gif-segmented {',
+      '  display: grid !important;',
+      '  grid-template-columns: 1fr 1fr !important;',
+      '  width: 100% !important;',
+      '  height: 40px !important;',
+      '  border: 1px solid #494440 !important;',
+      '  border-radius: 10px !important;',
+      '  overflow: hidden !important;',
+      '  background: #161412 !important;',
+      '  box-sizing: border-box !important;',
+      '}',
+      '.video-js .alabaster-gif-seg-btn, .alabaster-gif-seg-btn {',
+      '  width: 100% !important;',
+      '  height: 100% !important;',
+      '  margin: 0 !important;',
+      '  padding: 0 12px !important;',
+      '  border: none !important;',
+      '  border-radius: 0 !important;',
+      '  background: transparent !important;',
+      '  background-image: none !important;',
+      '  color: #e6e1de !important;',
+      '  font-family: "poketube flex", "PokeTube Flex", Roboto, sans-serif !important;',
+      '  font-size: 13.5px !important;',
+      '  font-weight: 600 !important;',
+      '  line-height: 1 !important;',
+      '  cursor: pointer !important;',
+      '  display: inline-flex !important;',
+      '  align-items: center !important;',
+      '  justify-content: center !important;',
+      '  gap: 8px !important;',
+      '  box-shadow: none !important;',
+      '  transition: background 0.14s ease, color 0.14s ease !important;',
+      '}',
+      '.video-js .alabaster-gif-seg-btn + .alabaster-gif-seg-btn, .alabaster-gif-seg-btn + .alabaster-gif-seg-btn {',
+      '  border-left: 1px solid #494440 !important;',
+      '}',
+      '.video-js .alabaster-gif-seg-btn:hover:not(:disabled):not(.is-selected), .alabaster-gif-seg-btn:hover:not(:disabled):not(.is-selected) {',
+      '  background: #262220 !important;',
+      '}',
+      '.video-js .alabaster-gif-seg-btn.is-selected, .alabaster-gif-seg-btn.is-selected {',
+      '  background: #ffffff !important;',
+      '  color: #161412 !important;',
+      '}',
+      '.video-js .alabaster-gif-seg-btn:disabled, .alabaster-gif-seg-btn:disabled {',
+      '  opacity: 0.45 !important;',
+      '  cursor: default !important;',
+      '}',
+      '.alabaster-gif-seg-check {',
+      '  display: none !important;',
+      '  align-items: center !important;',
+      '  justify-content: center !important;',
+      '}',
+      '.alabaster-gif-seg-btn.is-selected .alabaster-gif-seg-check {',
+      '  display: inline-flex !important;',
       '}',
       '.alabaster-gif-status-row {',
       '  display: flex !important;',
@@ -4513,6 +4604,36 @@ window.SyncLevel = SyncLevel;
           inputsRow.appendChild(startField);
           inputsRow.appendChild(endField);
 
+          var qualityGroup = document.createElement('div');
+          qualityGroup.className = 'alabaster-gif-quality-group';
+          var qualityLabel = document.createElement('span');
+          qualityLabel.className = 'alabaster-gif-field-label';
+          qualityLabel.textContent = 'Quality';
+
+          var segmentedWrap = document.createElement('div');
+          segmentedWrap.className = 'alabaster-gif-segmented';
+          segmentedWrap.setAttribute('role', 'radiogroup');
+          segmentedWrap.setAttribute('aria-label', 'GIF quality');
+
+          var highQualBtn = document.createElement('button');
+          highQualBtn.type = 'button';
+          highQualBtn.className = 'alabaster-gif-seg-btn is-selected';
+          highQualBtn.setAttribute('role', 'radio');
+          highQualBtn.setAttribute('aria-checked', 'true');
+          highQualBtn.innerHTML = '<span class="alabaster-gif-seg-check"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></span><span>High quality</span>';
+
+          var lowQualBtn = document.createElement('button');
+          lowQualBtn.type = 'button';
+          lowQualBtn.className = 'alabaster-gif-seg-btn';
+          lowQualBtn.setAttribute('role', 'radio');
+          lowQualBtn.setAttribute('aria-checked', 'false');
+          lowQualBtn.innerHTML = '<span class="alabaster-gif-seg-check"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></span><span>Low quality</span>';
+
+          segmentedWrap.appendChild(highQualBtn);
+          segmentedWrap.appendChild(lowQualBtn);
+          qualityGroup.appendChild(qualityLabel);
+          qualityGroup.appendChild(segmentedWrap);
+
           var statusRow = document.createElement('div');
           statusRow.className = 'alabaster-gif-status-row';
 
@@ -4562,6 +4683,7 @@ window.SyncLevel = SyncLevel;
           dialog.appendChild(previewWrap);
           dialog.appendChild(timelineSection);
           dialog.appendChild(inputsRow);
+          dialog.appendChild(qualityGroup);
           dialog.appendChild(statusRow);
           dialog.appendChild(actionsRow);
           gifMakerBackdrop.appendChild(dialog);
@@ -4577,6 +4699,7 @@ window.SyncLevel = SyncLevel;
             winEnd: 10,
             selStart: 0,
             selEnd: 3,
+            quality: 'high',
             jobId: 0,
             stripJobId: 0,
             previewSeekTimer: 0,
@@ -4589,6 +4712,28 @@ window.SyncLevel = SyncLevel;
             savedMainTime: 0,
             wasMainPlaying: false
           };
+
+          function setGifQualityMode(mode) {
+            if (gState.encoding) return;
+            gState.quality = mode === 'low' ? 'low' : 'high';
+            var isHigh = gState.quality === 'high';
+            highQualBtn.classList.toggle('is-selected', isHigh);
+            highQualBtn.setAttribute('aria-checked', isHigh ? 'true' : 'false');
+            lowQualBtn.classList.toggle('is-selected', !isHigh);
+            lowQualBtn.setAttribute('aria-checked', !isHigh ? 'true' : 'false');
+          }
+
+          highQualBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            setGifQualityMode('high');
+          });
+
+          lowQualBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            setGifQualityMode('low');
+          });
 
           function getEffectiveDuration() {
             var vNode = getVideoElementNode();
@@ -4992,6 +5137,8 @@ window.SyncLevel = SyncLevel;
             previewBtn.disabled = true;
             startInput.disabled = true;
             endInput.disabled = true;
+            highQualBtn.disabled = true;
+            lowQualBtn.disabled = true;
             prevWinBtn.disabled = true;
             nextWinBtn.disabled = true;
             progressTrack.style.display = 'block';
@@ -5005,6 +5152,8 @@ window.SyncLevel = SyncLevel;
               previewBtn.disabled = false;
               startInput.disabled = false;
               endInput.disabled = false;
+              highQualBtn.disabled = false;
+              lowQualBtn.disabled = false;
               updateSelectionUI(false);
               statusTextEl.textContent = msg || 'Ready';
               setTimeout(function() {
@@ -5022,19 +5171,25 @@ window.SyncLevel = SyncLevel;
               if (!vid.videoWidth || !vid.videoHeight) {
                 return finishUI('Video frames unavailable');
               }
+              var isHighQ = gState.quality !== 'low';
               var clipStart = gState.selStart;
               var clipEnd = Math.min(clipStart + MAX_GIF_SEC, gState.selEnd);
               var clipDur = Math.max(MIN_GIF_SEC, clipEnd - clipStart);
-              var fps = 12;
-              var totalFrames = Math.max(2, Math.min(60, Math.round(clipDur * fps)));
+              var fps = isHighQ ? 15 : 8;
+              var maxFramesCap = isHighQ ? 75 : 40;
+              var totalFrames = Math.max(2, Math.min(maxFramesCap, Math.round(clipDur * fps)));
               var frameStep = clipDur / totalFrames;
               var delayCs = Math.max(5, Math.round((frameStep) * 100));
 
-              var maxGifW = 480;
+              var maxGifW = isHighQ ? 640 : 320;
               var outW = Math.min(maxGifW, vid.videoWidth);
               var outH = Math.max(2, Math.round(outW * (vid.videoHeight / vid.videoWidth)));
               if (outW % 2 !== 0) outW--;
               if (outH % 2 !== 0) outH--;
+
+              var encodeOpts = isHighQ
+                ? { maxColors: 256, dither: true, sampleStep: 1 }
+                : { maxColors: 96, dither: false, sampleStep: 4 };
 
               var capCanvas = document.createElement('canvas');
               capCanvas.width = outW;
@@ -5086,7 +5241,7 @@ window.SyncLevel = SyncLevel;
                     capCtx.drawImage(vid, 0, 0, outW, outH);
                     drawVideoToPreview(vid);
                     var imgData = capCtx.getImageData(0, 0, outW, outH);
-                    enc.addFrame(imgData.data, delayCs);
+                    enc.addFrame(imgData.data, delayCs, encodeOpts);
                   } catch (_) {
                     return finishUI('Video cannot be exported');
                   }
@@ -5257,6 +5412,9 @@ window.SyncLevel = SyncLevel;
             previewBtn.disabled = false;
             startInput.disabled = false;
             endInput.disabled = false;
+            highQualBtn.disabled = false;
+            lowQualBtn.disabled = false;
+            setGifQualityMode(gState.quality);
             progressTrack.style.display = 'none';
             progressFill.style.width = '0%';
             updateSelectionUI(false);
@@ -6676,15 +6834,15 @@ window.SyncLevel = SyncLevel;
       var t = targetTime;
       var count = ranges.length;
       var matchedEnd = -1;
-      var startTol = t < 0.15 ? 0.24 : 0.16;
+      var startTol = 0.35;
 
       for (var i = 0; i < count; i++) {
         var start = ranges.start(i);
         var end = ranges.end(i);
-        if (t >= start - startTol && t <= end + 0.08) {
+        if (t >= start - startTol && t <= end + 0.12) {
           matchedEnd = end;
           for (var j = i + 1; j < count; j++) {
-            if (ranges.start(j) <= matchedEnd + 0.18) {
+            if (ranges.start(j) <= matchedEnd + 0.35) {
               matchedEnd = Math.max(matchedEnd, ranges.end(j));
             } else {
               break;
@@ -6730,18 +6888,18 @@ window.SyncLevel = SyncLevel;
       var lead = this.ahead(media, t);
       if (rState < 2) return false;
 
-      if (rState >= 4 && lead >= Math.max(0.22, requiredLead * 0.6)) return true;
+      if (rState >= 4 && (lead >= 0.05 || (media.buffered && media.buffered.length > 0))) return true;
 
       var dynamicLead = requiredLead;
-      if (timeBufferingMs > 4500) {
-        if (rState >= 2 && lead >= 0.15) return true;
-        dynamicLead = Math.max(0.15, Math.min(0.28, requiredLead));
-      } else if (timeBufferingMs > 2200) {
-        dynamicLead = Math.max(0.25, requiredLead * 0.55);
+      if (timeBufferingMs > 4000) {
+        if (rState >= 2 && lead >= 0.12) return true;
+        dynamicLead = Math.max(0.12, Math.min(0.24, requiredLead));
+      } else if (timeBufferingMs > 1800) {
+        dynamicLead = Math.max(0.2, requiredLead * 0.5);
       }
 
       if (rState >= 3 && lead >= dynamicLead) return true;
-      if (rState === 2 && lead >= Math.max(dynamicLead, 0.55)) return true;
+      if (rState === 2 && lead >= Math.max(dynamicLead, 0.45)) return true;
 
       return false;
     }
@@ -7550,7 +7708,7 @@ window.SyncLevel = SyncLevel;
       }
 
       function getRequiredAudioBuffer(baseLead) {
-        return Math.min(baseLead, 0.85);
+        return Math.min(baseLead, 0.65);
       }
 
       function getSeekTimeout() {
@@ -7814,7 +7972,7 @@ window.SyncLevel = SyncLevel;
             return;
           }
 
-          if (delta < -0.048 * baseRate && tryNum < 1 && bufferMonitor.isTimeBuffered(videoEl, aAfter, 0.12)) {
+          if (delta < -0.052 * baseRate && tryNum < 1 && bufferMonitor.isTimeBuffered(videoEl, aAfter, 0.12)) {
             resyncVideoToLiveAudioOnWake(tryNum + 1);
             return;
           }
@@ -7965,7 +8123,7 @@ window.SyncLevel = SyncLevel;
         var holdStart = compat.now();
         var lastAudioPos = aCur;
         var lastAudioAdvanceAt = holdStart;
-        var maxHoldMs = Math.min(3500, Math.max(90, Math.round((Math.max(0, lead - resumeCompSec) / baseRate) * 1000) + 350));
+        var maxHoldMs = Math.min(3500, Math.max(120, Math.round((Math.max(0, lead - resumeCompSec) / baseRate) * 1000) + 450));
 
         pauseVideoOnly();
 
@@ -7984,9 +8142,10 @@ window.SyncLevel = SyncLevel;
           }
           var elapsed = now - holdStart;
           var audioCaughtUp = aNow >= vNow - resumeCompSec;
-          var audioStalledWhileHolding = !audioCaughtUp && (nativeGetAPaused() || audioEl.seeking || (now - lastAudioAdvanceAt >= 550) || elapsed >= maxHoldMs);
+          var audioTrulyStarved = !audioCaughtUp && (nativeGetAPaused() || audioEl.seeking || (audioEl.readyState < 3 && (now - lastAudioAdvanceAt >= 650)));
+          var holdTimedOut = !audioCaughtUp && elapsed >= maxHoldMs;
 
-          if (audioStalledWhileHolding) {
+          if (audioTrulyStarved) {
             cancelVideoHold();
             setBufferSpinner(true);
             freezeBothStreams();
@@ -7994,7 +8153,7 @@ window.SyncLevel = SyncLevel;
             return;
           }
 
-          if (audioCaughtUp) {
+          if (audioCaughtUp || holdTimedOut) {
             if (state.holdTimer) {
               clearTimeout(state.holdTimer);
               state.holdTimer = 0;
@@ -8759,7 +8918,7 @@ window.SyncLevel = SyncLevel;
           return;
         }
 
-        if (!nativeGetAPaused() && !nativeGetVPaused() && !videoEl.seeking && !audioEl.seeking && Math.abs(nativeGetVTime() - nativeGetATime()) <= 0.055 * Math.max(1, getTargetPlaybackRate())) {
+        if (!nativeGetAPaused() && !nativeGetVPaused() && !videoEl.seeking && !audioEl.seeking) {
           fadeAudioInSmoothly();
           state.hasStartedPlayback = true;
           state.initialAutoplayAttempt = false;
@@ -8770,10 +8929,6 @@ window.SyncLevel = SyncLevel;
           clearWatchdog();
           shield.activate();
           markPlayerStartedUI(player);
-          runInternal(function() {
-            player.trigger('play');
-            player.trigger('playing');
-          });
           if (navigator.mediaSession) navigator.mediaSession.playbackState = 'playing';
           return;
         }
@@ -8796,8 +8951,6 @@ window.SyncLevel = SyncLevel;
         }
 
         if (videoEl.seeking || audioEl.seeking) {
-          setBufferSpinner(true);
-          if (!nativeGetAPaused() || !nativeGetVPaused()) freezeBothStreams();
           var waitFn = videoEl.seeking ? waitVideoSettled : waitAudioSettled;
           state.cancelSeekWait = waitFn(function() {
             state.cancelSeekWait = null;
@@ -8814,7 +8967,6 @@ window.SyncLevel = SyncLevel;
             masterAnchor = aCurNow;
           } else if (Math.abs(aCurNow - masterAnchor) > 0.25) {
             freezeBothStreams();
-            setBufferSpinner(true);
             seekAudioAndWait(masterAnchor, function() {
               syncPlaybackState();
             });
@@ -8831,7 +8983,6 @@ window.SyncLevel = SyncLevel;
         if (Math.abs(vDiffFromAudio) > config.maxStartDesyncSec && state.alignAttemptCount < 1) {
           state.alignAttemptCount++;
           freezeBothStreams();
-          setBufferSpinner(true);
           seekVideoAndWait(aCurNow, function() {
             syncPlaybackState();
           });
@@ -9162,10 +9313,6 @@ window.SyncLevel = SyncLevel;
             return;
           }
 
-          var timeBuf = state.buffering ? (compat.now() - state.bufferStartTime) : 0;
-          var neededLead = state.buffering ? getMinResumeBuffer() : getMinPlayBuffer();
-          var neededAudioLead = getRequiredAudioBuffer(neededLead);
-
           if (isVideoBypassed() || isEffectivelyHidden()) {
             clearWatchdog();
             state.vStallSince = 0;
@@ -9173,6 +9320,18 @@ window.SyncLevel = SyncLevel;
             startLockstepPlayback();
             return;
           }
+
+          if (!nativeGetAPaused() && !nativeGetVPaused() && !videoEl.seeking && !audioEl.seeking && videoEl.readyState >= 3 && audioEl.readyState >= 3) {
+            setBufferSpinner(false);
+            clearWatchdog();
+            state.vStallSince = 0;
+            state.aStallSince = 0;
+            return;
+          }
+
+          var timeBuf = state.buffering ? (compat.now() - state.bufferStartTime) : 0;
+          var neededLead = state.buffering ? getMinResumeBuffer() : getMinPlayBuffer();
+          var neededAudioLead = getRequiredAudioBuffer(neededLead);
 
           if (videoEl.readyState === 0) {
             reprimeEvictedVideo(getMasterAnchorTime(), false);
@@ -9354,6 +9513,10 @@ window.SyncLevel = SyncLevel;
             player.trigger('timeupdate');
           });
           return;
+        }
+
+        if (bufferMonitor.canPlayCleanly(videoEl, getMinPlayBuffer(), 0, vNow) && bufferMonitor.canPlayCleanly(audioEl, getRequiredAudioBuffer(getMinPlayBuffer()), 0, aNow)) {
+          setBufferSpinner(false);
         }
 
         syncPlaybackState();
@@ -9690,7 +9853,9 @@ window.SyncLevel = SyncLevel;
         if (state.userSeeking) {
           completeUserSeek();
         } else if (state.wantPlaying && !state.cancelSeekWait && !state.launchingPlay && !state.holdingVideoForSync && !state.wakeSyncing) {
-          syncPlaybackState();
+          if (state.buffering || nativeGetVPaused() || nativeGetAPaused()) {
+            syncPlaybackState();
+          }
         }
       }, false);
 
@@ -9704,7 +9869,9 @@ window.SyncLevel = SyncLevel;
         if (state.userSeeking) {
           completeUserSeek();
         } else if (state.wantPlaying && !state.cancelSeekWait && !state.launchingPlay && !state.holdingVideoForSync) {
-          syncPlaybackState();
+          if (state.buffering || nativeGetVPaused() || nativeGetAPaused()) {
+            syncPlaybackState();
+          }
         }
       }, false);
 
@@ -9747,23 +9914,10 @@ window.SyncLevel = SyncLevel;
 
       listen(videoEl, 'waiting', function(evt) {
         state.steadyPlaybackSince = 0;
-        if (isVideoBypassed() || isEffectivelyHidden() || state.wakeSyncing || isTabWaking() || isLiveSnapping() || isInPlayGrace() || state.launchingPlay || !state.wantPlaying || state.userSeeking || state.endedCompleted || isPlaybackCompleted() || isStreamNearItsEnd(videoEl, true)) {
-          if (!state.buffering && !state.userSeeking) {
-            evt.stopImmediatePropagation();
-            player.removeClass('vjs-waiting');
-            player.removeClass('vjs-seeking');
-          }
-          return;
-        }
-        var vLead = bufferMonitor.ahead(videoEl, nativeGetVTime());
-        var waitingLimit = isHighResVideo() ? 0.25 : 0.14;
-        if (videoEl.readyState < 3 && vLead < waitingLimit) {
-          setBufferSpinner(true);
-          freezeBothStreams();
-          armNetworkWatchdog();
-        } else if (!state.buffering) {
+        if (!state.buffering && !state.userSeeking) {
           evt.stopImmediatePropagation();
           player.removeClass('vjs-waiting');
+          player.removeClass('vjs-seeking');
         }
       }, true);
 
@@ -9771,8 +9925,7 @@ window.SyncLevel = SyncLevel;
         state.steadyPlaybackSince = 0;
         if (isEffectivelyHidden() || state.launchingPlay || !state.wantPlaying || state.userSeeking || state.endedCompleted || isPlaybackCompleted() || isStreamNearItsEnd(audioEl, false)) return;
         var aLead = bufferMonitor.ahead(audioEl, nativeGetATime());
-        var dryLimit = isInPlayGrace() ? 0.08 : 0.14;
-        if (audioEl.readyState < 3 && aLead < dryLimit) {
+        if (audioEl.readyState < 2 && aLead < 0.04) {
           setBufferSpinner(true);
           freezeBothStreams();
           armNetworkWatchdog();
@@ -10125,8 +10278,8 @@ window.SyncLevel = SyncLevel;
 
         if (state.buffering && bufferPctEl) {
           var needed = getMinResumeBuffer();
-          if (timeBuf > 4500) needed = Math.max(0.15, Math.min(0.28, needed));
-          else if (timeBuf > 2200) needed = Math.max(0.25, needed * 0.55);
+          if (timeBuf > 4000) needed = Math.max(0.12, Math.min(0.24, needed));
+          else if (timeBuf > 1800) needed = Math.max(0.2, needed * 0.5);
 
           var aLead = bufferMonitor.ahead(audioEl, nativeGetATime());
           var vLead = bufferMonitor.ahead(videoEl, nativeGetVTime());
@@ -10256,7 +10409,7 @@ window.SyncLevel = SyncLevel;
 
         if (state.wakeSyncing) {
           var aNearWake = isStreamNearItsEnd(audioEl, false);
-          if (!aNearWake && !aPaused && (audioEl.readyState < 2 || bufferMonitor.ahead(audioEl, liveAudio) < 0.05)) {
+          if (!aNearWake && !aPaused && (audioEl.readyState < 2 || bufferMonitor.ahead(audioEl, liveAudio) < 0.04)) {
             cancelWakeSync();
             setBufferSpinner(true);
             freezeBothStreams();
@@ -10369,13 +10522,12 @@ window.SyncLevel = SyncLevel;
         var vAhead = bufferMonitor.ahead(videoEl, vNow);
         var aAhead = bufferMonitor.ahead(audioEl, aNow);
 
-        var minStarveLead = isHighResVideo() ? 0.16 : (isLongVideo() ? 0.10 : 0.06);
-        var videoStarved = !vNearEndNow && (videoEl.seeking || (videoEl.readyState < 2 && vAhead < 0.15) || (videoEl.readyState < 3 && vAhead < minStarveLead));
-        var audioStarved = !aNearEndNow && (audioEl.seeking || (audioEl.readyState < 2 && aAhead < 0.15) || (audioEl.readyState < 3 && aAhead < minStarveLead));
+        var videoStarved = !vNearEndNow && !videoEl.seeking && vSameFrame && ((videoEl.readyState < 2 && vAhead < 0.12) || (videoEl.readyState < 3 && vAhead < 0.08));
+        var audioStarved = !aNearEndNow && !audioEl.seeking && aSameFrame && ((audioEl.readyState < 2 && aAhead < 0.12) || (audioEl.readyState < 3 && aAhead < 0.08));
 
         if (videoStarved || audioStarved) {
           state.starveTicks++;
-          if (state.starveTicks >= 3) {
+          if (state.starveTicks >= 6) {
             state.starveTicks = 0;
             state.avgDrift = 0;
             state.aheadDriftSince = 0;
@@ -10433,8 +10585,9 @@ window.SyncLevel = SyncLevel;
 
         var vStalledDur = state.vStallSince ? (now - state.vStallSince) : 0;
         var aStalledDur = state.aStallSince ? (now - state.aStallSince) : 0;
+        var rateScale = Math.max(1, 1 / Math.max(0.25, getTargetPlaybackRate()));
 
-        if (!aPaused && !aEndedNative && !aNearEndNow && aStalledDur >= 800 && !vNotMoving) {
+        if (!aPaused && !aEndedNative && !aNearEndNow && aStalledDur >= Math.round(900 * rateScale) && !vNotMoving) {
           state.vStallSince = 0;
           state.aStallSince = 0;
           state.avgDrift = 0;
@@ -10450,26 +10603,30 @@ window.SyncLevel = SyncLevel;
           return;
         }
 
-        if (!vPaused && !vEndedNative && !vNearEndNow && vStalledDur >= 550 && !aNotMoving) {
+        if (!vPaused && !vEndedNative && !vNearEndNow && vStalledDur >= Math.round(750 * rateScale) && !aNotMoving) {
           state.vStallSince = 0;
           state.aStallSince = 0;
           state.avgDrift = 0;
           state.aheadDriftSince = 0;
           state.behindDriftSince = 0;
           state.severeDriftSince = 0;
-          freezeBothStreams();
-          setBufferSpinner(true);
-          seekVideoAndWait(aNow, function() {
-            syncPlaybackState();
-          });
+          if (bufferMonitor.isTimeBuffered(videoEl, aNow, 0.25)) {
+            resyncVideoToLiveAudioOnWake(0);
+          } else {
+            freezeBothStreams();
+            setBufferSpinner(true);
+            seekVideoAndWait(aNow, function() {
+              syncPlaybackState();
+            });
+          }
           return;
         }
 
         if (!inGrace) {
-          var stallLimitMs = isHeavyStream() ? 700 : 500;
+          var stallLimitMs = Math.round((isHeavyStream() ? 950 : 750) * rateScale);
 
-          if ((vStalledDur >= stallLimitMs && (videoEl.readyState < 3 || vAhead < 0.3)) ||
-              (aStalledDur >= stallLimitMs && (audioEl.readyState < 3 || aAhead < 0.3))) {
+          if ((vStalledDur >= stallLimitMs && videoEl.readyState < 3 && vAhead < 0.15) ||
+              (aStalledDur >= stallLimitMs && audioEl.readyState < 3 && aAhead < 0.15)) {
             state.vStallSince = 0;
             state.aStallSince = 0;
             state.avgDrift = 0;
@@ -10482,9 +10639,9 @@ window.SyncLevel = SyncLevel;
             return;
           }
         } else {
-          var graceStallLimitMs = isHeavyStream() ? 1300 : 1000;
-          if ((vStalledDur >= graceStallLimitMs && !vPaused && (videoEl.readyState < 3 || vAhead < 0.25)) ||
-              (aStalledDur >= graceStallLimitMs && !aPaused && (audioEl.readyState < 3 || aAhead < 0.25))) {
+          var graceStallLimitMs = Math.round((isHeavyStream() ? 1500 : 1200) * rateScale);
+          if ((vStalledDur >= graceStallLimitMs && !vPaused && videoEl.readyState < 3 && vAhead < 0.15) ||
+              (aStalledDur >= graceStallLimitMs && !aPaused && audioEl.readyState < 3 && aAhead < 0.15)) {
             state.vStallSince = 0;
             state.aStallSince = 0;
             state.avgDrift = 0;
@@ -10544,48 +10701,56 @@ window.SyncLevel = SyncLevel;
         var smoothDrift = state.avgDrift;
         var sinceLastCorr = now - state.lastCorrectionAt;
 
-        if (Math.abs(realSignedDrift) > 0.24) {
+        if (Math.abs(realSignedDrift) > 0.30) {
           if (!state.severeDriftSince) state.severeDriftSince = now;
-          if (now - state.severeDriftSince >= 220 && sinceLastCorr > 1200) {
+          if (now - state.severeDriftSince >= 350 && sinceLastCorr > 1600) {
             state.severeDriftSince = 0;
             state.aheadDriftSince = 0;
             state.behindDriftSince = 0;
             state.avgDrift = 0;
             state.lastCorrectionAt = now;
             state.alignedForAnchor = null;
-            freezeBothStreams();
-            setBufferSpinner(true);
-            seekVideoAndWait(aNow, function() {
-              syncPlaybackState();
-            });
+            if (bufferMonitor.isTimeBuffered(videoEl, aNow, 0.25)) {
+              resyncVideoToLiveAudioOnWake(0);
+            } else {
+              freezeBothStreams();
+              setBufferSpinner(true);
+              seekVideoAndWait(aNow, function() {
+                syncPlaybackState();
+              });
+            }
             return;
           }
         } else {
           state.severeDriftSince = 0;
         }
 
-        if (realSignedDrift < -0.048) {
+        if (realSignedDrift < -0.055) {
           state.aheadDriftSince = 0;
           if (!state.behindDriftSince) state.behindDriftSince = now;
-          if (now - state.behindDriftSince >= 650 && smoothDrift < -0.045 && sinceLastCorr > config.syncCooldownMs) {
+          if (now - state.behindDriftSince >= 800 && smoothDrift < -0.052 && sinceLastCorr > config.syncCooldownMs) {
             state.behindDriftSince = 0;
             state.avgDrift = 0;
             state.lastCorrectionAt = now;
-            state.alignedForAnchor = null;
-            freezeBothStreams();
-            setBufferSpinner(true);
-            seekVideoAndWait(aNow, function() {
-              syncPlaybackState();
-            });
+            if (bufferMonitor.isTimeBuffered(videoEl, aNow, 0.25)) {
+              resyncVideoToLiveAudioOnWake(0);
+            } else {
+              state.alignedForAnchor = null;
+              freezeBothStreams();
+              setBufferSpinner(true);
+              seekVideoAndWait(aNow, function() {
+                syncPlaybackState();
+              });
+            }
             return;
           }
-        } else if (realSignedDrift > 0.048 && realSignedDrift <= 6.0) {
+        } else if (realSignedDrift > 0.055 && realSignedDrift <= 6.0) {
           state.behindDriftSince = 0;
           if (!state.aheadDriftSince) state.aheadDriftSince = now;
-          if (now - state.aheadDriftSince >= 650 && smoothDrift > 0.045 && sinceLastCorr > config.syncCooldownMs) {
+          if (now - state.aheadDriftSince >= 800 && smoothDrift > 0.052 && sinceLastCorr > config.syncCooldownMs) {
             state.aheadDriftSince = 0;
             state.avgDrift = 0;
-            holdVideoUntilAudioCatchesUp(0.016 * getTargetPlaybackRate());
+            holdVideoUntilAudioCatchesUp(0.016 * getTargetPlaybackRate(), false);
             return;
           }
         } else {
@@ -10668,6 +10833,7 @@ window.SyncLevel = SyncLevel;
     initAlabasterPlayer();
   }
 })();
+
 
 (function () {
   'use strict';
