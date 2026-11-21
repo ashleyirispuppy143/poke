@@ -307,7 +307,7 @@ async function getYouTubePlayerId(fetch) {
 app.get("/api/innertube/v1/player", async (req, res) => {
   const id = req.query.v || req.query.videoId;
   if (!id) {
-    return res.status(400).json({ error: "Missing video ID (?v= or ?videoId=)" });
+    return res.status(400).json({ error: "Missing video ID! :<" });
   }
 
   try {
