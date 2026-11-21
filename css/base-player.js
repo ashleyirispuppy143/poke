@@ -52,32 +52,103 @@ window.SyncLevel = SyncLevel;
 
   const qs = new URLSearchParams(window.location.search);
   const qua = qs.get("quality") || "";
-  const VOL_PERSIST_KEY = 'alabaster_volume';
-  const MUTE_PERSIST_KEY = 'alabaster_muted';
-  const LEGACY_DESC_BTN_KEY = 'DontUseAlabasterStyleDescriptionOpeningFS';
-  const DISABLE_FS_DISCOVER_KEY = 'CloseFullScreenDiscover';
-  const SHOW_DISLIKES_FS_DESC_KEY = 'ShowDislikesOnFullScreenDesc';
-  const HIDE_VERIFY_BADGE_FS_DESC_KEY = 'DontShowVerifiedBadgeOnPopUpDescription';
-  const DISABLE_REC_SHORTCUT_KEY = 'AlabasterDontUseYoutubeStyleRecommendationsShortcut';
-  const DISABLE_YT_CAPTIONS_KEY = 'DontUseYoutubeStyleCapitions';
-  const DISABLE_SAVE_SUBTITLE_KEY = 'DontSaveSubtitleState';
-  const DISABLE_HOLD_2X_KEY = 'AlabasterDisableAttentionSpanFixer';
-  const SUB_DEFAULT_SYSTEM_LANG_KEY = 'AlabasterSubtitleDefaultUseSystemLanguge';
-  const ENABLE_AUTO_SUBTITLE_KEY = 'AlabasterEnableAutoSubtitle';
-  const SUB_ENABLED_PERSIST_KEY = 'alabaster_subtitles_enabled';
-  const SUB_LANG_PERSIST_KEY = 'alabaster_subtitles_lang';
-  const SUB_LABEL_PERSIST_KEY = 'alabaster_subtitles_label';
 
-  function isStorageFlagEnabled(key) {
+  const STORAGE_KEYS = [
+    { id: 'volume', key: 'alabaster_volume', legacy: null },
+    { id: 'muted', key: 'alabaster_muted', legacy: null },
+    { id: 'legacy_desc_btn', key: 'dont_use_alabaster_style_description_opening_fs', legacy: 'DontUseAlabasterStyleDescriptionOpeningFS' },
+    { id: 'disable_fs_discover', key: 'close_full_screen_discover', legacy: 'CloseFullScreenDiscover' },
+    { id: 'show_dislikes_fs_desc', key: 'show_dislikes_on_full_screen_desc', legacy: 'ShowDislikesOnFullScreenDesc' },
+    { id: 'hide_verify_badge_fs_desc', key: 'dont_show_verified_badge_on_pop_up_description', legacy: 'DontShowVerifiedBadgeOnPopUpDescription' },
+    { id: 'disable_rec_shortcut', key: 'alabaster_dont_use_youtube_style_recommendations_shortcut', legacy: 'AlabasterDontUseYoutubeStyleRecommendationsShortcut' },
+    { id: 'disable_yt_captions', key: 'dont_use_youtube_style_captions', legacy: 'DontUseYoutubeStyleCapitions' },
+    { id: 'disable_save_subtitle', key: 'dont_save_subtitle_state', legacy: 'DontSaveSubtitleState' },
+    { id: 'disable_hold_2x', key: 'alabaster_disable_attention_span_fixer', legacy: 'AlabasterDisableAttentionSpanFixer' },
+    { id: 'sub_default_system_lang', key: 'alabaster_subtitle_default_use_system_language', legacy: 'AlabasterSubtitleDefaultUseSystemLanguge' },
+    { id: 'enable_auto_subtitle', key: 'alabaster_enable_auto_subtitle', legacy: 'AlabasterEnableAutoSubtitle' },
+    { id: 'sub_enabled', key: 'alabaster_subtitles_enabled', legacy: null },
+    { id: 'sub_lang', key: 'alabaster_subtitles_lang', legacy: null },
+    { id: 'sub_label', key: 'alabaster_subtitles_label', legacy: null }
+  ];
+
+  function findStorageKeyEntry(idOrKey) {
+    for (var i = 0; i < STORAGE_KEYS.length; i++) {
+      var item = STORAGE_KEYS[i];
+      if (item.id === idOrKey || item.key === idOrKey || (item.legacy && item.legacy === idOrKey)) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  function migrateStorageEntry(item) {
+    if (!item || !item.legacy) return;
     try {
-      var val = localStorage.getItem(key);
-      if (!val) return false;
-      var norm = String(val).trim().toLowerCase();
-      return norm === 'true' || norm === '1' || norm === 'yes';
-    } catch (_) {
-      return false;
+      var legacyVal = localStorage.getItem(item.legacy);
+      if (legacyVal !== null) {
+        var currentVal = localStorage.getItem(item.key);
+        if (currentVal === null) {
+          localStorage.setItem(item.key, legacyVal);
+        }
+        localStorage.removeItem(item.legacy);
+      }
+    } catch (_) {}
+  }
+
+  function migrateStorageKeys() {
+    for (var i = 0; i < STORAGE_KEYS.length; i++) {
+      migrateStorageEntry(STORAGE_KEYS[i]);
     }
   }
+
+  function getStorageKeyName(id) {
+    var entry = findStorageKeyEntry(id);
+    return entry ? entry.key : id;
+  }
+
+  function getStorageValue(idOrKey) {
+    var entry = findStorageKeyEntry(idOrKey);
+    if (entry) migrateStorageEntry(entry);
+    var targetKey = entry ? entry.key : idOrKey;
+    try {
+      return localStorage.getItem(targetKey);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function setStorageValue(idOrKey, value) {
+    var entry = findStorageKeyEntry(idOrKey);
+    var targetKey = entry ? entry.key : idOrKey;
+    try {
+      localStorage.setItem(targetKey, String(value));
+      if (entry && entry.legacy) {
+        localStorage.removeItem(entry.legacy);
+      }
+    } catch (_) {}
+  }
+
+  function isStorageFlagEnabled(idOrKey) {
+    var val = getStorageValue(idOrKey);
+    if (!val) return false;
+    var norm = String(val).trim().toLowerCase();
+    return norm === 'true' || norm === '1' || norm === 'yes';
+  }
+
+  migrateStorageKeys();
+  window.addEventListener('storage', function(evt) {
+    if (evt && evt.key) {
+      var entry = findStorageKeyEntry(evt.key);
+      if (entry && entry.legacy === evt.key && evt.newValue !== null) {
+        try {
+          localStorage.setItem(entry.key, evt.newValue);
+          localStorage.removeItem(entry.legacy);
+        } catch (_) {}
+      }
+    } else {
+      migrateStorageKeys();
+    }
+  }, false);
 
   function formatShortPublishDate(rawDateStr) {
     var str = String(rawDateStr || '').trim();
@@ -104,30 +175,30 @@ window.SyncLevel = SyncLevel;
   }
 
   var config = {
-    minPlayBuffer: 0.25,
-    minResumeBuffer: 0.75,
+    minPlayBuffer: 0.30,
+    minResumeBuffer: 0.85,
     longVideoThresholdSec: 600,
     ultraLongVideoThresholdSec: 1800,
-    longMinPlayBuffer: 0.45,
-    longMinResumeBuffer: 1.25,
-    ultraLongMinPlayBuffer: 0.6,
-    ultraLongMinResumeBuffer: 1.6,
-    highResMinPlayBuffer: 0.45,
-    highResMinResumeBuffer: 1.35,
+    longMinPlayBuffer: 0.65,
+    longMinResumeBuffer: 1.45,
+    ultraLongMinPlayBuffer: 0.85,
+    ultraLongMinResumeBuffer: 1.9,
+    highResMinPlayBuffer: 0.85,
+    highResMinResumeBuffer: 1.85,
     endTolerance: 0.85,
     alignThreshold: 0.025,
     maxStartDesyncSec: 0.042,
     driftTolerance: 0.04,
-    heavyDriftTolerance: 0.05,
+    heavyDriftTolerance: 0.045,
     hardSeekDrift: 0.06,
     heavyHardSeekDrift: 0.065,
-    syncCooldownMs: 2200,
-    longSyncCooldownMs: 2600,
+    syncCooldownMs: 2400,
+    longSyncCooldownMs: 2800,
     watchdogMs: 90,
     tickMs: 25,
-    seekTimeoutMs: 1400,
-    longSeekTimeoutMs: 2400,
-    highResSeekTimeoutMs: 2800,
+    seekTimeoutMs: 1800,
+    longSeekTimeoutMs: 3200,
+    highResSeekTimeoutMs: 3600,
     startupProtectionMs: 5500
   };
 
@@ -136,12 +207,14 @@ window.SyncLevel = SyncLevel;
     muxedMode: false,
     audioOnly: false,
     testErrorActive: false,
+    storageKeys: STORAGE_KEYS,
     onAudioOnlyChange: null,
     _showErrorUI: null,
     _hideErrorUI: null,
     _showLoopedIndicator: null,
     _hideLoopedIndicator: null,
     _setSyncedPlaybackRate: null,
+    _gifMakerOpen: false,
     _frameStats: {
       lastRawTotal: 0,
       lastRawDropped: 0,
@@ -246,20 +319,59 @@ window.SyncLevel = SyncLevel;
       }
       return mins + ':' + padSecs;
     },
+    formatPreciseClock: function(seconds) {
+      if (isNaN(seconds) || seconds < 0 || !isFinite(seconds)) return '0:00';
+      var rounded = Math.round(seconds * 10) / 10;
+      var whole = Math.floor(rounded);
+      var tenths = Math.round((rounded - whole) * 10);
+      var base = compat.formatClock(whole);
+      if (tenths > 0) {
+        return base + '.' + tenths;
+      }
+      return base;
+    },
+    formatFileTimestamp: function(seconds) {
+      var s = Math.max(0, Math.round(Number(seconds) || 0));
+      var hrs = Math.floor(s / 3600);
+      var mins = Math.floor((s % 3600) / 60);
+      var secs = s % 60;
+      if (hrs > 0) {
+        return hrs + 'h' + mins + 'm' + secs + 's';
+      }
+      return mins + 'm' + secs + 's';
+    },
+    parseClockText: function(raw) {
+      if (raw === null || raw === undefined) return NaN;
+      var str = String(raw).trim();
+      if (!str) return NaN;
+      if (/^\d+(?:\.\d+)?$/.test(str)) {
+        return parseFloat(str);
+      }
+      var parts = str.split(':');
+      if (parts.length < 2 || parts.length > 3) return NaN;
+      var total = 0;
+      for (var i = 0; i < parts.length; i++) {
+        var part = parts[i].trim();
+        if (!/^\d+(?:\.\d+)?$/.test(part)) return NaN;
+        var num = parseFloat(part);
+        if (i > 0 && num >= 60) return NaN;
+        total = total * 60 + num;
+      }
+      return isFinite(total) ? total : NaN;
+    },
     onSeekSettled: function(media, callback, timeoutMs, getTimeFn, targetTime) {
       var finished = false;
       var timer = 0;
       var settleTick = 0;
       var seekedEventSeen = false;
       var readTime = typeof getTimeFn === 'function' ? getTimeFn : function() { return media.currentTime; };
+      var initialCur = readTime();
+      var needsSeekMove = Boolean(targetTime !== undefined && isFinite(targetTime) && Math.abs(initialCur - targetTime) > 0.04);
       var isSettledNow = function() {
         if (media.seeking) return false;
         var cur = readTime();
-        if (seekedEventSeen && media.readyState >= 1) return true;
-        if (targetTime !== undefined && isFinite(targetTime) && media.duration && isFinite(media.duration)) {
-          if (Math.abs(cur - targetTime) > 0.35) {
-            return false;
-          }
+        if (needsSeekMove && !seekedEventSeen && Math.abs(cur - initialCur) < 0.01 && Math.abs(cur - targetTime) > 0.08) {
+          return false;
         }
         if (bufferMonitor.isNearEnd(media, cur) && media.readyState >= 1) return true;
         return media.readyState >= 2;
@@ -304,6 +416,285 @@ window.SyncLevel = SyncLevel;
       };
     }
   };
+
+  var gifEncoder = (function() {
+    function quantizeFrame(rgba, pixelCount) {
+      var histCounts = new Uint32Array(32768);
+      var uniqueKeys = [];
+      var step = pixelCount > 65536 ? 2 : 1;
+      for (var i = 0; i < pixelCount; i += step) {
+        var o = i * 4;
+        var k = ((rgba[o] >> 3) << 10) | ((rgba[o + 1] >> 3) << 5) | (rgba[o + 2] >> 3);
+        if (histCounts[k] === 0) {
+          uniqueKeys.push(k);
+        }
+        histCounts[k]++;
+      }
+
+      var boxes = [];
+      function makeBox(keys) {
+        var rMin = 31, rMax = 0, gMin = 31, gMax = 0, bMin = 31, bMax = 0;
+        var count = 0;
+        for (var j = 0; j < keys.length; j++) {
+          var key = keys[j];
+          var r = (key >> 10) & 31;
+          var g = (key >> 5) & 31;
+          var b = key & 31;
+          if (r < rMin) rMin = r;
+          if (r > rMax) rMax = r;
+          if (g < gMin) gMin = g;
+          if (g > gMax) gMax = g;
+          if (b < bMin) bMin = b;
+          if (b > bMax) bMax = b;
+          count += histCounts[key];
+        }
+        return {
+          keys: keys,
+          rMin: rMin, rMax: rMax,
+          gMin: gMin, gMax: gMax,
+          bMin: bMin, bMax: bMax,
+          count: count,
+          vol: (rMax - rMin + 1) * (gMax - gMin + 1) * (bMax - bMin + 1)
+        };
+      }
+
+      if (uniqueKeys.length === 0) {
+        uniqueKeys.push(0);
+        histCounts[0] = 1;
+      }
+      boxes.push(makeBox(uniqueKeys));
+
+      while (boxes.length < 256) {
+        var bestIdx = -1;
+        var bestScore = -1;
+        for (var bIdx = 0; bIdx < boxes.length; bIdx++) {
+          var bx = boxes[bIdx];
+          if (bx.keys.length <= 1) continue;
+          var score = bx.count * (Math.max(bx.rMax - bx.rMin, bx.gMax - bx.gMin, bx.bMax - bx.bMin) + 1);
+          if (score > bestScore) {
+            bestScore = score;
+            bestIdx = bIdx;
+          }
+        }
+        if (bestIdx === -1) break;
+        var box = boxes.splice(bestIdx, 1)[0];
+        var dr = box.rMax - box.rMin;
+        var dg = box.gMax - box.gMin;
+        var db = box.bMax - box.bMin;
+        var ch = dg >= dr && dg >= db ? 1 : (dr >= db ? 0 : 2);
+        box.keys.sort(function(a, b) {
+          if (ch === 0) return ((a >> 10) & 31) - ((b >> 10) & 31);
+          if (ch === 1) return ((a >> 5) & 31) - ((b >> 5) & 31);
+          return (a & 31) - (b & 31);
+        });
+        var half = box.count >> 1;
+        var acc = 0;
+        var splitAt = 1;
+        for (var s = 0; s < box.keys.length - 1; s++) {
+          acc += histCounts[box.keys[s]];
+          if (acc >= half) {
+            splitAt = s + 1;
+            break;
+          }
+        }
+        boxes.push(makeBox(box.keys.slice(0, splitAt)));
+        boxes.push(makeBox(box.keys.slice(splitAt)));
+      }
+
+      var palette = new Uint8Array(768);
+      var palCount = boxes.length;
+      for (var p = 0; p < palCount; p++) {
+        var pb = boxes[p];
+        var rSum = 0, gSum = 0, bSum = 0, totalW = 0;
+        for (var m = 0; m < pb.keys.length; m++) {
+          var pk = pb.keys[m];
+          var w = histCounts[pk];
+          rSum += (((pk >> 10) & 31) * 255 / 31) * w;
+          gSum += (((pk >> 5) & 31) * 255 / 31) * w;
+          bSum += ((pk & 31) * 255 / 31) * w;
+          totalW += w;
+        }
+        if (totalW > 0) {
+          palette[p * 3] = Math.round(rSum / totalW);
+          palette[p * 3 + 1] = Math.round(gSum / totalW);
+          palette[p * 3 + 2] = Math.round(bSum / totalW);
+        }
+      }
+
+      var lut = new Int16Array(32768);
+      lut.fill(-1);
+      var indices = new Uint8Array(pixelCount);
+
+      for (var px = 0; px < pixelCount; px++) {
+        var po = px * 4;
+        var rVal = rgba[po];
+        var gVal = rgba[po + 1];
+        var bVal = rgba[po + 2];
+        var key555 = ((rVal >> 3) << 10) | ((gVal >> 3) << 5) | (bVal >> 3);
+        var mapped = lut[key555];
+        if (mapped === -1) {
+          var bestP = 0;
+          var bestDist = 1e9;
+          for (var c = 0; c < palCount; c++) {
+            var c3 = c * 3;
+            var dR = rVal - palette[c3];
+            var dG = gVal - palette[c3 + 1];
+            var dB = bVal - palette[c3 + 2];
+            var dist = dR * dR * 2 + dG * dG * 4 + dB * dB;
+            if (dist < bestDist) {
+              bestDist = dist;
+              bestP = c;
+              if (dist === 0) break;
+            }
+          }
+          lut[key555] = bestP;
+          mapped = bestP;
+        }
+        indices[px] = mapped;
+      }
+
+      return { palette: palette, indices: indices };
+    }
+
+    function lzwEncode(indices, out) {
+      var minCodeSize = 8;
+      var clearCode = 256;
+      var eoiCode = 257;
+      var nextCode = 258;
+      var codeSize = 9;
+      var codeLimit = 512;
+
+      var hashSize = 8192;
+      var hashMask = hashSize - 1;
+      var hashKeys = new Int32Array(hashSize);
+      var hashVals = new Int16Array(hashSize);
+      hashKeys.fill(-1);
+
+      var subBlock = new Uint8Array(256);
+      var subLen = 0;
+      var bitBuf = 0;
+      var bitCount = 0;
+
+      out.push(minCodeSize);
+
+      function flushSubBlock() {
+        if (subLen === 0) return;
+        out.push(subLen);
+        for (var i = 0; i < subLen; i++) {
+          out.push(subBlock[i]);
+        }
+        subLen = 0;
+      }
+
+      function writeCode(code, size) {
+        bitBuf |= (code << bitCount);
+        bitCount += size;
+        while (bitCount >= 8) {
+          subBlock[subLen++] = bitBuf & 0xFF;
+          bitBuf >>>= 8;
+          bitCount -= 8;
+          if (subLen === 255) {
+            flushSubBlock();
+          }
+        }
+      }
+
+      writeCode(clearCode, codeSize);
+
+      var prefix = indices[0];
+      var len = indices.length;
+
+      for (var i = 1; i < len; i++) {
+        var k = indices[i];
+        var key = (prefix << 8) | k;
+        var slot = ((key * 2654435761) >>> 19) & hashMask;
+        var found = -1;
+        while (hashKeys[slot] !== -1) {
+          if (hashKeys[slot] === key) {
+            found = hashVals[slot];
+            break;
+          }
+          slot = (slot + 1) & hashMask;
+        }
+        if (found !== -1) {
+          prefix = found;
+        } else {
+          writeCode(prefix, codeSize);
+          if (nextCode < 4096) {
+            if (nextCode === codeLimit && codeSize < 12) {
+              codeSize++;
+              codeLimit <<= 1;
+            }
+            hashKeys[slot] = key;
+            hashVals[slot] = nextCode;
+            nextCode++;
+          } else {
+            writeCode(clearCode, codeSize);
+            hashKeys.fill(-1);
+            nextCode = 258;
+            codeSize = 9;
+            codeLimit = 512;
+          }
+          prefix = k;
+        }
+      }
+
+      writeCode(prefix, codeSize);
+      if (nextCode === codeLimit && codeSize < 12) {
+        codeSize++;
+        codeLimit <<= 1;
+      }
+      writeCode(eoiCode, codeSize);
+
+      if (bitCount > 0) {
+        subBlock[subLen++] = bitBuf & 0xFF;
+        if (subLen === 255) {
+          flushSubBlock();
+        }
+      }
+      flushSubBlock();
+      out.push(0x00);
+    }
+
+    function create(width, height) {
+      var bytes = [
+        0x47, 0x49, 0x46, 0x38, 0x39, 0x61,
+        width & 0xFF, (width >> 8) & 0xFF,
+        height & 0xFF, (height >> 8) & 0xFF,
+        0x70, 0x00, 0x00,
+        0x21, 0xFF, 0x0B,
+        0x4E, 0x45, 0x54, 0x53, 0x43, 0x41, 0x50, 0x45, 0x32, 0x2E, 0x30,
+        0x03, 0x01, 0x00, 0x00, 0x00
+      ];
+
+      return {
+        addFrame: function(rgba, delayCentisec) {
+          var delay = Math.max(2, Math.round(delayCentisec || 8));
+          var q = quantizeFrame(rgba, width * height);
+          bytes.push(
+            0x21, 0xF9, 0x04, 0x04,
+            delay & 0xFF, (delay >> 8) & 0xFF,
+            0x00, 0x00,
+            0x2C,
+            0x00, 0x00, 0x00, 0x00,
+            width & 0xFF, (width >> 8) & 0xFF,
+            height & 0xFF, (height >> 8) & 0xFF,
+            0x87
+          );
+          for (var p = 0; p < 768; p++) {
+            bytes.push(q.palette[p]);
+          }
+          lzwEncode(q.indices, bytes);
+        },
+        finish: function() {
+          bytes.push(0x3B);
+          return new Uint8Array(bytes);
+        }
+      };
+    }
+
+    return { create: create };
+  })();
 
   function readRawVideoFrameCounters(vNode) {
     var dropped = 0;
@@ -365,8 +756,8 @@ window.SyncLevel = SyncLevel;
   function setupVolumePersistence(player, videoEl, audioEl) {
     var restoring = true;
     try {
-      var savedVol = localStorage.getItem(VOL_PERSIST_KEY);
-      var savedMute = localStorage.getItem(MUTE_PERSIST_KEY);
+      var savedVol = getStorageValue('volume');
+      var savedMute = getStorageValue('muted');
       if (savedVol !== null) {
         var v = parseFloat(savedVol);
         if (!isNaN(v) && isFinite(v)) {
@@ -391,9 +782,9 @@ window.SyncLevel = SyncLevel;
         var curVol = typeof player.volume === 'function' ? player.volume() : (videoEl ? videoEl.volume : 1);
         var curMute = typeof player.muted === 'function' ? player.muted() : (videoEl ? videoEl.muted : false);
         if (typeof curVol === 'number' && !isNaN(curVol)) {
-          localStorage.setItem(VOL_PERSIST_KEY, String(curVol));
+          setStorageValue('volume', String(curVol));
         }
-        localStorage.setItem(MUTE_PERSIST_KEY, curMute ? '1' : '0');
+        setStorageValue('muted', curMute ? '1' : '0');
       } catch (_) {}
     };
 
@@ -1360,6 +1751,370 @@ window.SyncLevel = SyncLevel;
       '.alabaster-audio-option-item.is-selected .alabaster-audio-check {',
       '  opacity: 1 !important;',
       '}',
+      '.video-js .alabaster-gif-backdrop, .alabaster-gif-backdrop {',
+      '  position: absolute !important;',
+      '  inset: 0 !important;',
+      '  z-index: 48 !important;',
+      '  display: none;',
+      '  align-items: center !important;',
+      '  justify-content: center !important;',
+      '  padding: 14px !important;',
+      '  box-sizing: border-box !important;',
+      '  background: rgba(0, 0, 0, 0.68) !important;',
+      '  pointer-events: auto !important;',
+      '  opacity: 0;',
+      '  transition: opacity 0.18s ease !important;',
+      '}',
+      '.video-js .alabaster-gif-backdrop.is-visible, .alabaster-gif-backdrop.is-visible {',
+      '  opacity: 1 !important;',
+      '}',
+      '.video-js .alabaster-gif-dialog, .alabaster-gif-dialog {',
+      '  width: min(560px, 100%) !important;',
+      '  max-height: 100% !important;',
+      '  display: flex !important;',
+      '  flex-direction: column !important;',
+      '  background: #1c1917 !important;',
+      '  background-image: none !important;',
+      '  border: 1px solid #35302d !important;',
+      '  border-radius: 28px !important;',
+      '  box-shadow: 0 20px 56px rgba(0, 0, 0, 0.75) !important;',
+      '  color: #f1f1f1 !important;',
+      '  font-family: "poketube flex", "PokeTube Flex", Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;',
+      '  overflow-y: auto !important;',
+      '  overflow-x: hidden !important;',
+      '  box-sizing: border-box !important;',
+      '  padding: 20px 24px 20px 24px !important;',
+      '  gap: 14px !important;',
+      '  user-select: none !important;',
+      '  transform: scale(0.96);',
+      '  transition: transform 0.18s cubic-bezier(0.2, 0, 0, 1) !important;',
+      '}',
+      '.alabaster-gif-backdrop.is-visible .alabaster-gif-dialog {',
+      '  transform: scale(1) !important;',
+      '}',
+      '.alabaster-gif-dialog::-webkit-scrollbar {',
+      '  width: 6px;',
+      '}',
+      '.alabaster-gif-dialog::-webkit-scrollbar-track {',
+      '  background: transparent;',
+      '}',
+      '.alabaster-gif-dialog::-webkit-scrollbar-thumb {',
+      '  background: #46403c;',
+      '  border-radius: 3px;',
+      '}',
+      '.alabaster-gif-header {',
+      '  display: flex !important;',
+      '  align-items: center !important;',
+      '  justify-content: space-between !important;',
+      '  gap: 12px !important;',
+      '  flex-shrink: 0 !important;',
+      '}',
+      '.alabaster-gif-title {',
+      '  margin: 0 !important;',
+      '  font-size: 20px !important;',
+      '  font-weight: 600 !important;',
+      '  line-height: 1.3 !important;',
+      '  color: #f1f1f1 !important;',
+      '  letter-spacing: 0 !important;',
+      '}',
+      '.video-js .alabaster-gif-close-btn, .alabaster-gif-close-btn {',
+      '  width: 36px !important;',
+      '  height: 36px !important;',
+      '  min-width: 36px !important;',
+      '  border-radius: 12px !important;',
+      '  border: none !important;',
+      '  background: transparent !important;',
+      '  background-image: none !important;',
+      '  color: #b8b2ae !important;',
+      '  display: inline-flex !important;',
+      '  align-items: center !important;',
+      '  justify-content: center !important;',
+      '  cursor: pointer !important;',
+      '  padding: 0 !important;',
+      '  margin: 0 !important;',
+      '  box-shadow: none !important;',
+      '  transition: background 0.15s ease, color 0.15s ease !important;',
+      '}',
+      '.video-js .alabaster-gif-close-btn:hover, .alabaster-gif-close-btn:hover {',
+      '  background: #2c2825 !important;',
+      '  color: #ffffff !important;',
+      '}',
+      '.alabaster-gif-preview-wrap {',
+      '  position: relative !important;',
+      '  width: 100% !important;',
+      '  height: 196px !important;',
+      '  max-height: 34vh !important;',
+      '  background: #0f0d0c !important;',
+      '  border: 1px solid #2e2a27 !important;',
+      '  border-radius: 16px !important;',
+      '  overflow: hidden !important;',
+      '  display: flex !important;',
+      '  align-items: center !important;',
+      '  justify-content: center !important;',
+      '  flex-shrink: 0 !important;',
+      '}',
+      '.alabaster-gif-preview-canvas {',
+      '  max-width: 100% !important;',
+      '  max-height: 100% !important;',
+      '  width: auto !important;',
+      '  height: 100% !important;',
+      '  object-fit: contain !important;',
+      '  display: block !important;',
+      '}',
+      '.alabaster-gif-timeline-section {',
+      '  display: flex !important;',
+      '  flex-direction: column !important;',
+      '  gap: 8px !important;',
+      '  flex-shrink: 0 !important;',
+      '}',
+      '.alabaster-gif-timeline-bar {',
+      '  display: flex !important;',
+      '  align-items: center !important;',
+      '  gap: 8px !important;',
+      '  width: 100% !important;',
+      '}',
+      '.video-js .alabaster-gif-nav-btn, .alabaster-gif-nav-btn {',
+      '  width: 32px !important;',
+      '  height: 54px !important;',
+      '  min-width: 32px !important;',
+      '  border-radius: 10px !important;',
+      '  border: 1px solid #35302d !important;',
+      '  background: #25211f !important;',
+      '  background-image: none !important;',
+      '  color: #e6e1de !important;',
+      '  display: inline-flex !important;',
+      '  align-items: center !important;',
+      '  justify-content: center !important;',
+      '  cursor: pointer !important;',
+      '  padding: 0 !important;',
+      '  margin: 0 !important;',
+      '  box-shadow: none !important;',
+      '  flex-shrink: 0 !important;',
+      '  transition: background 0.14s ease, border-color 0.14s ease !important;',
+      '}',
+      '.video-js .alabaster-gif-nav-btn:hover, .alabaster-gif-nav-btn:hover {',
+      '  background: #302b28 !important;',
+      '  border-color: #524b47 !important;',
+      '}',
+      '.video-js .alabaster-gif-nav-btn:disabled, .alabaster-gif-nav-btn:disabled {',
+      '  opacity: 0.38 !important;',
+      '  cursor: default !important;',
+      '}',
+      '.alabaster-gif-strip-wrap {',
+      '  position: relative !important;',
+      '  flex: 1 1 auto !important;',
+      '  height: 54px !important;',
+      '  background: #12100f !important;',
+      '  border: 1px solid #35302d !important;',
+      '  border-radius: 10px !important;',
+      '  overflow: hidden !important;',
+      '  cursor: pointer !important;',
+      '  touch-action: none !important;',
+      '}',
+      '.alabaster-gif-frames-canvas {',
+      '  width: 100% !important;',
+      '  height: 100% !important;',
+      '  display: block !important;',
+      '}',
+      '.alabaster-gif-mask-left, .alabaster-gif-mask-right {',
+      '  position: absolute !important;',
+      '  top: 0 !important;',
+      '  bottom: 0 !important;',
+      '  background: rgba(12, 10, 9, 0.72) !important;',
+      '  pointer-events: none !important;',
+      '}',
+      '.alabaster-gif-mask-left {',
+      '  left: 0 !important;',
+      '}',
+      '.alabaster-gif-mask-right {',
+      '  right: 0 !important;',
+      '}',
+      '.alabaster-gif-selection {',
+      '  position: absolute !important;',
+      '  top: 0 !important;',
+      '  bottom: 0 !important;',
+      '  box-sizing: border-box !important;',
+      '  border-top: 2px solid #ffffff !important;',
+      '  border-bottom: 2px solid #ffffff !important;',
+      '  background: rgba(255, 255, 255, 0.06) !important;',
+      '  cursor: grab !important;',
+      '}',
+      '.alabaster-gif-selection:active {',
+      '  cursor: grabbing !important;',
+      '}',
+      '.alabaster-gif-handle {',
+      '  position: absolute !important;',
+      '  top: -2px !important;',
+      '  bottom: -2px !important;',
+      '  width: 14px !important;',
+      '  background: #ffffff !important;',
+      '  cursor: ew-resize !important;',
+      '  display: flex !important;',
+      '  align-items: center !important;',
+      '  justify-content: center !important;',
+      '  box-sizing: border-box !important;',
+      '}',
+      '.alabaster-gif-handle-start {',
+      '  left: 0 !important;',
+      '  border-radius: 4px 0 0 4px !important;',
+      '}',
+      '.alabaster-gif-handle-end {',
+      '  right: 0 !important;',
+      '  border-radius: 0 4px 4px 0 !important;',
+      '}',
+      '.alabaster-gif-handle::after {',
+      '  content: "" !important;',
+      '  width: 2px !important;',
+      '  height: 18px !important;',
+      '  background: #1c1917 !important;',
+      '  border-radius: 1px !important;',
+      '}',
+      '.alabaster-gif-playhead {',
+      '  position: absolute !important;',
+      '  top: 0 !important;',
+      '  bottom: 0 !important;',
+      '  width: 2px !important;',
+      '  background: #ffffff !important;',
+      '  pointer-events: none !important;',
+      '  display: none;',
+      '}',
+      '.alabaster-gif-scale-row {',
+      '  display: flex !important;',
+      '  align-items: center !important;',
+      '  justify-content: space-between !important;',
+      '  font-size: 12px !important;',
+      '  color: #a9a29d !important;',
+      '  padding: 0 40px !important;',
+      '}',
+      '.alabaster-gif-inputs-row {',
+      '  display: grid !important;',
+      '  grid-template-columns: 1fr 1fr !important;',
+      '  gap: 12px !important;',
+      '  width: 100% !important;',
+      '  box-sizing: border-box !important;',
+      '  flex-shrink: 0 !important;',
+      '}',
+      '.alabaster-gif-field {',
+      '  display: flex !important;',
+      '  flex-direction: column !important;',
+      '  gap: 5px !important;',
+      '  min-width: 0 !important;',
+      '}',
+      '.alabaster-gif-field-label {',
+      '  font-size: 12px !important;',
+      '  font-weight: 500 !important;',
+      '  color: #b8b2ae !important;',
+      '  line-height: 1.2 !important;',
+      '}',
+      '.video-js .alabaster-gif-input, .alabaster-gif-input {',
+      '  width: 100% !important;',
+      '  height: 42px !important;',
+      '  padding: 0 12px !important;',
+      '  box-sizing: border-box !important;',
+      '  border-radius: 8px !important;',
+      '  border: 1px solid #494440 !important;',
+      '  background: #161412 !important;',
+      '  color: #f1f1f1 !important;',
+      '  font-family: "poketube flex", "PokeTube Flex", Roboto, monospace !important;',
+      '  font-size: 14px !important;',
+      '  font-weight: 500 !important;',
+      '  outline: none !important;',
+      '  user-select: text !important;',
+      '  transition: border-color 0.14s ease !important;',
+      '}',
+      '.video-js .alabaster-gif-input:focus, .alabaster-gif-input:focus {',
+      '  border-color: #ffffff !important;',
+      '}',
+      '.alabaster-gif-status-row {',
+      '  display: flex !important;',
+      '  flex-direction: column !important;',
+      '  gap: 8px !important;',
+      '  flex-shrink: 0 !important;',
+      '}',
+      '.alabaster-gif-meta-line {',
+      '  display: flex !important;',
+      '  align-items: center !important;',
+      '  justify-content: space-between !important;',
+      '  gap: 10px !important;',
+      '  font-size: 12.5px !important;',
+      '  color: #b8b2ae !important;',
+      '  line-height: 1.3 !important;',
+      '}',
+      '.alabaster-gif-progress-track {',
+      '  width: 100% !important;',
+      '  height: 4px !important;',
+      '  background: #332e2b !important;',
+      '  border-radius: 2px !important;',
+      '  overflow: hidden !important;',
+      '  display: none;',
+      '}',
+      '.alabaster-gif-progress-fill {',
+      '  height: 100% !important;',
+      '  width: 0%;',
+      '  background: #ffffff !important;',
+      '  background-image: none !important;',
+      '  transition: width 0.1s linear !important;',
+      '}',
+      '.alabaster-gif-actions {',
+      '  display: flex !important;',
+      '  align-items: center !important;',
+      '  justify-content: space-between !important;',
+      '  gap: 10px !important;',
+      '  padding-top: 4px !important;',
+      '  flex-shrink: 0 !important;',
+      '}',
+      '.alabaster-gif-actions-right {',
+      '  display: flex !important;',
+      '  align-items: center !important;',
+      '  gap: 8px !important;',
+      '}',
+      '.video-js .alabaster-gif-btn, .alabaster-gif-btn {',
+      '  height: 40px !important;',
+      '  padding: 0 18px !important;',
+      '  margin: 0 !important;',
+      '  border-radius: 10px !important;',
+      '  font-family: "poketube flex", "PokeTube Flex", Roboto, sans-serif !important;',
+      '  font-size: 13.5px !important;',
+      '  font-weight: 600 !important;',
+      '  line-height: 1 !important;',
+      '  cursor: pointer !important;',
+      '  display: inline-flex !important;',
+      '  align-items: center !important;',
+      '  justify-content: center !important;',
+      '  gap: 8px !important;',
+      '  box-shadow: none !important;',
+      '  background-image: none !important;',
+      '  transition: background 0.14s ease, color 0.14s ease, opacity 0.14s ease !important;',
+      '}',
+      '.video-js .alabaster-gif-btn:disabled, .alabaster-gif-btn:disabled {',
+      '  opacity: 0.45 !important;',
+      '  cursor: default !important;',
+      '}',
+      '.video-js .alabaster-gif-btn-text, .alabaster-gif-btn-text {',
+      '  background: transparent !important;',
+      '  border: 1px solid transparent !important;',
+      '  color: #e6e1de !important;',
+      '}',
+      '.video-js .alabaster-gif-btn-text:hover:not(:disabled), .alabaster-gif-btn-text:hover:not(:disabled) {',
+      '  background: #2b2624 !important;',
+      '}',
+      '.video-js .alabaster-gif-btn-tonal, .alabaster-gif-btn-tonal {',
+      '  background: #2b2624 !important;',
+      '  border: 1px solid #3c3633 !important;',
+      '  color: #f1f1f1 !important;',
+      '}',
+      '.video-js .alabaster-gif-btn-tonal:hover:not(:disabled), .alabaster-gif-btn-tonal:hover:not(:disabled) {',
+      '  background: #36302d !important;',
+      '}',
+      '.video-js .alabaster-gif-btn-filled, .alabaster-gif-btn-filled {',
+      '  background: #ffffff !important;',
+      '  border: 1px solid #ffffff !important;',
+      '  color: #161412 !important;',
+      '}',
+      '.video-js .alabaster-gif-btn-filled:hover:not(:disabled), .alabaster-gif-btn-filled:hover:not(:disabled) {',
+      '  background: #e5e2df !important;',
+      '  border-color: #e5e2df !important;',
+      '}',
       '.alabaster-rec-open-btn {',
       '  position: absolute;',
       '  left: 50%;',
@@ -1797,6 +2552,10 @@ window.SyncLevel = SyncLevel;
       var setSettingsPopupState = null;
       var syncYoutubeCaptionsUI = null;
 
+      var gifMakerBackdrop = null;
+      var closeGifMaker = null;
+      var openGifMaker = null;
+
       var statsOverlayEl = null;
       var statsBodyEl = null;
       var statsTitleSpan = null;
@@ -1862,14 +2621,14 @@ window.SyncLevel = SyncLevel;
 
           ['mousedown', 'pointerdown', 'touchstart', 'touchend'].forEach(function(evName) {
             tNode.addEventListener(evName, function(evt) {
-              if (!checkIsPlayerFullscreen() || isStorageFlagEnabled(LEGACY_DESC_BTN_KEY)) return;
+              if (!checkIsPlayerFullscreen() || isStorageFlagEnabled('legacy_desc_btn')) return;
               if (!document.querySelector('.descriptionHtml')) return;
               evt.stopPropagation();
             }, false);
           });
 
           tNode.addEventListener('click', function(evt) {
-            if (!checkIsPlayerFullscreen() || isStorageFlagEnabled(LEGACY_DESC_BTN_KEY)) return;
+            if (!checkIsPlayerFullscreen() || isStorageFlagEnabled('legacy_desc_btn')) return;
             if (!document.querySelector('.descriptionHtml')) return;
             evt.preventDefault();
             evt.stopPropagation();
@@ -1978,7 +2737,7 @@ window.SyncLevel = SyncLevel;
 
           var chName = (typeof window.authorchannelname === 'string' && window.authorchannelname.trim()) ? window.authorchannelname.trim() : freshMeta.author;
           var avUrl = (typeof window.avatarurl === 'string' && window.avatarurl.trim()) ? window.avatarurl.trim() : freshMeta.avatarUrl;
-          var hideVerifyBadge = isStorageFlagEnabled(HIDE_VERIFY_BADGE_FS_DESC_KEY);
+          var hideVerifyBadge = isStorageFlagEnabled('hide_verify_badge_fs_desc');
           var isVerifiedChannel = !hideVerifyBadge && Boolean(document.getElementById('channel-pill-verify-badge'));
 
           if (avUrl) {
@@ -2069,7 +2828,7 @@ window.SyncLevel = SyncLevel;
 
           fsDescBody.innerHTML = '';
 
-          var showDislikes = isStorageFlagEnabled(SHOW_DISLIKES_FS_DESC_KEY);
+          var showDislikes = isStorageFlagEnabled('show_dislikes_fs_desc');
           var pubDateFormatted = formatShortPublishDate(window.formattedPublishDate);
           var thirdVal = showDislikes ? freshMeta.dislikes : pubDateFormatted.top;
           var thirdLabel = showDislikes ? 'Dislikes' : pubDateFormatted.bottom;
@@ -2490,7 +3249,7 @@ window.SyncLevel = SyncLevel;
             clearTimeout(ccToastTimer);
             ccToastTimer = 0;
           }
-          if (!langText || isStorageFlagEnabled(DISABLE_YT_CAPTIONS_KEY)) {
+          if (!langText || isStorageFlagEnabled('disable_yt_captions')) {
             ccToastEl.classList.remove('is-visible');
             return;
           }
@@ -2619,7 +3378,7 @@ window.SyncLevel = SyncLevel;
         var getDefaultCaptionTrack = function(tracks) {
           var arr = tracks || getCaptionTracks();
           if (!arr || !arr.length) return null;
-          if (isStorageFlagEnabled(SUB_DEFAULT_SYSTEM_LANG_KEY)) {
+          if (isStorageFlagEnabled('sub_default_system_lang')) {
             var sysTrack = findSystemLanguageTrack(arr);
             if (sysTrack) return sysTrack;
           }
@@ -2649,17 +3408,15 @@ window.SyncLevel = SyncLevel;
             }
           }
           if (fromUserAction) {
-            var ytCapsOn = !isStorageFlagEnabled(DISABLE_YT_CAPTIONS_KEY);
-            if (ytCapsOn && !isStorageFlagEnabled(DISABLE_SAVE_SUBTITLE_KEY)) {
-              try {
-                if (targetTrack) {
-                  localStorage.setItem(SUB_ENABLED_PERSIST_KEY, '1');
-                  localStorage.setItem(SUB_LANG_PERSIST_KEY, String(targetTrack.language || '').trim());
-                  localStorage.setItem(SUB_LABEL_PERSIST_KEY, String(targetTrack.label || '').trim());
-                } else {
-                  localStorage.setItem(SUB_ENABLED_PERSIST_KEY, '0');
-                }
-              } catch (_) {}
+            var ytCapsOn = !isStorageFlagEnabled('disable_yt_captions');
+            if (ytCapsOn && !isStorageFlagEnabled('disable_save_subtitle')) {
+              if (targetTrack) {
+                setStorageValue('sub_enabled', '1');
+                setStorageValue('sub_lang', String(targetTrack.language || '').trim());
+                setStorageValue('sub_label', String(targetTrack.label || '').trim());
+              } else {
+                setStorageValue('sub_enabled', '0');
+              }
             }
             if (targetTrack) {
               showCaptionToast(targetTrack.label || targetTrack.language || 'Subtitle');
@@ -2780,6 +3537,27 @@ window.SyncLevel = SyncLevel;
           '</div>'
         ].join('');
 
+        var gifMakerMenuRow = document.createElement('div');
+        gifMakerMenuRow.className = 'alabaster-settings-item';
+        gifMakerMenuRow.setAttribute('role', 'button');
+        gifMakerMenuRow.tabIndex = 0;
+        gifMakerMenuRow.innerHTML = [
+          '<div class="alabaster-settings-item-left">',
+          '  <span class="alabaster-settings-icon">',
+          '    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
+          '      <rect x="2" y="4" width="20" height="16" rx="2"></rect>',
+          '      <line x1="7" y1="4" x2="7" y2="20"></line>',
+          '      <line x1="17" y1="4" x2="17" y2="20"></line>',
+          '      <line x1="2" y1="9" x2="7" y2="9"></line>',
+          '      <line x1="2" y1="15" x2="7" y2="15"></line>',
+          '      <line x1="17" y1="9" x2="22" y2="9"></line>',
+          '      <line x1="17" y1="15" x2="22" y2="15"></line>',
+          '    </svg>',
+          '  </span>',
+          '  <span class="alabaster-settings-label">GIF maker</span>',
+          '</div>'
+        ].join('');
+
         var configPlayerRow = document.createElement('div');
         configPlayerRow.className = 'alabaster-settings-item';
         configPlayerRow.setAttribute('role', 'button');
@@ -2843,6 +3621,7 @@ window.SyncLevel = SyncLevel;
         mainPanel.appendChild(audioMenuRow);
         mainPanel.appendChild(subtitlesMenuRow);
         mainPanel.appendChild(snapshotMenuRow);
+        mainPanel.appendChild(gifMakerMenuRow);
         mainPanel.appendChild(configPlayerRow);
         mainPanel.appendChild(reportProblemRow);
         mainPanel.appendChild(statsForNerdsRow);
@@ -3285,21 +4064,21 @@ window.SyncLevel = SyncLevel;
         };
 
         syncYoutubeCaptionsUI = function() {
-          var ytCapsEnabled = !isStorageFlagEnabled(DISABLE_YT_CAPTIONS_KEY);
+          var ytCapsEnabled = !isStorageFlagEnabled('disable_yt_captions');
           if (rootEl) {
             rootEl.classList.toggle('alabaster-yt-captions', ytCapsEnabled);
           }
           var tracks = getCaptionTracks();
-          var saveSubsEnabled = ytCapsEnabled && !isStorageFlagEnabled(DISABLE_SAVE_SUBTITLE_KEY);
-          var autoSubsEnabled = isStorageFlagEnabled(ENABLE_AUTO_SUBTITLE_KEY);
+          var saveSubsEnabled = ytCapsEnabled && !isStorageFlagEnabled('disable_save_subtitle');
+          var autoSubsEnabled = isStorageFlagEnabled('enable_auto_subtitle');
 
           if (!hasUserToggledCaptions && tracks.length > 0) {
             if (saveSubsEnabled && !hasRestoredSavedSubtitle) {
               try {
-                var savedSubEnabled = localStorage.getItem(SUB_ENABLED_PERSIST_KEY);
+                var savedSubEnabled = getStorageValue('sub_enabled');
                 if (savedSubEnabled === '1') {
-                  var savedLang = String(localStorage.getItem(SUB_LANG_PERSIST_KEY) || '').trim().toLowerCase();
-                  var savedLabel = String(localStorage.getItem(SUB_LABEL_PERSIST_KEY) || '').trim().toLowerCase();
+                  var savedLang = String(getStorageValue('sub_lang') || '').trim().toLowerCase();
+                  var savedLabel = String(getStorageValue('sub_label') || '').trim().toLowerCase();
                   var savedBaseLang = savedLang ? savedLang.split(/[-_]/)[0] : '';
                   var savedBaseLabel = savedLabel ? savedLabel.split('(')[0].trim() : '';
                   var matchedTrack = null;
@@ -3588,6 +4367,968 @@ window.SyncLevel = SyncLevel;
           setSettingsPopupState(false);
         });
 
+        (function setupGifMakerModal() {
+          var MAX_GIF_SEC = 5;
+          var MIN_GIF_SEC = 0.2;
+          var WINDOW_SPAN_SEC = 16;
+
+          gifMakerBackdrop = document.createElement('div');
+          gifMakerBackdrop.className = 'alabaster-gif-backdrop';
+
+          var dialog = document.createElement('div');
+          dialog.className = 'alabaster-gif-dialog';
+          dialog.setAttribute('role', 'dialog');
+          dialog.setAttribute('aria-modal', 'true');
+          dialog.setAttribute('aria-label', 'GIF maker');
+
+          var header = document.createElement('div');
+          header.className = 'alabaster-gif-header';
+
+          var heading = document.createElement('h3');
+          heading.className = 'alabaster-gif-title';
+          heading.textContent = 'GIF maker';
+
+          var closeBtn = document.createElement('button');
+          closeBtn.type = 'button';
+          closeBtn.className = 'alabaster-gif-close-btn';
+          closeBtn.setAttribute('aria-label', 'Close GIF maker');
+          closeBtn.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+
+          header.appendChild(heading);
+          header.appendChild(closeBtn);
+
+          var previewWrap = document.createElement('div');
+          previewWrap.className = 'alabaster-gif-preview-wrap';
+          var previewCanvas = document.createElement('canvas');
+          previewCanvas.className = 'alabaster-gif-preview-canvas';
+          previewCanvas.width = 480;
+          previewCanvas.height = 270;
+          previewWrap.appendChild(previewCanvas);
+
+          var timelineSection = document.createElement('div');
+          timelineSection.className = 'alabaster-gif-timeline-section';
+
+          var timelineBar = document.createElement('div');
+          timelineBar.className = 'alabaster-gif-timeline-bar';
+
+          var prevWinBtn = document.createElement('button');
+          prevWinBtn.type = 'button';
+          prevWinBtn.className = 'alabaster-gif-nav-btn';
+          prevWinBtn.setAttribute('aria-label', 'Earlier frames');
+          prevWinBtn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>';
+
+          var stripWrap = document.createElement('div');
+          stripWrap.className = 'alabaster-gif-strip-wrap';
+
+          var framesCanvas = document.createElement('canvas');
+          framesCanvas.className = 'alabaster-gif-frames-canvas';
+          framesCanvas.width = 480;
+          framesCanvas.height = 54;
+
+          var maskLeft = document.createElement('div');
+          maskLeft.className = 'alabaster-gif-mask-left';
+
+          var maskRight = document.createElement('div');
+          maskRight.className = 'alabaster-gif-mask-right';
+
+          var selBox = document.createElement('div');
+          selBox.className = 'alabaster-gif-selection';
+
+          var handleStart = document.createElement('div');
+          handleStart.className = 'alabaster-gif-handle alabaster-gif-handle-start';
+
+          var handleEnd = document.createElement('div');
+          handleEnd.className = 'alabaster-gif-handle alabaster-gif-handle-end';
+
+          var playheadEl = document.createElement('div');
+          playheadEl.className = 'alabaster-gif-playhead';
+
+          selBox.appendChild(handleStart);
+          selBox.appendChild(handleEnd);
+          stripWrap.appendChild(framesCanvas);
+          stripWrap.appendChild(maskLeft);
+          stripWrap.appendChild(maskRight);
+          stripWrap.appendChild(selBox);
+          stripWrap.appendChild(playheadEl);
+
+          var nextWinBtn = document.createElement('button');
+          nextWinBtn.type = 'button';
+          nextWinBtn.className = 'alabaster-gif-nav-btn';
+          nextWinBtn.setAttribute('aria-label', 'Later frames');
+          nextWinBtn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>';
+
+          timelineBar.appendChild(prevWinBtn);
+          timelineBar.appendChild(stripWrap);
+          timelineBar.appendChild(nextWinBtn);
+
+          var scaleRow = document.createElement('div');
+          scaleRow.className = 'alabaster-gif-scale-row';
+          var scaleStartLbl = document.createElement('span');
+          var scaleMidLbl = document.createElement('span');
+          var scaleEndLbl = document.createElement('span');
+          scaleRow.appendChild(scaleStartLbl);
+          scaleRow.appendChild(scaleMidLbl);
+          scaleRow.appendChild(scaleEndLbl);
+
+          timelineSection.appendChild(timelineBar);
+          timelineSection.appendChild(scaleRow);
+
+          var inputsRow = document.createElement('div');
+          inputsRow.className = 'alabaster-gif-inputs-row';
+
+          var startField = document.createElement('div');
+          startField.className = 'alabaster-gif-field';
+          var startLabel = document.createElement('label');
+          startLabel.className = 'alabaster-gif-field-label';
+          startLabel.textContent = 'From (or range like 0:50-0:54)';
+          var startInput = document.createElement('input');
+          startInput.type = 'text';
+          startInput.className = 'alabaster-gif-input';
+          startInput.placeholder = '0:00';
+          startField.appendChild(startLabel);
+          startField.appendChild(startInput);
+
+          var endField = document.createElement('div');
+          endField.className = 'alabaster-gif-field';
+          var endLabel = document.createElement('label');
+          endLabel.className = 'alabaster-gif-field-label';
+          endLabel.textContent = 'To (max 5s)';
+          var endInput = document.createElement('input');
+          endInput.type = 'text';
+          endInput.className = 'alabaster-gif-input';
+          endInput.placeholder = '0:05';
+          endField.appendChild(endLabel);
+          endField.appendChild(endInput);
+
+          inputsRow.appendChild(startField);
+          inputsRow.appendChild(endField);
+
+          var statusRow = document.createElement('div');
+          statusRow.className = 'alabaster-gif-status-row';
+
+          var metaLine = document.createElement('div');
+          metaLine.className = 'alabaster-gif-meta-line';
+          var durationInfoEl = document.createElement('span');
+          var statusTextEl = document.createElement('span');
+          metaLine.appendChild(durationInfoEl);
+          metaLine.appendChild(statusTextEl);
+
+          var progressTrack = document.createElement('div');
+          progressTrack.className = 'alabaster-gif-progress-track';
+          var progressFill = document.createElement('div');
+          progressFill.className = 'alabaster-gif-progress-fill';
+          progressTrack.appendChild(progressFill);
+
+          statusRow.appendChild(metaLine);
+          statusRow.appendChild(progressTrack);
+
+          var actionsRow = document.createElement('div');
+          actionsRow.className = 'alabaster-gif-actions';
+
+          var previewBtn = document.createElement('button');
+          previewBtn.type = 'button';
+          previewBtn.className = 'alabaster-gif-btn alabaster-gif-btn-tonal';
+          previewBtn.textContent = 'Preview';
+
+          var actionsRight = document.createElement('div');
+          actionsRight.className = 'alabaster-gif-actions-right';
+
+          var cancelBtn = document.createElement('button');
+          cancelBtn.type = 'button';
+          cancelBtn.className = 'alabaster-gif-btn alabaster-gif-btn-text';
+          cancelBtn.textContent = 'Cancel';
+
+          var downloadBtn = document.createElement('button');
+          downloadBtn.type = 'button';
+          downloadBtn.className = 'alabaster-gif-btn alabaster-gif-btn-filled';
+          downloadBtn.textContent = 'Download GIF';
+
+          actionsRight.appendChild(cancelBtn);
+          actionsRight.appendChild(downloadBtn);
+          actionsRow.appendChild(previewBtn);
+          actionsRow.appendChild(actionsRight);
+
+          dialog.appendChild(header);
+          dialog.appendChild(previewWrap);
+          dialog.appendChild(timelineSection);
+          dialog.appendChild(inputsRow);
+          dialog.appendChild(statusRow);
+          dialog.appendChild(actionsRow);
+          gifMakerBackdrop.appendChild(dialog);
+          rootEl.appendChild(gifMakerBackdrop);
+
+          var gState = {
+            open: false,
+            encoding: false,
+            previewing: false,
+            previewRafId: 0,
+            duration: 0,
+            winStart: 0,
+            winEnd: 10,
+            selStart: 0,
+            selEnd: 3,
+            jobId: 0,
+            stripJobId: 0,
+            previewSeekTimer: 0,
+            dragMode: '',
+            dragStartX: 0,
+            dragInitStart: 0,
+            dragInitEnd: 0,
+            offVideo: null,
+            usingMainFallback: false,
+            savedMainTime: 0,
+            wasMainPlaying: false
+          };
+
+          function getEffectiveDuration() {
+            var vNode = getVideoElementNode();
+            var d = Number(player.duration ? player.duration() : (vNode ? vNode.duration : 0));
+            if (isFinite(d) && d > 0) return d;
+            if (gState.offVideo && isFinite(gState.offVideo.duration) && gState.offVideo.duration > 0) {
+              return gState.offVideo.duration;
+            }
+            return 0;
+          }
+
+          function drawVideoToPreview(srcVid) {
+            if (!srcVid || !srcVid.videoWidth || !srcVid.videoHeight) return;
+            var maxW = 480;
+            var aspect = srcVid.videoWidth / srcVid.videoHeight;
+            var cw = maxW;
+            var ch = Math.max(2, Math.round(cw / aspect));
+            if (previewCanvas.width !== cw || previewCanvas.height !== ch) {
+              previewCanvas.width = cw;
+              previewCanvas.height = ch;
+            }
+            var ctx = previewCanvas.getContext('2d');
+            try {
+              ctx.drawImage(srcVid, 0, 0, cw, ch);
+            } catch (_) {}
+          }
+
+          function seekHelperVideo(vid, timeSec, timeoutMs) {
+            return new Promise(function(resolve) {
+              if (!vid) return resolve(false);
+              var dur = isFinite(vid.duration) && vid.duration > 0 ? vid.duration : gState.duration;
+              var target = Math.max(0, Math.min(dur > 0 ? Math.max(0, dur - 0.04) : timeSec, timeSec));
+              var doneCalled = false;
+              var tmr = 0;
+              var finish = function(ok) {
+                if (doneCalled) return;
+                doneCalled = true;
+                clearTimeout(tmr);
+                vid.removeEventListener('seeked', onSeeked, false);
+                vid.removeEventListener('error', onErr, false);
+                resolve(ok);
+              };
+              var onSeeked = function() {
+                finish(true);
+              };
+              var onErr = function() {
+                finish(false);
+              };
+              if (!vid.seeking && vid.readyState >= 2 && Math.abs(vid.currentTime - target) < 0.015) {
+                return resolve(true);
+              }
+              vid.addEventListener('seeked', onSeeked, false);
+              vid.addEventListener('error', onErr, false);
+              tmr = setTimeout(function() { finish(vid.readyState >= 2); }, timeoutMs || 2200);
+              try {
+                vid.currentTime = target;
+              } catch (_) {
+                finish(false);
+              }
+            });
+          }
+
+          function ensureOffscreenVideo() {
+            return new Promise(function(resolve) {
+              if (gState.offVideo && gState.offVideo.readyState >= 1) {
+                return resolve(gState.offVideo);
+              }
+              var mainVid = getVideoElementNode();
+              if (!mainVid) return resolve(null);
+              var srcUrl = mainVid.currentSrc || mainVid.getAttribute('src') || '';
+              if (!srcUrl) {
+                var sEl = mainVid.querySelector('source');
+                if (sEl) srcUrl = sEl.src || sEl.getAttribute('src') || '';
+              }
+              if (!srcUrl || srcUrl.indexOf('blob:') === 0) {
+                gState.usingMainFallback = true;
+                return resolve(mainVid);
+              }
+              var off = document.createElement('video');
+              off.muted = true;
+              off.playsInline = true;
+              off.preload = 'auto';
+              if (mainVid.crossOrigin) off.crossOrigin = mainVid.crossOrigin;
+              var settled = false;
+              var tmr = 0;
+              var finish = function(result) {
+                if (settled) return;
+                settled = true;
+                clearTimeout(tmr);
+                off.removeEventListener('loadeddata', onReady, false);
+                off.removeEventListener('loadedmetadata', onMeta, false);
+                off.removeEventListener('error', onFail, false);
+                resolve(result);
+              };
+              var onReady = function() {
+                gState.offVideo = off;
+                gState.usingMainFallback = false;
+                finish(off);
+              };
+              var onMeta = function() {
+                if (off.readyState >= 2) onReady();
+              };
+              var onFail = function() {
+                gState.usingMainFallback = true;
+                finish(mainVid);
+              };
+              off.addEventListener('loadeddata', onReady, false);
+              off.addEventListener('loadedmetadata', onMeta, false);
+              off.addEventListener('error', onFail, false);
+              tmr = setTimeout(function() {
+                if (off.readyState >= 1) {
+                  gState.offVideo = off;
+                  gState.usingMainFallback = false;
+                  finish(off);
+                } else {
+                  gState.usingMainFallback = true;
+                  finish(mainVid);
+                }
+              }, 3000);
+              off.src = srcUrl;
+              try { off.load(); } catch (_) {}
+            });
+          }
+
+          function destroyOffscreenVideo() {
+            if (gState.offVideo) {
+              try {
+                gState.offVideo.pause();
+                gState.offVideo.removeAttribute('src');
+                gState.offVideo.load();
+              } catch (_) {}
+              gState.offVideo = null;
+            }
+          }
+
+          function stopPreviewPlayback() {
+            gState.previewing = false;
+            previewBtn.textContent = 'Preview';
+            playheadEl.style.display = 'none';
+            if (gState.previewRafId) {
+              cancelAnimationFrame(gState.previewRafId);
+              gState.previewRafId = 0;
+            }
+            if (gState.offVideo && !gState.offVideo.paused) {
+              try { gState.offVideo.pause(); } catch (_) {}
+            }
+          }
+
+          function clampSelection(startSec, endSec, anchor) {
+            var dur = Math.max(0.5, gState.duration || 5);
+            var maxSpan = Math.min(MAX_GIF_SEC, dur);
+            var minSpan = Math.min(MIN_GIF_SEC, dur);
+            var s = Math.max(0, Math.min(dur, Number(startSec) || 0));
+            var e = Math.max(0, Math.min(dur, Number(endSec) || 0));
+
+            if (anchor === 'start') {
+              if (e < s + minSpan) e = Math.min(dur, s + minSpan);
+              if (e - s > maxSpan) e = s + maxSpan;
+              if (e > dur) {
+                e = dur;
+                s = Math.max(0, e - minSpan);
+              }
+            } else if (anchor === 'end') {
+              if (s > e - minSpan) s = Math.max(0, e - minSpan);
+              if (e - s > maxSpan) s = e - maxSpan;
+              if (s < 0) {
+                s = 0;
+                e = Math.min(dur, minSpan);
+              }
+            } else {
+              if (e < s) {
+                var tmp = s;
+                s = e;
+                e = tmp;
+              }
+              if (e - s < minSpan) {
+                e = Math.min(dur, s + minSpan);
+                if (e - s < minSpan) s = Math.max(0, e - minSpan);
+              }
+              if (e - s > maxSpan) {
+                e = s + maxSpan;
+              }
+            }
+
+            gState.selStart = Math.round(s * 10) / 10;
+            gState.selEnd = Math.round(e * 10) / 10;
+          }
+
+          function centerWindowAroundSelection() {
+            var dur = Math.max(0.5, gState.duration || 5);
+            if (dur <= WINDOW_SPAN_SEC) {
+              gState.winStart = 0;
+              gState.winEnd = dur;
+              return;
+            }
+            var mid = (gState.selStart + gState.selEnd) * 0.5;
+            var wStart = mid - WINDOW_SPAN_SEC * 0.5;
+            var wEnd = mid + WINDOW_SPAN_SEC * 0.5;
+            if (wStart < 0) {
+              wStart = 0;
+              wEnd = WINDOW_SPAN_SEC;
+            } else if (wEnd > dur) {
+              wEnd = dur;
+              wStart = Math.max(0, dur - WINDOW_SPAN_SEC);
+            }
+            gState.winStart = wStart;
+            gState.winEnd = wEnd;
+          }
+
+          function updateSelectionUI(skipInputs) {
+            var span = Math.max(0.1, gState.winEnd - gState.winStart);
+            var leftPct = Math.max(0, Math.min(100, ((gState.selStart - gState.winStart) / span) * 100));
+            var rightPct = Math.max(0, Math.min(100, ((gState.selEnd - gState.winStart) / span) * 100));
+            var widthPct = Math.max(2, rightPct - leftPct);
+            if (leftPct + widthPct > 100) leftPct = Math.max(0, 100 - widthPct);
+
+            selBox.style.left = leftPct + '%';
+            selBox.style.width = widthPct + '%';
+            maskLeft.style.width = leftPct + '%';
+            maskRight.style.width = Math.max(0, 100 - (leftPct + widthPct)) + '%';
+
+            scaleStartLbl.textContent = compat.formatClock(gState.winStart);
+            scaleMidLbl.textContent = compat.formatClock((gState.winStart + gState.winEnd) * 0.5);
+            scaleEndLbl.textContent = compat.formatClock(gState.winEnd);
+
+            prevWinBtn.disabled = gState.encoding || gState.winStart <= 0.05;
+            nextWinBtn.disabled = gState.encoding || gState.winEnd >= gState.duration - 0.05;
+
+            if (!skipInputs) {
+              startInput.value = compat.formatPreciseClock(gState.selStart);
+              endInput.value = compat.formatPreciseClock(gState.selEnd);
+            }
+
+            var clipDur = Math.max(0, gState.selEnd - gState.selStart);
+            durationInfoEl.textContent = 'Selected: ' + clipDur.toFixed(1) + 's of 5.0s max';
+          }
+
+          function showPreviewFrameAt(timeSec) {
+            if (gState.encoding || !gState.open) return;
+            if (gState.previewSeekTimer) {
+              clearTimeout(gState.previewSeekTimer);
+              gState.previewSeekTimer = 0;
+            }
+            var jobSnapshot = gState.jobId;
+            gState.previewSeekTimer = setTimeout(function() {
+              gState.previewSeekTimer = 0;
+              if (!gState.open || gState.encoding || gState.previewing || jobSnapshot !== gState.jobId) return;
+              ensureOffscreenVideo().then(function(vid) {
+                if (!vid || !gState.open || gState.encoding || gState.previewing || jobSnapshot !== gState.jobId) return;
+                seekHelperVideo(vid, timeSec, 1500).then(function() {
+                  if (!gState.open || gState.encoding || gState.previewing || jobSnapshot !== gState.jobId) return;
+                  drawVideoToPreview(vid);
+                });
+              });
+            }, 45);
+          }
+
+          function renderFrameStrip() {
+            var myStripId = ++gState.stripJobId;
+            var fCtx = framesCanvas.getContext('2d');
+            var cw = framesCanvas.width;
+            var ch = framesCanvas.height;
+            fCtx.fillStyle = '#12100f';
+            fCtx.fillRect(0, 0, cw, ch);
+
+            var numThumbs = 8;
+            var thumbW = cw / numThumbs;
+            var span = Math.max(0.1, gState.winEnd - gState.winStart);
+
+            statusTextEl.textContent = 'Loading frames...';
+
+            ensureOffscreenVideo().then(function(vid) {
+              if (!vid || !gState.open || myStripId !== gState.stripJobId || gState.encoding) return;
+              var idx = 0;
+              var nextThumb = function() {
+                if (!gState.open || myStripId !== gState.stripJobId || gState.encoding || gState.previewing) return;
+                if (idx >= numThumbs) {
+                  statusTextEl.textContent = 'Ready';
+                  seekHelperVideo(vid, gState.selStart, 1200).then(function() {
+                    if (gState.open && myStripId === gState.stripJobId && !gState.previewing && !gState.encoding) {
+                      drawVideoToPreview(vid);
+                    }
+                  });
+                  return;
+                }
+                var t = gState.winStart + ((idx + 0.5) / numThumbs) * span;
+                seekHelperVideo(vid, t, 1500).then(function() {
+                  if (!gState.open || myStripId !== gState.stripJobId || gState.encoding) return;
+                  try {
+                    fCtx.drawImage(vid, Math.floor(idx * thumbW), 0, Math.ceil(thumbW), ch);
+                  } catch (_) {}
+                  idx++;
+                  setTimeout(nextThumb, 0);
+                });
+              };
+              nextThumb();
+            });
+          }
+
+          function shiftTimelineWindow(deltaSec) {
+            if (gState.encoding) return;
+            stopPreviewPlayback();
+            var dur = Math.max(0.5, gState.duration || 5);
+            if (dur <= WINDOW_SPAN_SEC) return;
+            var nextStart = Math.max(0, Math.min(dur - WINDOW_SPAN_SEC, gState.winStart + deltaSec));
+            var actualShift = nextStart - gState.winStart;
+            if (Math.abs(actualShift) < 0.05) return;
+            gState.winStart = nextStart;
+            gState.winEnd = nextStart + WINDOW_SPAN_SEC;
+            var len = gState.selEnd - gState.selStart;
+            var newSelStart = Math.max(gState.winStart, Math.min(gState.winEnd - len, gState.selStart + actualShift));
+            clampSelection(newSelStart, newSelStart + len, 'start');
+            updateSelectionUI(false);
+            renderFrameStrip();
+          }
+
+          function applyManualTimeInputs(sourceField) {
+            if (gState.encoding) return;
+            stopPreviewPlayback();
+            var rawStart = String(startInput.value || '').trim();
+            var rawEnd = String(endInput.value || '').trim();
+            var rangeMatch = (sourceField === 'start' ? rawStart : rawEnd).match(/^([\d:.]+)\s*[-–to]+\s*([\d:.]+)$/i);
+            if (rangeMatch) {
+              var pStart = compat.parseClockText(rangeMatch[1]);
+              var pEnd = compat.parseClockText(rangeMatch[2]);
+              if (!isNaN(pStart) && !isNaN(pEnd)) {
+                clampSelection(pStart, pEnd, 'both');
+                if (gState.selStart < gState.winStart || gState.selEnd > gState.winEnd) {
+                  centerWindowAroundSelection();
+                  updateSelectionUI(false);
+                  renderFrameStrip();
+                } else {
+                  updateSelectionUI(false);
+                  showPreviewFrameAt(gState.selStart);
+                }
+                return;
+              }
+            }
+            var parsedS = compat.parseClockText(rawStart);
+            var parsedE = compat.parseClockText(rawEnd);
+            if (!isNaN(parsedS) && !isNaN(parsedE)) {
+              clampSelection(parsedS, parsedE, sourceField === 'end' ? 'end' : 'start');
+              if (gState.selStart < gState.winStart || gState.selEnd > gState.winEnd) {
+                centerWindowAroundSelection();
+                updateSelectionUI(false);
+                renderFrameStrip();
+              } else {
+                updateSelectionUI(false);
+                showPreviewFrameAt(sourceField === 'end' ? gState.selEnd : gState.selStart);
+              }
+            } else {
+              updateSelectionUI(false);
+            }
+          }
+
+          function togglePreviewLoop() {
+            if (gState.encoding) return;
+            if (gState.previewing) {
+              stopPreviewPlayback();
+              showPreviewFrameAt(gState.selStart);
+              return;
+            }
+            gState.stripJobId++;
+            ensureOffscreenVideo().then(function(vid) {
+              if (!vid || !gState.open || gState.encoding) return;
+              gState.previewing = true;
+              previewBtn.textContent = 'Stop preview';
+              playheadEl.style.display = 'block';
+              seekHelperVideo(vid, gState.selStart, 1200).then(function() {
+                if (!gState.previewing || !gState.open) return;
+                vid.muted = true;
+                try {
+                  var p = vid.play();
+                  if (p && typeof p.catch === 'function') p.catch(function() {});
+                } catch (_) {}
+                var stepPreview = function() {
+                  if (!gState.previewing || !gState.open) return;
+                  var cur = vid.currentTime || gState.selStart;
+                  if (cur >= gState.selEnd || vid.ended) {
+                    try { vid.currentTime = gState.selStart; } catch (_) {}
+                    cur = gState.selStart;
+                  }
+                  drawVideoToPreview(vid);
+                  var span = Math.max(0.1, gState.winEnd - gState.winStart);
+                  var pct = Math.max(0, Math.min(100, ((cur - gState.winStart) / span) * 100));
+                  playheadEl.style.left = pct + '%';
+                  gState.previewRafId = requestAnimationFrame(stepPreview);
+                };
+                gState.previewRafId = requestAnimationFrame(stepPreview);
+              });
+            });
+          }
+
+          function startGifExport() {
+            if (gState.encoding) return;
+            stopPreviewPlayback();
+            gState.stripJobId++;
+            var myJob = ++gState.jobId;
+            gState.encoding = true;
+            downloadBtn.disabled = true;
+            previewBtn.disabled = true;
+            startInput.disabled = true;
+            endInput.disabled = true;
+            prevWinBtn.disabled = true;
+            nextWinBtn.disabled = true;
+            progressTrack.style.display = 'block';
+            progressFill.style.width = '2%';
+            statusTextEl.textContent = 'Preparing frames...';
+
+            var finishUI = function(msg) {
+              if (myJob !== gState.jobId) return;
+              gState.encoding = false;
+              downloadBtn.disabled = false;
+              previewBtn.disabled = false;
+              startInput.disabled = false;
+              endInput.disabled = false;
+              updateSelectionUI(false);
+              statusTextEl.textContent = msg || 'Ready';
+              setTimeout(function() {
+                if (!gState.encoding) {
+                  progressTrack.style.display = 'none';
+                  progressFill.style.width = '0%';
+                }
+              }, 1200);
+            };
+
+            ensureOffscreenVideo().then(function(vid) {
+              if (!vid || !gState.open || myJob !== gState.jobId) {
+                return finishUI('Cancelled');
+              }
+              if (!vid.videoWidth || !vid.videoHeight) {
+                return finishUI('Video frames unavailable');
+              }
+              var clipStart = gState.selStart;
+              var clipEnd = Math.min(clipStart + MAX_GIF_SEC, gState.selEnd);
+              var clipDur = Math.max(MIN_GIF_SEC, clipEnd - clipStart);
+              var fps = 12;
+              var totalFrames = Math.max(2, Math.min(60, Math.round(clipDur * fps)));
+              var frameStep = clipDur / totalFrames;
+              var delayCs = Math.max(5, Math.round((frameStep) * 100));
+
+              var maxGifW = 480;
+              var outW = Math.min(maxGifW, vid.videoWidth);
+              var outH = Math.max(2, Math.round(outW * (vid.videoHeight / vid.videoWidth)));
+              if (outW % 2 !== 0) outW--;
+              if (outH % 2 !== 0) outH--;
+
+              var capCanvas = document.createElement('canvas');
+              capCanvas.width = outW;
+              capCanvas.height = outH;
+              var capCtx = capCanvas.getContext('2d', { willReadFrequently: true });
+              var enc = gifEncoder.create(outW, outH);
+              var frameIndex = 0;
+
+              var captureNextFrame = function() {
+                if (!gState.open || myJob !== gState.jobId) {
+                  return finishUI('Cancelled');
+                }
+                if (frameIndex >= totalFrames) {
+                  statusTextEl.textContent = 'Saving GIF...';
+                  progressFill.style.width = '100%';
+                  setTimeout(function() {
+                    if (!gState.open || myJob !== gState.jobId) return;
+                    try {
+                      var gifBytes = enc.finish();
+                      var blob = new Blob([gifBytes], { type: 'image/gif' });
+                      var url = URL.createObjectURL(blob);
+                      var freshMeta = metadataParser.read();
+                      var rawTitle = (freshMeta.title || info.title || document.title || 'Video').trim();
+                      var cleanTitle = rawTitle.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim() || 'Video';
+                      var fromStr = compat.formatFileTimestamp(clipStart);
+                      var toStr = compat.formatFileTimestamp(clipEnd);
+                      var fileName = cleanTitle + ' ' + fromStr + '-' + toStr + '.gif';
+                      var link = document.createElement('a');
+                      link.href = url;
+                      link.download = fileName;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                      setTimeout(function() { URL.revokeObjectURL(url); }, 4000);
+                      finishUI('GIF downloaded');
+                    } catch (_) {
+                      finishUI('Could not encode GIF');
+                    }
+                  }, 15);
+                  return;
+                }
+
+                var t = clipStart + frameIndex * frameStep;
+                seekHelperVideo(vid, t, 2000).then(function() {
+                  if (!gState.open || myJob !== gState.jobId) {
+                    return finishUI('Cancelled');
+                  }
+                  try {
+                    capCtx.drawImage(vid, 0, 0, outW, outH);
+                    drawVideoToPreview(vid);
+                    var imgData = capCtx.getImageData(0, 0, outW, outH);
+                    enc.addFrame(imgData.data, delayCs);
+                  } catch (_) {
+                    return finishUI('Video cannot be exported');
+                  }
+                  frameIndex++;
+                  var pct = Math.min(98, Math.round((frameIndex / totalFrames) * 98));
+                  progressFill.style.width = pct + '%';
+                  statusTextEl.textContent = 'Encoding frame ' + frameIndex + ' of ' + totalFrames;
+                  setTimeout(captureNextFrame, 0);
+                });
+              };
+
+              captureNextFrame();
+            });
+          }
+
+          var getClientX = function(evt) {
+            if (evt.touches && evt.touches.length) return evt.touches[0].clientX;
+            if (evt.changedTouches && evt.changedTouches.length) return evt.changedTouches[0].clientX;
+            return evt.clientX;
+          };
+
+          var beginStripDrag = function(mode, evt) {
+            if (gState.encoding) return;
+            evt.preventDefault();
+            evt.stopPropagation();
+            stopPreviewPlayback();
+            gState.dragMode = mode;
+            gState.dragStartX = getClientX(evt);
+            gState.dragInitStart = gState.selStart;
+            gState.dragInitEnd = gState.selEnd;
+          };
+
+          handleStart.addEventListener('mousedown', function(e) { beginStripDrag('start', e); }, false);
+          handleStart.addEventListener('touchstart', function(e) { beginStripDrag('start', e); }, { passive: false });
+          handleEnd.addEventListener('mousedown', function(e) { beginStripDrag('end', e); }, false);
+          handleEnd.addEventListener('touchstart', function(e) { beginStripDrag('end', e); }, { passive: false });
+          selBox.addEventListener('mousedown', function(e) {
+            if (e.target === handleStart || e.target === handleEnd) return;
+            beginStripDrag('move', e);
+          }, false);
+          selBox.addEventListener('touchstart', function(e) {
+            if (e.target === handleStart || e.target === handleEnd) return;
+            beginStripDrag('move', e);
+          }, { passive: false });
+
+          stripWrap.addEventListener('mousedown', function(e) {
+            if (gState.encoding || e.target === handleStart || e.target === handleEnd || selBox.contains(e.target)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            stopPreviewPlayback();
+            var rect = stripWrap.getBoundingClientRect();
+            if (!rect.width) return;
+            var ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            var clickedTime = gState.winStart + ratio * (gState.winEnd - gState.winStart);
+            var len = Math.min(MAX_GIF_SEC, Math.max(MIN_GIF_SEC, gState.selEnd - gState.selStart));
+            var newStart = Math.max(gState.winStart, Math.min(gState.winEnd - len, clickedTime - len * 0.5));
+            clampSelection(newStart, newStart + len, 'start');
+            updateSelectionUI(false);
+            showPreviewFrameAt(gState.selStart);
+          }, false);
+
+          var onStripDragMove = function(evt) {
+            if (!gState.dragMode || !gState.open) return;
+            var rect = stripWrap.getBoundingClientRect();
+            if (!rect.width) return;
+            var dx = getClientX(evt) - gState.dragStartX;
+            var dt = (dx / rect.width) * (gState.winEnd - gState.winStart);
+
+            if (gState.dragMode === 'start') {
+              var nextS = Math.max(gState.winStart, Math.min(gState.dragInitEnd - MIN_GIF_SEC, gState.dragInitStart + dt));
+              if (gState.dragInitEnd - nextS > MAX_GIF_SEC) {
+                nextS = gState.dragInitEnd - MAX_GIF_SEC;
+              }
+              clampSelection(nextS, gState.dragInitEnd, 'end');
+              updateSelectionUI(false);
+              showPreviewFrameAt(gState.selStart);
+            } else if (gState.dragMode === 'end') {
+              var nextE = Math.min(gState.winEnd, Math.max(gState.dragInitStart + MIN_GIF_SEC, gState.dragInitEnd + dt));
+              if (nextE - gState.dragInitStart > MAX_GIF_SEC) {
+                nextE = gState.dragInitStart + MAX_GIF_SEC;
+              }
+              clampSelection(gState.dragInitStart, nextE, 'start');
+              updateSelectionUI(false);
+              showPreviewFrameAt(gState.selEnd);
+            } else if (gState.dragMode === 'move') {
+              var curLen = gState.dragInitEnd - gState.dragInitStart;
+              var movedS = Math.max(gState.winStart, Math.min(gState.winEnd - curLen, gState.dragInitStart + dt));
+              clampSelection(movedS, movedS + curLen, 'start');
+              updateSelectionUI(false);
+              showPreviewFrameAt(gState.selStart);
+            }
+          };
+
+          var onStripDragEnd = function() {
+            if (!gState.dragMode) return;
+            gState.dragMode = '';
+          };
+
+          window.addEventListener('mousemove', onStripDragMove, false);
+          window.addEventListener('mouseup', onStripDragEnd, false);
+          window.addEventListener('touchmove', onStripDragMove, { passive: true });
+          window.addEventListener('touchend', onStripDragEnd, false);
+
+          prevWinBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            shiftTimelineWindow(-WINDOW_SPAN_SEC * 0.6);
+          });
+
+          nextWinBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            shiftTimelineWindow(WINDOW_SPAN_SEC * 0.6);
+          });
+
+          startInput.addEventListener('change', function() { applyManualTimeInputs('start'); });
+          endInput.addEventListener('change', function() { applyManualTimeInputs('end'); });
+          startInput.addEventListener('keydown', function(e) {
+            e.stopPropagation();
+            if (e.key === 'Enter') applyManualTimeInputs('start');
+          });
+          endInput.addEventListener('keydown', function(e) {
+            e.stopPropagation();
+            if (e.key === 'Enter') applyManualTimeInputs('end');
+          });
+
+          previewBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            togglePreviewLoop();
+          });
+
+          downloadBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            startGifExport();
+          });
+
+          openGifMaker = function() {
+            var vNode = getVideoElementNode();
+            if (!vNode) return;
+            setSettingsPopupState(false);
+            if (isFsDescOpen && typeof setDrawerState === 'function') setDrawerState(false);
+            if (isFsCommentsOpen && typeof setCommentsDrawerState === 'function') setCommentsDrawerState(false);
+
+            var dur = getEffectiveDuration();
+            if (!dur || dur <= 0) return;
+
+            gState.wasMainPlaying = !player.paused();
+            gState.savedMainTime = Number(player.currentTime ? player.currentTime() : vNode.currentTime) || 0;
+            if (gState.wasMainPlaying) {
+              window.Alabaster._forceUserPause = true;
+              try { vNode.pause(); } catch (_) {}
+            }
+
+            gState.open = true;
+            window.Alabaster._gifMakerOpen = true;
+            gState.encoding = false;
+            gState.duration = dur;
+            gState.jobId++;
+
+            var defaultLen = Math.min(3, dur);
+            var startAt = Math.max(0, Math.min(dur - defaultLen, gState.savedMainTime));
+            clampSelection(startAt, startAt + defaultLen, 'start');
+            centerWindowAroundSelection();
+
+            downloadBtn.disabled = false;
+            previewBtn.disabled = false;
+            startInput.disabled = false;
+            endInput.disabled = false;
+            progressTrack.style.display = 'none';
+            progressFill.style.width = '0%';
+            updateSelectionUI(false);
+            drawVideoToPreview(vNode);
+
+            gifMakerBackdrop.style.display = 'flex';
+            compat.raf(function() {
+              gifMakerBackdrop.classList.add('is-visible');
+            });
+
+            renderFrameStrip();
+          };
+
+          closeGifMaker = function() {
+            if (!gState.open) return;
+            gState.open = false;
+            window.Alabaster._gifMakerOpen = false;
+            gState.jobId++;
+            gState.stripJobId++;
+            gState.encoding = false;
+            gState.dragMode = '';
+            if (gState.previewSeekTimer) {
+              clearTimeout(gState.previewSeekTimer);
+              gState.previewSeekTimer = 0;
+            }
+            stopPreviewPlayback();
+            destroyOffscreenVideo();
+            if (gState.usingMainFallback) {
+              gState.usingMainFallback = false;
+              var vNode = getVideoElementNode();
+              if (vNode) {
+                try { vNode.currentTime = gState.savedMainTime; } catch (_) {}
+              }
+            }
+            gifMakerBackdrop.classList.remove('is-visible');
+            setTimeout(function() {
+              if (!gState.open) {
+                gifMakerBackdrop.style.display = 'none';
+              }
+            }, 190);
+          };
+
+          closeBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            closeGifMaker();
+          });
+
+          cancelBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            closeGifMaker();
+          });
+
+          gifMakerBackdrop.addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (e.target === gifMakerBackdrop) {
+              closeGifMaker();
+            }
+          });
+
+          ['mousedown', 'pointerdown', 'touchstart', 'touchend', 'wheel'].forEach(function(evName) {
+            gifMakerBackdrop.addEventListener(evName, function(evt) {
+              evt.stopPropagation();
+            }, false);
+          });
+
+          gifMakerMenuRow.addEventListener('click', function(evt) {
+            evt.preventDefault();
+            evt.stopPropagation();
+            openGifMaker();
+          });
+
+          player.on('dispose', function() {
+            window.removeEventListener('mousemove', onStripDragMove, false);
+            window.removeEventListener('mouseup', onStripDragEnd, false);
+            window.removeEventListener('touchmove', onStripDragMove, false);
+            window.removeEventListener('touchend', onStripDragEnd, false);
+            if (gState.open) closeGifMaker();
+          });
+        })();
+
         configPlayerRow.addEventListener('click', function(evt) {
           evt.preventDefault();
           evt.stopPropagation();
@@ -3650,7 +5391,7 @@ window.SyncLevel = SyncLevel;
         if (cBarForSettings && !cBarForSettings._alabasterYtCapsBound) {
           cBarForSettings._alabasterYtCapsBound = true;
           cBarForSettings.addEventListener('click', function(evt) {
-            if (isStorageFlagEnabled(DISABLE_YT_CAPTIONS_KEY)) return;
+            if (isStorageFlagEnabled('disable_yt_captions')) return;
             var target = evt.target;
             if (!target || !target.closest) return;
             if (target.closest('.vjs-menu')) return;
@@ -3770,7 +5511,7 @@ window.SyncLevel = SyncLevel;
         rootEl.appendChild(recDrawer);
 
         var buildRecCards = function() {
-          if (isStorageFlagEnabled(DISABLE_FS_DISCOVER_KEY)) return false;
+          if (isStorageFlagEnabled('disable_fs_discover')) return false;
           var list = metadataParser.readRecommended();
           if (!list || !list.length) return false;
           recGrid.innerHTML = '';
@@ -3862,7 +5603,7 @@ window.SyncLevel = SyncLevel;
         };
 
         applyRecStage = function(stage) {
-          if (stage > 0 && (!checkIsPlayerFullscreen() || isStorageFlagEnabled(DISABLE_FS_DISCOVER_KEY))) {
+          if (stage > 0 && (!checkIsPlayerFullscreen() || isStorageFlagEnabled('disable_fs_discover'))) {
             stage = 0;
           }
           if (stage > 0 && !buildRecCards()) return;
@@ -3906,7 +5647,7 @@ window.SyncLevel = SyncLevel;
         });
 
         var isPointInControlBarCenterGap = function(clientX, clientY, targetEl) {
-          if (!checkIsPlayerFullscreen() || isStorageFlagEnabled(DISABLE_FS_DISCOVER_KEY)) return false;
+          if (!checkIsPlayerFullscreen() || isStorageFlagEnabled('disable_fs_discover')) return false;
           if (targetEl && recOpenBtn && (targetEl === recOpenBtn || recOpenBtn.contains(targetEl))) {
             return true;
           }
@@ -3975,7 +5716,7 @@ window.SyncLevel = SyncLevel;
         var consumeOutsideClickUntil = 0;
 
         var onDragStart = function(clientX, clientY, targetEl, sourceType) {
-          if (!checkIsPlayerFullscreen() || isStorageFlagEnabled(DISABLE_FS_DISCOVER_KEY)) return false;
+          if (!checkIsPlayerFullscreen() || isStorageFlagEnabled('disable_fs_discover')) return false;
           if (sourceType === 'bar') {
             if (recStage !== 0) return false;
             if (!isPointInControlBarCenterGap(clientX, clientY, targetEl)) return false;
@@ -4119,6 +5860,10 @@ window.SyncLevel = SyncLevel;
           var now = compat.now();
           var target = evt.target;
 
+          if (window.Alabaster._gifMakerOpen) {
+            return;
+          }
+
           if (dragState.active || dragState.engaged || now < justFinishedDragUntil) {
             if (evt.type === 'click') {
               evt.preventDefault();
@@ -4207,11 +5952,17 @@ window.SyncLevel = SyncLevel;
 
         document.addEventListener('keydown', function(evt) {
           if (evt.key === 'Escape') {
+            if (window.Alabaster._gifMakerOpen && typeof closeGifMaker === 'function') {
+              evt.preventDefault();
+              closeGifMaker();
+              return;
+            }
             if (recStage !== 0) applyRecStage(0);
             if (isFsCommentsOpen && typeof setCommentsDrawerState === 'function') setCommentsDrawerState(false);
             if (isFsSettingsOpen && typeof setSettingsPopupState === 'function') setSettingsPopupState(false);
           } else if ((evt.key === 'v' || evt.key === 'V') && !evt.repeat && !evt.ctrlKey && !evt.altKey && !evt.metaKey) {
-            if (isStorageFlagEnabled(DISABLE_REC_SHORTCUT_KEY)) return;
+            if (window.Alabaster._gifMakerOpen) return;
+            if (isStorageFlagEnabled('disable_rec_shortcut')) return;
             var activeEl = document.activeElement;
             var activeTag = activeEl && activeEl.tagName ? activeEl.tagName.toLowerCase() : '';
             var targetTag = evt.target && evt.target.tagName ? evt.target.tagName.toLowerCase() : '';
@@ -4219,7 +5970,7 @@ window.SyncLevel = SyncLevel;
                 targetTag === 'input' || targetTag === 'textarea' || targetTag === 'select' || (evt.target && evt.target.isContentEditable)) {
               return;
             }
-            if (!checkIsPlayerFullscreen() || isStorageFlagEnabled(DISABLE_FS_DISCOVER_KEY)) return;
+            if (!checkIsPlayerFullscreen() || isStorageFlagEnabled('disable_fs_discover')) return;
             evt.preventDefault();
             applyRecStage(recStage === 0 ? 1 : 0);
           }
@@ -4399,7 +6150,7 @@ window.SyncLevel = SyncLevel;
           syncYoutubeCaptionsUI();
         }
 
-        var useLegacyDescButton = isStorageFlagEnabled(LEGACY_DESC_BTN_KEY);
+        var useLegacyDescButton = isStorageFlagEnabled('legacy_desc_btn');
         var hasDescriptionNode = Boolean(document.querySelector('.descriptionHtml'));
         var hasCommentsNode = hasValidCommentsOnPage();
 
@@ -4469,7 +6220,7 @@ window.SyncLevel = SyncLevel;
 
         if (recOpenBtn && recDrawer) {
           var hasRecNode = Boolean(document.querySelector('.recommended-list .video'));
-          var discoverDisabled = isStorageFlagEnabled(DISABLE_FS_DISCOVER_KEY);
+          var discoverDisabled = isStorageFlagEnabled('disable_fs_discover');
           if (isFs && hasRecNode && !discoverDisabled) {
             recOpenBtn.style.display = 'inline-flex';
           } else {
@@ -4595,7 +6346,8 @@ window.SyncLevel = SyncLevel;
         };
 
         var startHold2x = function(sourceName) {
-          if (isStorageFlagEnabled(DISABLE_HOLD_2X_KEY)) return;
+          if (window.Alabaster._gifMakerOpen) return;
+          if (isStorageFlagEnabled('disable_hold_2x')) return;
           if (hold2xState.active) return;
           if (!isCurrentlyPlaying()) return;
           var nodes = getMediaNodes();
@@ -4636,11 +6388,12 @@ window.SyncLevel = SyncLevel;
         var isInteractivePlayerUI = function(target) {
           if (!target || !target.closest) return false;
           return Boolean(target.closest(
-            '.vjs-control-bar, .alabaster-fs-settings-popup, .alabaster-stats-for-nerds, .alabaster-fs-desc-drawer, .alabaster-fs-comments-drawer, .alabaster-rec-drawer, .alabaster-fs-desc-toggle, .vjs-title-bar-title, .vjs-big-play-button, button, a, input'
+            '.vjs-control-bar, .alabaster-fs-settings-popup, .alabaster-stats-for-nerds, .alabaster-fs-desc-drawer, .alabaster-fs-comments-drawer, .alabaster-rec-drawer, .alabaster-fs-desc-toggle, .alabaster-gif-backdrop, .vjs-title-bar-title, .vjs-big-play-button, button, a, input'
           ));
         };
 
         var onSpaceKeyDown = function(evt) {
+          if (window.Alabaster._gifMakerOpen) return;
           if (!evt || !evt.isTrusted) return;
           if (evt.code !== 'Space' && evt.key !== ' ') return;
           if (evt.ctrlKey || evt.altKey || evt.metaKey) return;
@@ -4650,7 +6403,7 @@ window.SyncLevel = SyncLevel;
           evt.stopPropagation();
           evt.stopImmediatePropagation();
 
-          if (isStorageFlagEnabled(DISABLE_HOLD_2X_KEY)) {
+          if (isStorageFlagEnabled('disable_hold_2x')) {
             if (evt.repeat) return;
             var nodesNow = getMediaNodes();
             if (nodesNow.v) {
@@ -4692,6 +6445,7 @@ window.SyncLevel = SyncLevel;
         };
 
         var onSpaceKeyUp = function(evt) {
+          if (window.Alabaster._gifMakerOpen) return;
           if (!evt || (evt.code !== 'Space' && evt.key !== ' ')) return;
           if (!hold2xState.spaceDown && !hold2xState.active) return;
 
@@ -4742,7 +6496,8 @@ window.SyncLevel = SyncLevel;
         };
 
         var onPointerHoldStart = function(clientX, clientY, evt) {
-          if (isStorageFlagEnabled(DISABLE_HOLD_2X_KEY)) return;
+          if (window.Alabaster._gifMakerOpen) return;
+          if (isStorageFlagEnabled('disable_hold_2x')) return;
           if (!isCurrentlyPlaying()) return;
           if (isInteractivePlayerUI(evt.target)) return;
           hold2xState.pointerDown = true;
@@ -4903,15 +6658,15 @@ window.SyncLevel = SyncLevel;
       var t = targetTime;
       var count = ranges.length;
       var matchedEnd = -1;
-      var startTol = t < 0.12 ? 0.16 : 0.045;
+      var startTol = t < 0.15 ? 0.24 : 0.16;
 
       for (var i = 0; i < count; i++) {
         var start = ranges.start(i);
         var end = ranges.end(i);
-        if (t >= start - startTol && t <= end + 0.045) {
+        if (t >= start - startTol && t <= end + 0.08) {
           matchedEnd = end;
           for (var j = i + 1; j < count; j++) {
-            if (ranges.start(j) <= matchedEnd + 0.055) {
+            if (ranges.start(j) <= matchedEnd + 0.18) {
               matchedEnd = Math.max(matchedEnd, ranges.end(j));
             } else {
               break;
@@ -4957,18 +6712,18 @@ window.SyncLevel = SyncLevel;
       var lead = this.ahead(media, t);
       if (rState < 2) return false;
 
-      if (rState >= 4 && lead >= Math.max(0.18, requiredLead * 0.5)) return true;
+      if (rState >= 4 && lead >= Math.max(0.22, requiredLead * 0.6)) return true;
 
       var dynamicLead = requiredLead;
       if (timeBufferingMs > 4500) {
-        if (rState >= 2 && lead >= 0.12) return true;
-        dynamicLead = Math.max(0.12, Math.min(0.22, requiredLead));
-      } else if (timeBufferingMs > 2000) {
-        dynamicLead = Math.max(0.2, requiredLead * 0.5);
+        if (rState >= 2 && lead >= 0.15) return true;
+        dynamicLead = Math.max(0.15, Math.min(0.28, requiredLead));
+      } else if (timeBufferingMs > 2200) {
+        dynamicLead = Math.max(0.25, requiredLead * 0.55);
       }
 
       if (rState >= 3 && lead >= dynamicLead) return true;
-      if (rState === 2 && lead >= Math.max(dynamicLead, 0.35)) return true;
+      if (rState === 2 && lead >= Math.max(dynamicLead, 0.55)) return true;
 
       return false;
     }
@@ -5250,13 +7005,11 @@ window.SyncLevel = SyncLevel;
         avgDrift: 0,
         aheadDriftSince: 0,
         behindDriftSince: 0,
+        severeDriftSince: 0,
         vStallSince: 0,
         aStallSince: 0,
         prevVideoTime: -1,
         prevAudioTime: -1,
-        lastDecodedFrameTotal: -1,
-        lastDecodedFrameChangeAt: 0,
-        lastDecoderKickAt: 0,
         watchdogTimer: 0,
         tickTimer: 0,
         cancelSeekWait: null,
@@ -5366,10 +7119,11 @@ window.SyncLevel = SyncLevel;
         var oldRate = getTargetPlaybackRate();
         clearRateTransitionTimer();
         window.Alabaster._targetPlaybackRate = clamped;
-        window.Alabaster._rateChangeGraceUntil = compat.now() + 260;
+        window.Alabaster._rateChangeGraceUntil = compat.now() + 220;
         state.avgDrift = 0;
         state.aheadDriftSince = 0;
         state.behindDriftSince = 0;
+        state.severeDriftSince = 0;
         videoEl.defaultPlaybackRate = clamped;
         audioEl.defaultPlaybackRate = clamped;
         if (player.cache_) player.cache_.lastPlaybackRate = clamped;
@@ -5403,9 +7157,18 @@ window.SyncLevel = SyncLevel;
         var aCur = nativeGetATime();
         var drift = vCur - aCur;
 
+        if (Math.abs(drift) <= 0.015) {
+          audioEl.playbackRate = clamped;
+          videoEl.playbackRate = clamped;
+          if (typeof player.playbackRate === 'function' && player.playbackRate() !== clamped) {
+            player.playbackRate(clamped);
+          }
+          return;
+        }
+
+        var absorbDelay = Math.min(45, Math.max(6, Math.round((Math.abs(drift) * 1000) / rateDiff)));
         if (clamped > oldRate) {
-          if (drift < -0.020) {
-            var aDelayUp = Math.min(45, Math.max(6, Math.round(Math.max(0, (-drift * 1000) - 14) / rateDiff)));
+          if (drift < 0) {
             videoEl.playbackRate = clamped;
             if (typeof player.playbackRate === 'function' && player.playbackRate() !== clamped) {
               player.playbackRate(clamped);
@@ -5413,9 +7176,8 @@ window.SyncLevel = SyncLevel;
             state.rateTransitionTimer = setTimeout(function() {
               state.rateTransitionTimer = 0;
               audioEl.playbackRate = getTargetPlaybackRate();
-            }, aDelayUp);
+            }, absorbDelay);
           } else {
-            var vDelayUp = Math.min(48, Math.max(12, Math.round((18 + Math.max(0, drift * 1000)) / rateDiff)));
             audioEl.playbackRate = clamped;
             state.rateTransitionTimer = setTimeout(function() {
               state.rateTransitionTimer = 0;
@@ -5424,11 +7186,10 @@ window.SyncLevel = SyncLevel;
               if (typeof player.playbackRate === 'function' && player.playbackRate() !== targetR) {
                 player.playbackRate(targetR);
               }
-            }, vDelayUp);
+            }, absorbDelay);
           }
         } else {
-          if (drift >= -0.015) {
-            var aDelayDown = Math.min(48, Math.max(8, Math.round((12 + Math.max(0, drift * 1000)) / rateDiff)));
+          if (drift > 0) {
             videoEl.playbackRate = clamped;
             if (typeof player.playbackRate === 'function' && player.playbackRate() !== clamped) {
               player.playbackRate(clamped);
@@ -5436,9 +7197,8 @@ window.SyncLevel = SyncLevel;
             state.rateTransitionTimer = setTimeout(function() {
               state.rateTransitionTimer = 0;
               audioEl.playbackRate = getTargetPlaybackRate();
-            }, aDelayDown);
+            }, absorbDelay);
           } else {
-            var vDelayDown = Math.min(48, Math.max(10, Math.round((14 + Math.abs(drift * 1000)) / rateDiff)));
             audioEl.playbackRate = clamped;
             state.rateTransitionTimer = setTimeout(function() {
               state.rateTransitionTimer = 0;
@@ -5447,7 +7207,7 @@ window.SyncLevel = SyncLevel;
               if (typeof player.playbackRate === 'function' && player.playbackRate() !== targetR) {
                 player.playbackRate(targetR);
               }
-            }, vDelayDown);
+            }, absorbDelay);
           }
         }
       };
@@ -5540,7 +7300,7 @@ window.SyncLevel = SyncLevel;
         var vh = videoEl.videoHeight || 0;
         if (vw >= 1920 || vh >= 1080) return true;
         var qLower = qua.toLowerCase();
-        return qLower.indexOf('2160') !== -1 || qLower.indexOf('1440') !== -1 || qLower.indexOf('4k') !== -1 || qLower.indexOf('2k') !== -1 || qLower.indexOf('hd2160') !== -1 || qLower.indexOf('hd1440') !== -1;
+        return qLower.indexOf('2160') !== -1 || qLower.indexOf('1440') !== -1 || qLower.indexOf('4k') !== -1 || qLower.indexOf('2k') !== -1 || qLower.indexOf('hd2160') !== -1 || qLower.indexOf('hd1440') !== -1 || qLower.indexOf('1080') !== -1;
       }
 
       function isHeavyStream() {
@@ -5548,11 +7308,11 @@ window.SyncLevel = SyncLevel;
       }
 
       function getMinPlayBuffer() {
+        if (isHighResVideo()) return config.highResMinPlayBuffer;
         if (!state.hasStartedPlayback && !state.buffering) {
           return config.minPlayBuffer;
         }
         if (isUltraLongVideo()) return config.ultraLongMinPlayBuffer;
-        if (isHighResVideo()) return config.highResMinPlayBuffer;
         if (isLongVideo()) return config.longMinPlayBuffer;
         return config.minPlayBuffer;
       }
@@ -5565,7 +7325,7 @@ window.SyncLevel = SyncLevel;
       }
 
       function getRequiredAudioBuffer(baseLead) {
-        return baseLead;
+        return Math.min(baseLead, 0.85);
       }
 
       function getSeekTimeout() {
@@ -5708,7 +7468,7 @@ window.SyncLevel = SyncLevel;
         }, 320);
       }
 
-      function resyncVideoToLiveAudioOnWake(attempt) {
+      function resyncVideoToLiveAudioOnWake() {
         cancelWakeSync();
         clearWakeFrameCheck();
         if (!state.wantPlaying || isEffectivelyHidden() || isVideoBypassed() || state.userSeeking || isPlaybackCompleted()) {
@@ -5728,17 +7488,16 @@ window.SyncLevel = SyncLevel;
           return;
         }
 
-        var tryNum = attempt || 0;
         var aNow = nativeGetATime();
         var vNow = nativeGetVTime();
         var baseRate = getTargetPlaybackRate();
         var dur = getAuthoritativeDuration() || 0;
 
-        if (tryNum === 0 && Math.abs(vNow - aNow) <= 0.045 * baseRate && videoEl.readyState >= 2 && !videoEl.seeking) {
+        if (Math.abs(vNow - aNow) <= 0.045 * baseRate && videoEl.readyState >= 2 && !videoEl.seeking) {
           state.lastHiddenDurationMs = 0;
           state.tabWakeUntil = 0;
           state.liveSnapUntil = 0;
-          state.playGraceUntil = compat.now() + 500;
+          state.playGraceUntil = compat.now() + 450;
           state.steadyPlaybackSince = compat.now() + 180;
           state.lastCorrectionAt = compat.now();
           if (nativeGetVPaused() && !nativeGetVEnded()) {
@@ -5749,10 +7508,18 @@ window.SyncLevel = SyncLevel;
         }
         state.lastHiddenDurationMs = 0;
 
-        var isBufferedAtAudio = bufferMonitor.isTimeBuffered(videoEl, aNow, 0.2);
-        var leadSec = isBufferedAtAudio
-          ? (Math.min(0.08, Math.max(0.035, state.avgVideoSeekSec * 0.6)) * baseRate)
-          : (0.12 * baseRate);
+        if (isHighResVideo() || !bufferMonitor.isTimeBuffered(videoEl, aNow, 0.4)) {
+          state.tabWakeUntil = 0;
+          state.liveSnapUntil = 0;
+          freezeBothStreams();
+          setBufferSpinner(true);
+          seekVideoAndWait(aNow, function() {
+            syncPlaybackState();
+          });
+          return;
+        }
+
+        var leadSec = Math.min(0.09, Math.max(0.035, state.avgVideoSeekSec * 0.7)) * baseRate;
         var dest = aNow + leadSec;
         if (dur > 0 && isFinite(dur) && dest >= dur - 0.06) {
           dest = Math.max(0, dur - 0.06);
@@ -5761,8 +7528,8 @@ window.SyncLevel = SyncLevel;
         state.wakeSyncing = true;
         var wakeSeq = state.sequence;
         var seekStartedAt = compat.now();
-        var seekWin = Math.min(1400, getSeekTimeout());
-        state.tabWakeUntil = seekStartedAt + seekWin + 400;
+        var seekWin = Math.min(1200, getSeekTimeout());
+        state.tabWakeUntil = seekStartedAt + seekWin + 300;
         setVideoTimeInternally(dest);
 
         state.cancelWakeSync = compat.onSeekSettled(videoEl, function() {
@@ -5787,15 +7554,15 @@ window.SyncLevel = SyncLevel;
           }
 
           var actualSeekSec = (compat.now() - seekStartedAt) / 1000;
-          if (isBufferedAtAudio && actualSeekSec > 0.005 && actualSeekSec < 0.5) {
+          if (actualSeekSec > 0.005 && actualSeekSec < 0.5) {
             state.avgVideoSeekSec = Math.max(0.025, Math.min(0.25, state.avgVideoSeekSec * 0.5 + actualSeekSec * 0.5));
           }
 
           var aAfter = nativeGetATime();
           var vAfter = nativeGetVTime();
-          var hasFutureFrames = videoEl.readyState >= 2 || bufferMonitor.ahead(videoEl, vAfter) >= 0.15 || isStreamNearItsEnd(videoEl, true);
+          var hasFutureFrames = videoEl.readyState >= 2 && (bufferMonitor.ahead(videoEl, vAfter) >= 0.15 || isStreamNearItsEnd(videoEl, true));
 
-          if (!hasFutureFrames) {
+          if (!hasFutureFrames || Math.abs(vAfter - aAfter) > 0.25 * baseRate) {
             state.tabWakeUntil = 0;
             state.liveSnapUntil = 0;
             setBufferSpinner(true);
@@ -5808,7 +7575,7 @@ window.SyncLevel = SyncLevel;
 
           state.tabWakeUntil = 0;
           state.liveSnapUntil = 0;
-          state.playGraceUntil = compat.now() + 550;
+          state.playGraceUntil = compat.now() + 450;
           state.steadyPlaybackSince = compat.now() + 180;
           state.lastCorrectionAt = compat.now();
           if (nativeGetVPaused() && !nativeGetVEnded()) {
@@ -5855,7 +7622,7 @@ window.SyncLevel = SyncLevel;
               return;
             }
             if (!nativeGetAPaused()) {
-              resyncVideoToLiveAudioOnWake(0);
+              resyncVideoToLiveAudioOnWake();
             } else if (latestTarget > 0.05 && Math.abs(nativeGetVTime() - latestTarget) > 0.05) {
               seekVideoAndWait(latestTarget, function() {
                 syncPlaybackState();
@@ -5881,26 +7648,6 @@ window.SyncLevel = SyncLevel;
         }
         state.internalVideoSeeking = true;
         state.internalVSeekUntil = compat.now() + 1400;
-        state.steadyPlaybackSince = 0;
-        runInternal(function() {
-          if (videoEl.readyState === 0 && dest > 0.05 && !isEffectivelyHidden() && !isVideoBypassed()) {
-            reprimeEvictedVideo(dest, true);
-            return;
-          }
-          try { nativeSetVTime(dest); } catch (_) {}
-        });
-      }
-
-      function snapVideoToAudioLive(targetSeconds, customWindowMs) {
-        var dur = getAuthoritativeDuration() || 0;
-        var dest = Math.max(0, Number(targetSeconds) || 0);
-        if (dur > 0 && isFinite(dur) && dest >= dur - 0.06) {
-          dest = Math.max(0, dur - 0.06);
-        }
-        var winDuration = Math.max(1000, customWindowMs || getSeekTimeout());
-        state.internalVideoSeeking = true;
-        state.internalVSeekUntil = compat.now() + winDuration + 300;
-        state.liveSnapUntil = compat.now() + winDuration;
         state.steadyPlaybackSince = 0;
         runInternal(function() {
           if (videoEl.readyState === 0 && dest > 0.05 && !isEffectivelyHidden() && !isVideoBypassed()) {
@@ -5948,8 +7695,8 @@ window.SyncLevel = SyncLevel;
         var baseRate = getTargetPlaybackRate();
         var vTarget = nativeGetVTime();
         var aCur = nativeGetATime();
-        var resumeCompSec = 0.025 * baseRate;
-        var minLead = typeof customMinLead === 'number' ? customMinLead : (0.045 * baseRate);
+        var resumeCompSec = 0.016 * baseRate;
+        var minLead = typeof customMinLead === 'number' ? customMinLead : (0.042 * baseRate);
         var lead = vTarget - aCur;
         if (lead <= minLead || lead > 6.0 || lead <= resumeCompSec) {
           if (nativeGetVPaused() && !nativeGetVEnded()) {
@@ -6004,7 +7751,7 @@ window.SyncLevel = SyncLevel;
               cancelVideoHold();
               var resumeNow = compat.now();
               state.lastCorrectionAt = resumeNow;
-              state.playGraceUntil = Math.max(state.playGraceUntil, resumeNow + 550);
+              state.playGraceUntil = Math.max(state.playGraceUntil, resumeNow + 450);
               state.steadyPlaybackSince = resumeNow + 180;
               if (verifyWakeOnResume) {
                 verifyPostWakeFramePaint();
@@ -6203,7 +7950,7 @@ window.SyncLevel = SyncLevel;
             return;
           }
           if (state.wantPlaying && !nativeGetAPaused() && !isEffectivelyHidden()) {
-            resyncVideoToLiveAudioOnWake(0);
+            resyncVideoToLiveAudioOnWake();
           } else if (state.wantPlaying) {
             syncPlaybackState();
           } else {
@@ -6272,6 +8019,7 @@ window.SyncLevel = SyncLevel;
       }
 
       listen(document, 'keydown', function(evt) {
+        if (window.Alabaster._gifMakerOpen) return;
         if (!evt || !evt.isTrusted) return;
         state.hasUserGesture = true;
         var activeTag = document.activeElement && document.activeElement.tagName ? document.activeElement.tagName.toLowerCase() : '';
@@ -6364,6 +8112,7 @@ window.SyncLevel = SyncLevel;
         state.avgDrift = 0;
         state.aheadDriftSince = 0;
         state.behindDriftSince = 0;
+        state.severeDriftSince = 0;
         state.starveTicks = 0;
         clearPendingWait();
 
@@ -6617,11 +8366,12 @@ window.SyncLevel = SyncLevel;
 
       function prepareCleanAudioResume() {
         var now = compat.now();
-        state.playGraceUntil = Math.max(state.playGraceUntil, now + 550);
+        state.playGraceUntil = Math.max(state.playGraceUntil, now + 450);
         state.lastCorrectionAt = 0;
         state.avgDrift = 0;
         state.aheadDriftSince = 0;
         state.behindDriftSince = 0;
+        state.severeDriftSince = 0;
         try {
           var ctx = window.audioCtx || window.audioContext || window._alabasterAudioCtx || (window.Alabaster && window.Alabaster.audioCtx);
           if (ctx && ctx.state === 'suspended' && typeof ctx.resume === 'function') {
@@ -6700,7 +8450,7 @@ window.SyncLevel = SyncLevel;
                       return;
                     }
                     applyBlockedAutoplayPauseState();
-                  } else if (err && err.name !== 'AbortError' && state.wantPlaying) {
+                  } else if (state.wantPlaying && !state.userSeeking) {
                     armNetworkWatchdog();
                   }
                 });
@@ -6720,7 +8470,7 @@ window.SyncLevel = SyncLevel;
           return;
         }
 
-        if (!nativeGetAPaused() && !nativeGetVPaused() && !videoEl.seeking && !audioEl.seeking && Math.abs(nativeGetVTime() - nativeGetATime()) <= 0.055) {
+        if (!nativeGetAPaused() && !nativeGetVPaused() && !videoEl.seeking && !audioEl.seeking && Math.abs(nativeGetVTime() - nativeGetATime()) <= 0.055 * Math.max(1, getTargetPlaybackRate())) {
           state.hasStartedPlayback = true;
           state.initialAutoplayAttempt = false;
           state.pendingBackgroundAutoplay = false;
@@ -6739,7 +8489,7 @@ window.SyncLevel = SyncLevel;
         }
 
         if (!nativeGetAPaused()) {
-          resyncVideoToLiveAudioOnWake(0);
+          resyncVideoToLiveAudioOnWake();
           return;
         }
 
@@ -6797,7 +8547,7 @@ window.SyncLevel = SyncLevel;
           return;
         }
 
-        if (Math.abs(vDiffFromAudio) > 0.008 && Math.abs(vDiffFromAudio) <= 0.15 && videoEl.readyState >= 2 && vCurNow >= 0 && state.alignedForAnchor !== vCurNow && bufferMonitor.isTimeBuffered(audioEl, vCurNow, 0.15)) {
+        if (Math.abs(vDiffFromAudio) > 0.008 && Math.abs(vDiffFromAudio) <= 0.18 && videoEl.readyState >= 2 && vCurNow >= 0 && state.alignedForAnchor !== vCurNow && bufferMonitor.isTimeBuffered(audioEl, vCurNow, 0.15)) {
           state.alignedForAnchor = vCurNow;
           state.savedMasterTime = vCurNow;
           runInternal(function() {
@@ -6827,27 +8577,39 @@ window.SyncLevel = SyncLevel;
 
         clearLaunchPoll();
         state.launchingPlay = true;
-        state.audioStarting = true;
+        state.audioStarting = false;
         state.isFrozen = false;
         state.alignedForAnchor = null;
         state.alignAttemptCount = 0;
         prepareCleanAudioResume();
-        state.playGraceUntil = compat.now() + 600;
+        state.playGraceUntil = compat.now() + 550;
         state.vStallSince = 0;
         state.aStallSince = 0;
         state.aheadDriftSince = 0;
         state.behindDriftSince = 0;
+        state.severeDriftSince = 0;
         setBufferSpinner(false);
         clearWatchdog();
 
         runInternal(function() {
           enforceRateAndVolume();
 
+          var v0 = nativeGetVTime();
+          var vBaseline = v0;
+          if (v0 < 0.05 && videoEl.buffered && videoEl.buffered.length > 0) {
+            var vBufStart = videoEl.buffered.start(0);
+            if (vBufStart > v0 && vBufStart < 0.25) {
+              vBaseline = vBufStart;
+            }
+          }
+          var launchStart = compat.now();
           var vResolved = false;
-          var aResolved = false;
+          var aStartedCall = false;
           var finished = false;
+          var rvfSeen = 0;
+          var hasRvf = typeof videoEl.requestVideoFrameCallback === 'function';
 
-          var finishLaunch = function() {
+          var finishLaunchSuccess = function() {
             if (finished) return;
             finished = true;
             clearTimeout(launchTimer);
@@ -6878,14 +8640,15 @@ window.SyncLevel = SyncLevel;
             state.pendingBackgroundAutoplay = false;
             state.awaitingGestureUnlock = false;
             state.audioWakeRetryCount = 0;
-            state.playGraceUntil = finishNow + 550;
-            state.steadyPlaybackSince = finishNow + 200;
+            state.playGraceUntil = finishNow + 450;
+            state.steadyPlaybackSince = finishNow + 180;
             setBufferSpinner(false);
             clearWatchdog();
             state.lastCorrectionAt = 0;
             state.avgDrift = 0;
             state.aheadDriftSince = 0;
             state.behindDriftSince = 0;
+            state.severeDriftSince = 0;
             state.vStallSince = 0;
             state.aStallSince = 0;
             clearErrorOverlayOnHealthyStream();
@@ -6900,15 +8663,21 @@ window.SyncLevel = SyncLevel;
             if (navigator.mediaSession) navigator.mediaSession.playbackState = 'playing';
           };
 
-          var handleLaunchError = function(err) {
+          var handleLaunchFailure = function(err) {
             if (finished || currentSeq !== state.sequence) return;
             var errName = err && err.name;
-            if (errName === 'AbortError') return;
             finished = true;
             clearTimeout(launchTimer);
             clearLaunchPoll();
             state.launchingPlay = false;
             state.audioStarting = false;
+            if (errName === 'AbortError') {
+              if (state.wantPlaying && !state.userSeeking) {
+                freezeBothStreams();
+                armNetworkWatchdog();
+              }
+              return;
+            }
             if (errName === 'NotAllowedError' || state.initialAutoplayAttempt) {
               if (document.hidden && state.initialAutoplayAttempt) {
                 state.pendingBackgroundAutoplay = true;
@@ -6920,6 +8689,100 @@ window.SyncLevel = SyncLevel;
               setBufferSpinner(true);
               armNetworkWatchdog();
             }
+          };
+
+          var launchAudioLockedToVideo = function() {
+            if (aStartedCall || finished || currentSeq !== state.sequence) return;
+            if (!state.wantPlaying || state.userSeeking || isEffectivelyHidden()) {
+              finished = true;
+              clearTimeout(launchTimer);
+              clearLaunchPoll();
+              state.launchingPlay = false;
+              state.audioStarting = false;
+              if (state.wantPlaying && isEffectivelyHidden()) {
+                syncPlaybackState();
+              }
+              return;
+            }
+            aStartedCall = true;
+            state.audioStarting = true;
+            clearLaunchPoll();
+
+            var vLive = nativeGetVTime();
+            var baseRate = getTargetPlaybackRate();
+            var targetA = vLive + (0.012 * baseRate);
+            var dur = getAuthoritativeDuration() || 0;
+            if (dur > 0 && isFinite(dur) && targetA >= dur - 0.05) {
+              targetA = Math.max(0, dur - 0.05);
+            }
+
+            if (Math.abs(nativeGetATime() - targetA) > 0.008 && bufferMonitor.isTimeBuffered(audioEl, targetA, 0.12)) {
+              setAudioTimeInternally(targetA);
+            }
+
+            var pA = nativeGetAPaused() ? runInternal(nativeAudioPlay) : Promise.resolve();
+            if (!pA || typeof pA.then !== 'function') pA = Promise.resolve();
+            pA.then(function() {
+              if (finished || currentSeq !== state.sequence) return;
+              finishLaunchSuccess();
+            }).catch(handleLaunchFailure);
+          };
+
+          var scheduleVideoFrameWatch = function() {
+            if (!hasRvf || finished || aStartedCall || currentSeq !== state.sequence) return;
+            try {
+              state.launchRvfId = videoEl.requestVideoFrameCallback(function(nowTs, meta) {
+                state.launchRvfId = 0;
+                if (finished || aStartedCall || currentSeq !== state.sequence) return;
+                rvfSeen++;
+                var mTime = (meta && typeof meta.mediaTime === 'number') ? meta.mediaTime : nativeGetVTime();
+                if (mTime > vBaseline + 0.001 || rvfSeen >= 2 || isStreamNearItsEnd(videoEl, true)) {
+                  launchAudioLockedToVideo();
+                } else {
+                  scheduleVideoFrameWatch();
+                }
+              });
+            } catch (_) {}
+          };
+
+          var pollVideoStart = function() {
+            state.launchPollTimer = 0;
+            if (finished || aStartedCall || currentSeq !== state.sequence) return;
+            if (!state.wantPlaying || state.userSeeking) {
+              finished = true;
+              clearTimeout(launchTimer);
+              clearLaunchPoll();
+              state.launchingPlay = false;
+              state.audioStarting = false;
+              return;
+            }
+            var now = compat.now();
+            var elapsed = now - launchStart;
+            var vNow = nativeGetVTime();
+
+            if (vNow > vBaseline + 0.002 || isStreamNearItsEnd(videoEl, true)) {
+              launchAudioLockedToVideo();
+              return;
+            }
+
+            if (vResolved && elapsed >= 220 && !nativeGetVPaused() && videoEl.readyState >= 3) {
+              launchAudioLockedToVideo();
+              return;
+            }
+
+            if (elapsed > 2200) {
+              finished = true;
+              clearTimeout(launchTimer);
+              clearLaunchPoll();
+              state.launchingPlay = false;
+              state.audioStarting = false;
+              freezeBothStreams();
+              setBufferSpinner(true);
+              armNetworkWatchdog();
+              return;
+            }
+
+            state.launchPollTimer = setTimeout(pollVideoStart, 4);
           };
 
           var launchTimer = setTimeout(function() {
@@ -6936,29 +8799,23 @@ window.SyncLevel = SyncLevel;
                 applyBlockedAutoplayPauseState();
                 return;
               }
-              if (!isVideoBypassed() && !isEffectivelyHidden() && (nativeGetVPaused() || nativeGetAPaused() || videoEl.seeking || audioEl.seeking || videoEl.readyState < 2 || audioEl.readyState < 2)) {
-                freezeBothStreams();
-              }
+              freezeBothStreams();
               syncPlaybackState();
             }
           }, 3200);
 
+          scheduleVideoFrameWatch();
           var pV = (!isVideoBypassed() && nativeGetVPaused()) ? nativeVideoPlay() : Promise.resolve();
-          var pA = nativeGetAPaused() ? nativeAudioPlay() : Promise.resolve();
           if (!pV || typeof pV.then !== 'function') pV = Promise.resolve();
-          if (!pA || typeof pA.then !== 'function') pA = Promise.resolve();
-
           pV.then(function() {
             if (finished || currentSeq !== state.sequence) return;
             vResolved = true;
-            if (aResolved) finishLaunch();
-          }).catch(handleLaunchError);
+            if (!aStartedCall && !state.launchPollTimer) {
+              pollVideoStart();
+            }
+          }).catch(handleLaunchFailure);
 
-          pA.then(function() {
-            if (finished || currentSeq !== state.sequence) return;
-            aResolved = true;
-            if (vResolved) finishLaunch();
-          }).catch(handleLaunchError);
+          state.launchPollTimer = setTimeout(pollVideoStart, 4);
         });
       }
 
@@ -7170,6 +9027,7 @@ window.SyncLevel = SyncLevel;
         state.avgDrift = 0;
         state.aheadDriftSince = 0;
         state.behindDriftSince = 0;
+        state.severeDriftSince = 0;
         state.vStallSince = 0;
         state.aStallSince = 0;
         state.seekStartTime = 0;
@@ -7202,6 +9060,7 @@ window.SyncLevel = SyncLevel;
         state.avgDrift = 0;
         state.aheadDriftSince = 0;
         state.behindDriftSince = 0;
+        state.severeDriftSince = 0;
         state.vStallSince = 0;
         state.aStallSince = 0;
         player.removeClass('vjs-ended');
@@ -7309,6 +9168,7 @@ window.SyncLevel = SyncLevel;
       };
 
       listen(videoEl, 'touchend', function(evt) {
+        if (window.Alabaster._gifMakerOpen) return;
         if (!compat.isTouchLayout()) return;
         evt.preventDefault();
         evt.stopImmediatePropagation();
@@ -7334,6 +9194,7 @@ window.SyncLevel = SyncLevel;
       }, true);
 
       listen(videoEl, 'click', function(evt) {
+        if (window.Alabaster._gifMakerOpen) return;
         evt.preventDefault();
         evt.stopImmediatePropagation();
         state.hasUserGesture = true;
@@ -7479,7 +9340,7 @@ window.SyncLevel = SyncLevel;
           state.liveSnapUntil = 0;
           var snapNow = compat.now();
           state.lastCorrectionAt = snapNow;
-          state.playGraceUntil = Math.max(state.playGraceUntil, snapNow + 550);
+          state.playGraceUntil = Math.max(state.playGraceUntil, snapNow + 450);
           state.steadyPlaybackSince = snapNow + 180;
           if (state.wantPlaying && !isVideoBypassed() && !isEffectivelyHidden() && nativeGetVPaused() && !nativeGetVEnded() && videoEl.readyState >= 2) {
             runInternal(function() { compat.safePlay(nativeVideoPlay); });
@@ -7554,7 +9415,8 @@ window.SyncLevel = SyncLevel;
           return;
         }
         var vLead = bufferMonitor.ahead(videoEl, nativeGetVTime());
-        if (videoEl.readyState < 3 && vLead < 0.12) {
+        var waitingLimit = isHighResVideo() ? 0.25 : 0.14;
+        if (videoEl.readyState < 3 && vLead < waitingLimit) {
           setBufferSpinner(true);
           freezeBothStreams();
           armNetworkWatchdog();
@@ -7567,7 +9429,7 @@ window.SyncLevel = SyncLevel;
         state.steadyPlaybackSince = 0;
         if (isEffectivelyHidden() || state.launchingPlay || !state.wantPlaying || state.userSeeking || state.endedCompleted || isPlaybackCompleted() || isStreamNearItsEnd(audioEl, false)) return;
         var aLead = bufferMonitor.ahead(audioEl, nativeGetATime());
-        var dryLimit = isInPlayGrace() ? 0.08 : 0.12;
+        var dryLimit = isInPlayGrace() ? 0.08 : 0.14;
         if (audioEl.readyState < 3 && aLead < dryLimit) {
           setBufferSpinner(true);
           freezeBothStreams();
@@ -7626,6 +9488,7 @@ window.SyncLevel = SyncLevel;
         state.avgDrift = 0;
         state.aheadDriftSince = 0;
         state.behindDriftSince = 0;
+        state.severeDriftSince = 0;
       });
 
       var onStreamEnded = function(evt) {
@@ -7769,6 +9632,7 @@ window.SyncLevel = SyncLevel;
         state.avgDrift = 0;
         state.aheadDriftSince = 0;
         state.behindDriftSince = 0;
+        state.severeDriftSince = 0;
         state.starveTicks = 0;
         state.alignedForAnchor = null;
         state.alignAttemptCount = 0;
@@ -7819,7 +9683,7 @@ window.SyncLevel = SyncLevel;
         shield.activate();
 
         if (!nativeGetAPaused()) {
-          resyncVideoToLiveAudioOnWake(0);
+          resyncVideoToLiveAudioOnWake();
           runInternal(function() {
             player.trigger('durationchange');
             player.trigger('timeupdate');
@@ -7838,7 +9702,7 @@ window.SyncLevel = SyncLevel;
       }, false);
       listen(videoEl, 'enterpictureinpicture', function() {
         if (state.wantPlaying && !state.userSeeking && !state.buffering && !isVideoBypassed() && !nativeGetAPaused() && nativeGetVPaused()) {
-          resyncVideoToLiveAudioOnWake(0);
+          resyncVideoToLiveAudioOnWake();
         }
       }, false);
       listen(window, 'pagehide', function() {
@@ -7912,8 +9776,8 @@ window.SyncLevel = SyncLevel;
 
         if (state.buffering && bufferPctEl) {
           var needed = getMinResumeBuffer();
-          if (timeBuf > 4500) needed = Math.max(0.12, Math.min(0.22, needed));
-          else if (timeBuf > 2000) needed = Math.max(0.2, needed * 0.5);
+          if (timeBuf > 4500) needed = Math.max(0.15, Math.min(0.28, needed));
+          else if (timeBuf > 2200) needed = Math.max(0.25, needed * 0.55);
 
           var aLead = bufferMonitor.ahead(audioEl, nativeGetATime());
           var vLead = bufferMonitor.ahead(videoEl, nativeGetVTime());
@@ -7933,6 +9797,7 @@ window.SyncLevel = SyncLevel;
           state.avgDrift = 0;
           state.aheadDriftSince = 0;
           state.behindDriftSince = 0;
+          state.severeDriftSince = 0;
           state.starveTicks = 0;
           state.endStallSince = 0;
           if (!aPaused || !vPaused) freezeBothStreams();
@@ -7947,6 +9812,7 @@ window.SyncLevel = SyncLevel;
           state.avgDrift = 0;
           state.aheadDriftSince = 0;
           state.behindDriftSince = 0;
+          state.severeDriftSince = 0;
           state.starveTicks = 0;
           state.endStallSince = 0;
           if (state.buffering) setBufferSpinner(false);
@@ -8056,7 +9922,7 @@ window.SyncLevel = SyncLevel;
           }
           state.liveSnapUntil = 0;
           state.lastCorrectionAt = now;
-          state.playGraceUntil = Math.max(state.playGraceUntil, now + 550);
+          state.playGraceUntil = Math.max(state.playGraceUntil, now + 450);
           state.steadyPlaybackSince = now + 180;
           if (vPaused && !vEndedNative && videoEl.readyState >= 2) {
             runInternal(function() { compat.safePlay(nativeVideoPlay); });
@@ -8071,12 +9937,13 @@ window.SyncLevel = SyncLevel;
           state.avgDrift = 0;
           state.aheadDriftSince = 0;
           state.behindDriftSince = 0;
+          state.severeDriftSince = 0;
           state.starveTicks = 0;
           if (!aPaused) {
             if (videoEl.readyState === 0) {
               reprimeEvictedVideo(liveAudio, false);
             } else if (vPaused && !videoEl.seeking && videoEl.readyState >= 2) {
-              resyncVideoToLiveAudioOnWake(0);
+              resyncVideoToLiveAudioOnWake();
             }
             return;
           }
@@ -8093,6 +9960,7 @@ window.SyncLevel = SyncLevel;
           state.avgDrift = 0;
           state.aheadDriftSince = 0;
           state.behindDriftSince = 0;
+          state.severeDriftSince = 0;
           state.starveTicks = 0;
           if (aPaused && !aEndedNative && !state.audioStarting && !audioEl.seeking && audioEl.readyState >= 2) {
             setBufferSpinner(false);
@@ -8105,6 +9973,7 @@ window.SyncLevel = SyncLevel;
           state.avgDrift = 0;
           state.aheadDriftSince = 0;
           state.behindDriftSince = 0;
+          state.severeDriftSince = 0;
           state.starveTicks = 0;
           if (!vPaused) pauseVideoOnly();
           if (!aPaused && !videoEl.seeking && videoEl.readyState >= 1 && (now - state.lastHiddenVideoSyncAt >= 3000)) {
@@ -8123,6 +9992,7 @@ window.SyncLevel = SyncLevel;
           state.avgDrift = 0;
           state.aheadDriftSince = 0;
           state.behindDriftSince = 0;
+          state.severeDriftSince = 0;
           state.starveTicks = 0;
           if (!aPaused || !vPaused) freezeBothStreams();
           syncPlaybackState();
@@ -8142,17 +10012,18 @@ window.SyncLevel = SyncLevel;
         var vAhead = bufferMonitor.ahead(videoEl, vNow);
         var aAhead = bufferMonitor.ahead(audioEl, aNow);
 
-        var minStarveLead = isLongVideo() ? 0.08 : 0.04;
-        var videoStarved = !vNearEndNow && (videoEl.seeking || (vSameFrame && ((videoEl.readyState < 2 && vAhead < 0.15) || (videoEl.readyState < 3 && vAhead < minStarveLead))));
-        var audioStarved = !aNearEndNow && (audioEl.seeking || (aSameFrame && ((audioEl.readyState < 2 && aAhead < 0.15) || (audioEl.readyState < 3 && aAhead < minStarveLead))));
+        var minStarveLead = isHighResVideo() ? 0.16 : (isLongVideo() ? 0.10 : 0.06);
+        var videoStarved = !vNearEndNow && (videoEl.seeking || (videoEl.readyState < 2 && vAhead < 0.15) || (videoEl.readyState < 3 && vAhead < minStarveLead));
+        var audioStarved = !aNearEndNow && (audioEl.seeking || (audioEl.readyState < 2 && aAhead < 0.15) || (audioEl.readyState < 3 && aAhead < minStarveLead));
 
         if (videoStarved || audioStarved) {
           state.starveTicks++;
-          if (state.starveTicks >= 4) {
+          if (state.starveTicks >= 3) {
             state.starveTicks = 0;
             state.avgDrift = 0;
             state.aheadDriftSince = 0;
             state.behindDriftSince = 0;
+            state.severeDriftSince = 0;
             setBufferSpinner(true);
             if (!aPaused || !vPaused) freezeBothStreams();
             armNetworkWatchdog();
@@ -8165,8 +10036,13 @@ window.SyncLevel = SyncLevel;
           state.avgDrift = 0;
           state.aheadDriftSince = 0;
           state.behindDriftSince = 0;
+          state.severeDriftSince = 0;
+          if (vPaused && aPaused) {
+            syncPlaybackState();
+            return;
+          }
           if (vPaused && !aPaused && !vNearEndNow && !videoEl.seeking && videoEl.readyState >= 2) {
-            if (Math.abs(vNow - aNow) <= 0.15) {
+            if (Math.abs(vNow - aNow) <= 0.12) {
               runInternal(function() { compat.safePlay(nativeVideoPlay); });
               return;
             }
@@ -8201,12 +10077,13 @@ window.SyncLevel = SyncLevel;
         var vStalledDur = state.vStallSince ? (now - state.vStallSince) : 0;
         var aStalledDur = state.aStallSince ? (now - state.aStallSince) : 0;
 
-        if (!aPaused && !aEndedNative && !aNearEndNow && aStalledDur >= 850 && !vNotMoving) {
+        if (!aPaused && !aEndedNative && !aNearEndNow && aStalledDur >= 800 && !vNotMoving) {
           state.vStallSince = 0;
           state.aStallSince = 0;
           state.avgDrift = 0;
           state.aheadDriftSince = 0;
           state.behindDriftSince = 0;
+          state.severeDriftSince = 0;
           var stuckPos = Math.max(aNow, vNow);
           freezeBothStreams();
           prepareCleanAudioResume();
@@ -8216,63 +10093,47 @@ window.SyncLevel = SyncLevel;
           return;
         }
 
-        if (!vPaused && !vEndedNative && !vNearEndNow && vStalledDur >= 600 && !aNotMoving) {
+        if (!vPaused && !vEndedNative && !vNearEndNow && vStalledDur >= 550 && !aNotMoving) {
           state.vStallSince = 0;
           state.aStallSince = 0;
           state.avgDrift = 0;
           state.aheadDriftSince = 0;
           state.behindDriftSince = 0;
-          if (bufferMonitor.isTimeBuffered(videoEl, aNow, 0.25)) {
-            resyncVideoToLiveAudioOnWake(0);
-          } else {
-            setBufferSpinner(true);
-            freezeBothStreams();
-            armNetworkWatchdog();
-          }
+          state.severeDriftSince = 0;
+          freezeBothStreams();
+          setBufferSpinner(true);
+          seekVideoAndWait(aNow, function() {
+            syncPlaybackState();
+          });
           return;
         }
 
-        var rawFrameCheck = readRawVideoFrameCounters(videoEl);
-        if (rawFrameCheck.total > 0) {
-          if (rawFrameCheck.total !== state.lastDecodedFrameTotal) {
-            state.lastDecodedFrameTotal = rawFrameCheck.total;
-            state.lastDecodedFrameChangeAt = now;
-          } else if (!inGrace && !vNotMoving && !aNotMoving && state.lastDecodedFrameChangeAt > 0 && (now - state.lastDecodedFrameChangeAt >= 950) && (now - state.lastDecoderKickAt >= 3500)) {
-            state.lastDecoderKickAt = now;
-            state.lastDecodedFrameChangeAt = now;
-            if (bufferMonitor.isTimeBuffered(videoEl, aNow, 0.25)) {
-              resyncVideoToLiveAudioOnWake(0);
-              return;
-            }
-          }
-        } else {
-          state.lastDecodedFrameChangeAt = now;
-        }
-
         if (!inGrace) {
-          var stallLimitMs = isHeavyStream() ? 750 : 550;
+          var stallLimitMs = isHeavyStream() ? 700 : 500;
 
-          if ((vStalledDur >= stallLimitMs && (videoEl.readyState < 3 || vAhead < 0.25)) ||
-              (aStalledDur >= stallLimitMs && (audioEl.readyState < 3 || aAhead < 0.25))) {
+          if ((vStalledDur >= stallLimitMs && (videoEl.readyState < 3 || vAhead < 0.3)) ||
+              (aStalledDur >= stallLimitMs && (audioEl.readyState < 3 || aAhead < 0.3))) {
             state.vStallSince = 0;
             state.aStallSince = 0;
             state.avgDrift = 0;
             state.aheadDriftSince = 0;
             state.behindDriftSince = 0;
+            state.severeDriftSince = 0;
             setBufferSpinner(true);
             freezeBothStreams();
             armNetworkWatchdog();
             return;
           }
         } else {
-          var graceStallLimitMs = isHeavyStream() ? 1400 : 1100;
-          if ((vStalledDur >= graceStallLimitMs && !vPaused && (videoEl.readyState < 3 || vAhead < 0.2)) ||
-              (aStalledDur >= graceStallLimitMs && !aPaused && (audioEl.readyState < 3 || aAhead < 0.2))) {
+          var graceStallLimitMs = isHeavyStream() ? 1300 : 1000;
+          if ((vStalledDur >= graceStallLimitMs && !vPaused && (videoEl.readyState < 3 || vAhead < 0.25)) ||
+              (aStalledDur >= graceStallLimitMs && !aPaused && (audioEl.readyState < 3 || aAhead < 0.25))) {
             state.vStallSince = 0;
             state.aStallSince = 0;
             state.avgDrift = 0;
             state.aheadDriftSince = 0;
             state.behindDriftSince = 0;
+            state.severeDriftSince = 0;
             setBufferSpinner(true);
             freezeBothStreams();
             armNetworkWatchdog();
@@ -8291,6 +10152,7 @@ window.SyncLevel = SyncLevel;
           state.avgDrift = 0;
           state.aheadDriftSince = 0;
           state.behindDriftSince = 0;
+          state.severeDriftSince = 0;
           if (player.hasClass && (player.hasClass('vjs-waiting') || player.hasClass('vjs-seeking'))) {
             player.removeClass('vjs-waiting');
             player.removeClass('vjs-seeking');
@@ -8315,41 +10177,58 @@ window.SyncLevel = SyncLevel;
           state.avgDrift = 0;
           state.aheadDriftSince = 0;
           state.behindDriftSince = 0;
+          state.severeDriftSince = 0;
           return;
         }
 
         var activeRateNow = Math.max(1, getTargetPlaybackRate());
         var realSignedDrift = (vNow - aNow) / activeRateNow;
-        state.avgDrift = state.avgDrift === 0 ? realSignedDrift : (state.avgDrift * 0.7 + realSignedDrift * 0.3);
+        state.avgDrift = state.avgDrift === 0 ? realSignedDrift : (state.avgDrift * 0.65 + realSignedDrift * 0.35);
         var smoothDrift = state.avgDrift;
         var sinceLastCorr = now - state.lastCorrectionAt;
 
-        if (realSignedDrift < -0.14) {
-          state.aheadDriftSince = 0;
-          if (!state.behindDriftSince) state.behindDriftSince = now;
-          if (now - state.behindDriftSince >= 900 && smoothDrift < -0.13 && sinceLastCorr > config.syncCooldownMs) {
+        if (Math.abs(realSignedDrift) > 0.24) {
+          if (!state.severeDriftSince) state.severeDriftSince = now;
+          if (now - state.severeDriftSince >= 220 && sinceLastCorr > 1200) {
+            state.severeDriftSince = 0;
+            state.aheadDriftSince = 0;
             state.behindDriftSince = 0;
             state.avgDrift = 0;
             state.lastCorrectionAt = now;
-            if (bufferMonitor.isTimeBuffered(videoEl, aNow, 0.35) && videoEl.readyState >= 3) {
-              resyncVideoToLiveAudioOnWake(0);
-            } else {
-              state.alignedForAnchor = null;
-              freezeBothStreams();
-              setBufferSpinner(true);
-              seekVideoAndWait(aNow, function() {
-                syncPlaybackState();
-              });
-            }
+            state.alignedForAnchor = null;
+            freezeBothStreams();
+            setBufferSpinner(true);
+            seekVideoAndWait(aNow, function() {
+              syncPlaybackState();
+            });
             return;
           }
-        } else if (realSignedDrift > 0.14 && realSignedDrift <= 6.0) {
+        } else {
+          state.severeDriftSince = 0;
+        }
+
+        if (realSignedDrift < -0.048) {
+          state.aheadDriftSince = 0;
+          if (!state.behindDriftSince) state.behindDriftSince = now;
+          if (now - state.behindDriftSince >= 650 && smoothDrift < -0.045 && sinceLastCorr > config.syncCooldownMs) {
+            state.behindDriftSince = 0;
+            state.avgDrift = 0;
+            state.lastCorrectionAt = now;
+            state.alignedForAnchor = null;
+            freezeBothStreams();
+            setBufferSpinner(true);
+            seekVideoAndWait(aNow, function() {
+              syncPlaybackState();
+            });
+            return;
+          }
+        } else if (realSignedDrift > 0.048 && realSignedDrift <= 6.0) {
           state.behindDriftSince = 0;
           if (!state.aheadDriftSince) state.aheadDriftSince = now;
-          if (now - state.aheadDriftSince >= 900 && smoothDrift > 0.13 && sinceLastCorr > config.syncCooldownMs) {
+          if (now - state.aheadDriftSince >= 650 && smoothDrift > 0.045 && sinceLastCorr > config.syncCooldownMs) {
             state.aheadDriftSince = 0;
             state.avgDrift = 0;
-            holdVideoUntilAudioCatchesUp(0.025 * getTargetPlaybackRate());
+            holdVideoUntilAudioCatchesUp(0.016 * getTargetPlaybackRate());
             return;
           }
         } else {
@@ -8431,7 +10310,6 @@ window.SyncLevel = SyncLevel;
     initAlabasterPlayer();
   }
 })();
-
 
 (function () {
   'use strict';
