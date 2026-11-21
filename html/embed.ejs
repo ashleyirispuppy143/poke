@@ -61,7 +61,8 @@
 
     const clientCaptions = (hasInvvid && Array.isArray(invvid.captions)) ? invvid.captions.map(x => ({
         src: `/api/subtitles?v=${encodeURIComponent(invvid.videoId || v)}&h=${encodeURIComponent(x.label || '')}`,
-        label: (x.label || '').replace("United States", "Simplified - USA")
+        label: (x.label || '').replace("United States", "Simplified - USA"),
+        lang: x.language_code || x.languageCode || ''
     })) : [];
 
     let encodedVidUrl = '';
@@ -2661,6 +2662,7 @@
                                 trackEl.src = cap.src;
                                 trackEl.label = cap.label;
                                 trackEl.kind = 'subtitles';
+                                if (cap.lang) trackEl.srclang = cap.lang;
                                 video.appendChild(trackEl);
                             });
                         }
@@ -3097,6 +3099,42 @@
                             } catch(e) {}
                         }
 
+                        function saveSubPref(idx) {
+                            try {
+                                const cap = idx >= 0 && invMeta.captions[idx] ? invMeta.captions[idx] : null;
+                                localStorage.setItem('poke_embed_subpref', JSON.stringify({
+                                    enabled: idx >= 0,
+                                    label: cap ? cap.label : '',
+                                    lang: cap ? cap.lang : ''
+                                }));
+                            } catch(e) {}
+                        }
+
+                        function findMatchingSubIdx(preferredLangs, preferredLabel) {
+                            if (!hasCaptions) return -1;
+                            if (preferredLabel) {
+                                const byLabel = invMeta.captions.findIndex(c => c.label.toLowerCase() === preferredLabel.toLowerCase());
+                                if (byLabel !== -1) return byLabel;
+                            }
+                            const langs = (preferredLangs || []).filter(Boolean).map(l => String(l).toLowerCase());
+                            for (const rawLang of langs) {
+                                const base = rawLang.split('-')[0];
+                                let idx = invMeta.captions.findIndex(c => c.lang && (c.lang.toLowerCase() === rawLang || c.lang.toLowerCase().split('-')[0] === base));
+                                if (idx !== -1) return idx;
+
+                                let displayName = '';
+                                try {
+                                    displayName = new Intl.DisplayNames(['en'], { type: 'language' }).of(base) || '';
+                                } catch(e) {}
+                                if (displayName) {
+                                    const dnLower = displayName.toLowerCase();
+                                    idx = invMeta.captions.findIndex(c => c.label.toLowerCase().includes(dnLower));
+                                    if (idx !== -1) return idx;
+                                }
+                            }
+                            return -1;
+                        }
+
                         function getSubEdgeCss(edge) {
                             if (edge === 'outline') {
                                 return '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000';
@@ -3119,6 +3157,23 @@
                             });
                         }
 
+                        const entityDecoder = document.createElement('textarea');
+                        function parseCaptionText(raw) {
+                            if (!raw) return '';
+                            let text = String(raw)
+                                .replace(/<br\s*\/?>/gi, '\n')
+                                .replace(/<[^>]*>/g, '')
+                                .replace(/\\r\\n|\\n|\\r/g, '\n')
+                                .replace(/\\t/g, '    ');
+                            entityDecoder.innerHTML = text;
+                            let decoded = entityDecoder.value;
+                            if (/&(?:#\d+|#x[\da-f]+|[a-z]+);/i.test(decoded)) {
+                                entityDecoder.innerHTML = decoded;
+                                decoded = entityDecoder.value;
+                            }
+                            return decoded.replace(/\r\n|\r/g, '\n').trim();
+                        }
+
                         function renderActiveCues() {
                             subtitleOverlay.innerHTML = '';
                             if (activeSubIdx < 0 || !video.textTracks || !video.textTracks[activeSubIdx]) return;
@@ -3126,17 +3181,20 @@
                             const cues = track.activeCues;
                             if (!cues || cues.length === 0) return;
                             for (let i = 0; i < cues.length; i++) {
+                                const parsed = parseCaptionText(cues[i].text);
+                                if (!parsed) continue;
                                 const span = document.createElement('span');
                                 span.className = 'subtitle-cue-<%- v %>';
-                                span.textContent = cues[i].text.replace(/<[^>]*>/g, '');
+                                span.textContent = parsed;
                                 subtitleOverlay.appendChild(span);
                             }
                             applySubStyle();
                         }
 
-                        function setSubtitleTrack(idx, silent = false) {
+                        function setSubtitleTrack(idx, silent = false, shouldSave = true) {
                             activeSubIdx = idx;
                             if (idx >= 0) lastEnabledSubIdx = idx;
+                            if (shouldSave) saveSubPref(idx);
                             if (video.textTracks) {
                                 for (let i = 0; i < video.textTracks.length; i++) {
                                     const t = video.textTracks[i];
@@ -3492,6 +3550,33 @@
                         }
                         syncSubstyleInputs();
                         applySubStyle();
+
+                        if (hasCaptions) {
+                            const browserLangs = (navigator.languages && navigator.languages.length) ? Array.from(navigator.languages) : [navigator.language || 'en'];
+                            let savedSubPref = null;
+                            try {
+                                const rawPref = localStorage.getItem('poke_embed_subpref');
+                                if (rawPref) savedSubPref = JSON.parse(rawPref);
+                            } catch(e) {}
+
+                            if (savedSubPref) {
+                                const prefLangs = savedSubPref.lang ? [savedSubPref.lang, ...browserLangs] : browserLangs;
+                                const matchedIdx = findMatchingSubIdx(prefLangs, savedSubPref.label);
+                                if (savedSubPref.enabled) {
+                                    if (matchedIdx >= 0) {
+                                        setSubtitleTrack(matchedIdx, true, false);
+                                    }
+                                } else {
+                                    lastEnabledSubIdx = matchedIdx >= 0 ? matchedIdx : 0;
+                                    setSubtitleTrack(-1, true, false);
+                                }
+                            } else {
+                                const defaultIdx = findMatchingSubIdx(browserLangs, '');
+                                if (defaultIdx >= 0) {
+                                    setSubtitleTrack(defaultIdx, true, false);
+                                }
+                            }
+                        }
 
                         let showRemainingTime = false;
                         let retryCount = 0;
@@ -3851,7 +3936,7 @@
                                 isSeekingPending = false;
                             }
                             if (activeSubIdx >= 0) {
-                                setSubtitleTrack(activeSubIdx, true);
+                                setSubtitleTrack(activeSubIdx, true, false);
                             }
                             updateTime();
                         });
