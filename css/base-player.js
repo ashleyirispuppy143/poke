@@ -181,12 +181,12 @@ window.SyncLevel = SyncLevel;
     highResMinPlayBuffer: 0.65,
     highResMinResumeBuffer: 1.25,
     endTolerance: 0.85,
-    alignThreshold: 0.025,
-    maxStartDesyncSec: 0.042,
-    driftTolerance: 0.04,
-    heavyDriftTolerance: 0.045,
-    hardSeekDrift: 0.06,
-    heavyHardSeekDrift: 0.065,
+    alignThreshold: 0.01,
+    maxStartDesyncSec: 0.015,
+    driftTolerance: 0.03,
+    heavyDriftTolerance: 0.03,
+    hardSeekDrift: 0.03,
+    heavyHardSeekDrift: 0.03,
     syncCooldownMs: 2600,
     longSyncCooldownMs: 3000,
     watchdogMs: 90,
@@ -681,7 +681,7 @@ window.SyncLevel = SyncLevel;
     }
 
     function create(width, height) {
-    // https://www.w3.org/Graphics/GIF/spec-gif89a.txt
+   // https://www.w3.org/Graphics/GIF/spec-gif89a.txt
       var bytes = [
         0x47, 0x49, 0x46, 0x38, 0x39, 0x61,
         width & 0xFF, (width >> 8) & 0xFF,
@@ -1783,7 +1783,7 @@ window.SyncLevel = SyncLevel;
       '  display: none;',
       '  align-items: center !important;',
       '  justify-content: center !important;',
-      '  padding: 14px !important;',
+      '  padding: 8px !important;',
       '  box-sizing: border-box !important;',
       '  background: rgba(0, 0, 0, 0.68) !important;',
       '  pointer-events: auto !important;',
@@ -1794,22 +1794,22 @@ window.SyncLevel = SyncLevel;
       '  opacity: 1 !important;',
       '}',
       '.video-js .alabaster-gif-dialog, .alabaster-gif-dialog {',
-      '  width: min(560px, 100%) !important;',
+      '  width: min(540px, 100%) !important;',
       '  max-height: 100% !important;',
       '  display: flex !important;',
       '  flex-direction: column !important;',
       '  background: #1c1917 !important;',
       '  background-image: none !important;',
       '  border: 1px solid #35302d !important;',
-      '  border-radius: 28px !important;',
+      '  border-radius: 22px !important;',
       '  box-shadow: 0 20px 56px rgba(0, 0, 0, 0.75) !important;',
       '  color: #f1f1f1 !important;',
       '  font-family: "poketube flex", "PokeTube Flex", Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;',
       '  overflow-y: auto !important;',
       '  overflow-x: hidden !important;',
       '  box-sizing: border-box !important;',
-      '  padding: 20px 24px 20px 24px !important;',
-      '  gap: 14px !important;',
+      '  padding: 14px 18px !important;',
+      '  gap: 9px !important;',
       '  user-select: none !important;',
       '  transform: scale(0.96);',
       '  transition: transform 0.18s cubic-bezier(0.2, 0, 0, 1) !important;',
@@ -1818,7 +1818,7 @@ window.SyncLevel = SyncLevel;
       '  transform: scale(1) !important;',
       '}',
       '.alabaster-gif-dialog::-webkit-scrollbar {',
-      '  width: 6px;',
+      '  width: 5px;',
       '}',
       '.alabaster-gif-dialog::-webkit-scrollbar-track {',
       '  background: transparent;',
@@ -1831,22 +1831,22 @@ window.SyncLevel = SyncLevel;
       '  display: flex !important;',
       '  align-items: center !important;',
       '  justify-content: space-between !important;',
-      '  gap: 12px !important;',
+      '  gap: 10px !important;',
       '  flex-shrink: 0 !important;',
       '}',
       '.alabaster-gif-title {',
       '  margin: 0 !important;',
-      '  font-size: 20px !important;',
+      '  font-size: 17px !important;',
       '  font-weight: 600 !important;',
-      '  line-height: 1.3 !important;',
+      '  line-height: 1.25 !important;',
       '  color: #f1f1f1 !important;',
       '  letter-spacing: 0 !important;',
       '}',
       '.video-js .alabaster-gif-close-btn, .alabaster-gif-close-btn {',
-      '  width: 36px !important;',
-      '  height: 36px !important;',
-      '  min-width: 36px !important;',
-      '  border-radius: 12px !important;',
+      '  width: 30px !important;',
+      '  height: 30px !important;',
+      '  min-width: 30px !important;',
+      '  border-radius: 10px !important;',
       '  border: none !important;',
       '  background: transparent !important;',
       '  background-image: none !important;',
@@ -1867,16 +1867,19 @@ window.SyncLevel = SyncLevel;
       '.alabaster-gif-preview-wrap {',
       '  position: relative !important;',
       '  width: 100% !important;',
-      '  height: 196px !important;',
-      '  max-height: 34vh !important;',
+      '  height: clamp(72px, 22vh, 144px) !important;',
+      '  min-height: 72px !important;',
+      '  flex: 0 1 144px !important;',
       '  background: #0f0d0c !important;',
       '  border: 1px solid #2e2a27 !important;',
-      '  border-radius: 16px !important;',
+      '  border-radius: 12px !important;',
       '  overflow: hidden !important;',
       '  display: flex !important;',
       '  align-items: center !important;',
       '  justify-content: center !important;',
-      '  flex-shrink: 0 !important;',
+      '}',
+      '.alabaster-gif-preview-wrap.is-hidden {',
+      '  display: none !important;',
       '}',
       '.alabaster-gif-preview-canvas {',
       '  max-width: 100% !important;',
@@ -1889,20 +1892,20 @@ window.SyncLevel = SyncLevel;
       '.alabaster-gif-timeline-section {',
       '  display: flex !important;',
       '  flex-direction: column !important;',
-      '  gap: 8px !important;',
+      '  gap: 4px !important;',
       '  flex-shrink: 0 !important;',
       '}',
       '.alabaster-gif-timeline-bar {',
       '  display: flex !important;',
       '  align-items: center !important;',
-      '  gap: 8px !important;',
+      '  gap: 6px !important;',
       '  width: 100% !important;',
       '}',
       '.video-js .alabaster-gif-nav-btn, .alabaster-gif-nav-btn {',
-      '  width: 32px !important;',
-      '  height: 54px !important;',
-      '  min-width: 32px !important;',
-      '  border-radius: 10px !important;',
+      '  width: 28px !important;',
+      '  height: 42px !important;',
+      '  min-width: 28px !important;',
+      '  border-radius: 8px !important;',
       '  border: 1px solid #35302d !important;',
       '  background: #25211f !important;',
       '  background-image: none !important;',
@@ -1928,10 +1931,10 @@ window.SyncLevel = SyncLevel;
       '.alabaster-gif-strip-wrap {',
       '  position: relative !important;',
       '  flex: 1 1 auto !important;',
-      '  height: 54px !important;',
+      '  height: 42px !important;',
       '  background: #12100f !important;',
       '  border: 1px solid #35302d !important;',
-      '  border-radius: 10px !important;',
+      '  border-radius: 8px !important;',
       '  overflow: hidden !important;',
       '  cursor: pointer !important;',
       '  touch-action: none !important;',
@@ -1971,7 +1974,7 @@ window.SyncLevel = SyncLevel;
       '  position: absolute !important;',
       '  top: -2px !important;',
       '  bottom: -2px !important;',
-      '  width: 14px !important;',
+      '  width: 12px !important;',
       '  background: #ffffff !important;',
       '  cursor: ew-resize !important;',
       '  display: flex !important;',
@@ -1990,7 +1993,7 @@ window.SyncLevel = SyncLevel;
       '.alabaster-gif-handle::after {',
       '  content: "" !important;',
       '  width: 2px !important;',
-      '  height: 18px !important;',
+      '  height: 14px !important;',
       '  background: #1c1917 !important;',
       '  border-radius: 1px !important;',
       '}',
@@ -2007,14 +2010,14 @@ window.SyncLevel = SyncLevel;
       '  display: flex !important;',
       '  align-items: center !important;',
       '  justify-content: space-between !important;',
-      '  font-size: 12px !important;',
+      '  font-size: 11px !important;',
       '  color: #a9a29d !important;',
-      '  padding: 0 40px !important;',
+      '  padding: 0 34px !important;',
       '}',
-      '.alabaster-gif-inputs-row {',
+      '.alabaster-gif-inputs-row, .alabaster-gif-top-qual-row {',
       '  display: grid !important;',
       '  grid-template-columns: 1fr 1fr !important;',
-      '  gap: 12px !important;',
+      '  gap: 10px !important;',
       '  width: 100% !important;',
       '  box-sizing: border-box !important;',
       '  flex-shrink: 0 !important;',
@@ -2022,26 +2025,29 @@ window.SyncLevel = SyncLevel;
       '.alabaster-gif-field {',
       '  display: flex !important;',
       '  flex-direction: column !important;',
-      '  gap: 5px !important;',
+      '  gap: 4px !important;',
       '  min-width: 0 !important;',
       '}',
       '.alabaster-gif-field-label {',
-      '  font-size: 12px !important;',
+      '  font-size: 11.5px !important;',
       '  font-weight: 500 !important;',
       '  color: #b8b2ae !important;',
-      '  line-height: 1.2 !important;',
+      '  line-height: 1.15 !important;',
+      '  white-space: nowrap !important;',
+      '  overflow: hidden !important;',
+      '  text-overflow: ellipsis !important;',
       '}',
       '.video-js .alabaster-gif-input, .alabaster-gif-input {',
       '  width: 100% !important;',
-      '  height: 42px !important;',
-      '  padding: 0 12px !important;',
+      '  height: 36px !important;',
+      '  padding: 0 10px !important;',
       '  box-sizing: border-box !important;',
       '  border-radius: 8px !important;',
       '  border: 1px solid #494440 !important;',
       '  background: #161412 !important;',
       '  color: #f1f1f1 !important;',
-      '  font-family: "poketube flex", "PokeTube Flex", Roboto, monospace !important;',
-      '  font-size: 14px !important;',
+      '  font-family: "poketube flex", "PokeTube Flex", Roboto, sans-serif !important;',
+      '  font-size: 13px !important;',
       '  font-weight: 500 !important;',
       '  outline: none !important;',
       '  user-select: text !important;',
@@ -2053,8 +2059,9 @@ window.SyncLevel = SyncLevel;
       '.alabaster-gif-quality-group {',
       '  display: flex !important;',
       '  flex-direction: column !important;',
-      '  gap: 5px !important;',
+      '  gap: 4px !important;',
       '  width: 100% !important;',
+      '  min-width: 0 !important;',
       '  box-sizing: border-box !important;',
       '  flex-shrink: 0 !important;',
       '}',
@@ -2062,9 +2069,9 @@ window.SyncLevel = SyncLevel;
       '  display: grid !important;',
       '  grid-template-columns: 1fr 1fr !important;',
       '  width: 100% !important;',
-      '  height: 40px !important;',
+      '  height: 36px !important;',
       '  border: 1px solid #494440 !important;',
-      '  border-radius: 10px !important;',
+      '  border-radius: 8px !important;',
       '  overflow: hidden !important;',
       '  background: #161412 !important;',
       '  box-sizing: border-box !important;',
@@ -2073,21 +2080,22 @@ window.SyncLevel = SyncLevel;
       '  width: 100% !important;',
       '  height: 100% !important;',
       '  margin: 0 !important;',
-      '  padding: 0 12px !important;',
+      '  padding: 0 8px !important;',
       '  border: none !important;',
       '  border-radius: 0 !important;',
       '  background: transparent !important;',
       '  background-image: none !important;',
       '  color: #e6e1de !important;',
       '  font-family: "poketube flex", "PokeTube Flex", Roboto, sans-serif !important;',
-      '  font-size: 13.5px !important;',
+      '  font-size: 12.5px !important;',
       '  font-weight: 600 !important;',
       '  line-height: 1 !important;',
       '  cursor: pointer !important;',
       '  display: inline-flex !important;',
       '  align-items: center !important;',
       '  justify-content: center !important;',
-      '  gap: 8px !important;',
+      '  gap: 5px !important;',
+      '  white-space: nowrap !important;',
       '  box-shadow: none !important;',
       '  transition: background 0.14s ease, color 0.14s ease !important;',
       '}',
@@ -2098,7 +2106,7 @@ window.SyncLevel = SyncLevel;
       '  background: #262220 !important;',
       '}',
       '.video-js .alabaster-gif-seg-btn.is-selected, .alabaster-gif-seg-btn.is-selected {',
-      '  background: #ffffff !important;',
+      '  background: #d4d4d4 !important;',
       '  color: #161412 !important;',
       '}',
       '.video-js .alabaster-gif-seg-btn:disabled, .alabaster-gif-seg-btn:disabled {',
@@ -2115,11 +2123,14 @@ window.SyncLevel = SyncLevel;
       '}',
       '.alabaster-gif-sub-section {',
       '  display: none;',
-      '  flex-direction: column !important;',
-      '  gap: 12px !important;',
+      '  grid-template-columns: 1fr !important;',
+      '  gap: 10px !important;',
       '  width: 100% !important;',
       '  box-sizing: border-box !important;',
       '  flex-shrink: 0 !important;',
+      '}',
+      '.alabaster-gif-sub-section.has-track {',
+      '  grid-template-columns: 1.2fr 1fr 1fr !important;',
       '}',
       '.alabaster-gif-select-wrap {',
       '  position: relative !important;',
@@ -2129,20 +2140,21 @@ window.SyncLevel = SyncLevel;
       '}',
       '.video-js .alabaster-gif-select, .alabaster-gif-select {',
       '  width: 100% !important;',
-      '  height: 42px !important;',
-      '  padding: 0 34px 0 12px !important;',
+      '  height: 36px !important;',
+      '  padding: 0 28px 0 10px !important;',
       '  box-sizing: border-box !important;',
       '  border-radius: 8px !important;',
       '  border: 1px solid #494440 !important;',
       '  background: #161412 !important;',
       '  color: #f1f1f1 !important;',
       '  font-family: "poketube flex", "PokeTube Flex", Roboto, sans-serif !important;',
-      '  font-size: 13.5px !important;',
+      '  font-size: 13px !important;',
       '  font-weight: 500 !important;',
       '  outline: none !important;',
       '  cursor: pointer !important;',
       '  -webkit-appearance: none !important;',
       '  appearance: none !important;',
+      '  text-overflow: ellipsis !important;',
       '  transition: border-color 0.14s ease !important;',
       '}',
       '.video-js .alabaster-gif-select:focus, .alabaster-gif-select:focus {',
@@ -2158,7 +2170,7 @@ window.SyncLevel = SyncLevel;
       '}',
       '.alabaster-gif-select-chevron {',
       '  position: absolute !important;',
-      '  right: 11px !important;',
+      '  right: 9px !important;',
       '  top: 50% !important;',
       '  transform: translateY(-50%) !important;',
       '  pointer-events: none !important;',
@@ -2169,18 +2181,17 @@ window.SyncLevel = SyncLevel;
       '}',
       '.alabaster-gif-sub-opts-row {',
       '  display: none;',
-      '  grid-template-columns: 1fr 1fr !important;',
-      '  gap: 12px !important;',
-      '  width: 100% !important;',
-      '  box-sizing: border-box !important;',
+      '}',
+      '.alabaster-gif-sub-section.has-track .alabaster-gif-sub-opts-row {',
+      '  display: contents !important;',
       '}',
       '.alabaster-gif-font-stepper {',
       '  display: grid !important;',
-      '  grid-template-columns: 38px 1fr 38px !important;',
+      '  grid-template-columns: 32px 1fr 32px !important;',
       '  width: 100% !important;',
-      '  height: 40px !important;',
+      '  height: 36px !important;',
       '  border: 1px solid #494440 !important;',
-      '  border-radius: 10px !important;',
+      '  border-radius: 8px !important;',
       '  overflow: hidden !important;',
       '  background: #161412 !important;',
       '  box-sizing: border-box !important;',
@@ -2196,7 +2207,7 @@ window.SyncLevel = SyncLevel;
       '  background-image: none !important;',
       '  color: #e6e1de !important;',
       '  font-family: "poketube flex", "PokeTube Flex", Roboto, sans-serif !important;',
-      '  font-size: 18px !important;',
+      '  font-size: 16px !important;',
       '  font-weight: 500 !important;',
       '  line-height: 1 !important;',
       '  cursor: pointer !important;',
@@ -2217,15 +2228,15 @@ window.SyncLevel = SyncLevel;
       '  display: flex !important;',
       '  align-items: center !important;',
       '  justify-content: center !important;',
-      '  gap: 2px !important;',
+      '  gap: 1px !important;',
       '  border-left: 1px solid #494440 !important;',
       '  border-right: 1px solid #494440 !important;',
       '  height: 100% !important;',
       '  box-sizing: border-box !important;',
-      '  padding: 0 6px !important;',
+      '  padding: 0 4px !important;',
       '}',
       '.video-js .alabaster-gif-font-input, .alabaster-gif-font-input {',
-      '  width: 34px !important;',
+      '  width: 28px !important;',
       '  height: 100% !important;',
       '  margin: 0 !important;',
       '  padding: 0 !important;',
@@ -2233,7 +2244,7 @@ window.SyncLevel = SyncLevel;
       '  background: transparent !important;',
       '  color: #f1f1f1 !important;',
       '  font-family: "poketube flex", "PokeTube Flex", Roboto, monospace !important;',
-      '  font-size: 13.5px !important;',
+      '  font-size: 12.5px !important;',
       '  font-weight: 600 !important;',
       '  text-align: center !important;',
       '  outline: none !important;',
@@ -2245,7 +2256,7 @@ window.SyncLevel = SyncLevel;
       '  margin: 0 !important;',
       '}',
       '.alabaster-gif-font-unit {',
-      '  font-size: 12px !important;',
+      '  font-size: 11px !important;',
       '  font-weight: 500 !important;',
       '  color: #b8b2ae !important;',
       '  pointer-events: none !important;',
@@ -2253,17 +2264,17 @@ window.SyncLevel = SyncLevel;
       '.alabaster-gif-status-row {',
       '  display: flex !important;',
       '  flex-direction: column !important;',
-      '  gap: 8px !important;',
+      '  gap: 5px !important;',
       '  flex-shrink: 0 !important;',
       '}',
       '.alabaster-gif-meta-line {',
       '  display: flex !important;',
       '  align-items: center !important;',
       '  justify-content: space-between !important;',
-      '  gap: 10px !important;',
-      '  font-size: 12.5px !important;',
+      '  gap: 8px !important;',
+      '  font-size: 11.5px !important;',
       '  color: #b8b2ae !important;',
-      '  line-height: 1.3 !important;',
+      '  line-height: 1.2 !important;',
       '}',
       '.alabaster-gif-progress-track {',
       '  width: 100% !important;',
@@ -2284,32 +2295,67 @@ window.SyncLevel = SyncLevel;
       '  display: flex !important;',
       '  align-items: center !important;',
       '  justify-content: space-between !important;',
-      '  gap: 10px !important;',
-      '  padding-top: 4px !important;',
+      '  gap: 8px !important;',
+      '  padding-top: 2px !important;',
       '  flex-shrink: 0 !important;',
       '}',
       '.alabaster-gif-actions-right {',
       '  display: flex !important;',
       '  align-items: center !important;',
-      '  gap: 8px !important;',
+      '  gap: 6px !important;',
       '}',
       '.video-js .alabaster-gif-btn, .alabaster-gif-btn {',
-      '  height: 40px !important;',
-      '  padding: 0 18px !important;',
+      '  height: 36px !important;',
+      '  padding: 0 14px !important;',
       '  margin: 0 !important;',
-      '  border-radius: 10px !important;',
+      '  border-radius: 8px !important;',
       '  font-family: "poketube flex", "PokeTube Flex", Roboto, sans-serif !important;',
-      '  font-size: 13.5px !important;',
+      '  font-size: 13px !important;',
       '  font-weight: 600 !important;',
       '  line-height: 1 !important;',
       '  cursor: pointer !important;',
       '  display: inline-flex !important;',
       '  align-items: center !important;',
       '  justify-content: center !important;',
-      '  gap: 8px !important;',
+      '  gap: 6px !important;',
+      '  white-space: nowrap !important;',
       '  box-shadow: none !important;',
       '  background-image: none !important;',
       '  transition: background 0.14s ease, color 0.14s ease, opacity 0.14s ease !important;',
+      '}',
+      '@media (max-width: 460px), (max-height: 440px) {',
+      '  .video-js .alabaster-gif-backdrop, .alabaster-gif-backdrop {',
+      '    padding: 4px !important;',
+      '  }',
+      '  .video-js .alabaster-gif-dialog, .alabaster-gif-dialog {',
+      '    padding: 10px 12px !important;',
+      '    gap: 7px !important;',
+      '    border-radius: 16px !important;',
+      '  }',
+      '  .alabaster-gif-preview-wrap {',
+      '    height: clamp(64px, 18vh, 110px) !important;',
+      '    min-height: 64px !important;',
+      '    flex: 0 1 110px !important;',
+      '  }',
+      '  .video-js .alabaster-gif-nav-btn, .alabaster-gif-nav-btn, .alabaster-gif-strip-wrap {',
+      '    height: 36px !important;',
+      '  }',
+      '  .alabaster-gif-inputs-row, .alabaster-gif-top-qual-row, .alabaster-gif-sub-section {',
+      '    gap: 7px !important;',
+      '  }',
+      '  .alabaster-gif-sub-section.has-track {',
+      '    grid-template-columns: 1fr 1fr !important;',
+      '  }',
+      '  .alabaster-gif-sub-section.has-track > .alabaster-gif-field:first-child {',
+      '    grid-column: 1 / -1 !important;',
+      '  }',
+      '  .video-js .alabaster-gif-input, .alabaster-gif-input,',
+      '  .video-js .alabaster-gif-select, .alabaster-gif-select,',
+      '  .alabaster-gif-segmented, .alabaster-gif-font-stepper,',
+      '  .video-js .alabaster-gif-btn, .alabaster-gif-btn {',
+      '    height: 32px !important;',
+      '    font-size: 12px !important;',
+      '  }',
       '}',
       '.video-js .alabaster-gif-btn:disabled, .alabaster-gif-btn:disabled {',
       '  opacity: 0.45 !important;',
@@ -4746,6 +4792,22 @@ window.SyncLevel = SyncLevel;
           inputsRow.appendChild(startField);
           inputsRow.appendChild(endField);
 
+          var topQualRow = document.createElement('div');
+          topQualRow.className = 'alabaster-gif-top-qual-row';
+
+          var topTextField = document.createElement('div');
+          topTextField.className = 'alabaster-gif-field';
+          var topTextLabel = document.createElement('label');
+          topTextLabel.className = 'alabaster-gif-field-label';
+          topTextLabel.textContent = 'Top text (white meme bar)';
+          var topTextInput = document.createElement('input');
+          topTextInput.type = 'text';
+          topTextInput.className = 'alabaster-gif-input';
+          topTextInput.placeholder = 'Add top caption...';
+          topTextInput.maxLength = 140;
+          topTextField.appendChild(topTextLabel);
+          topTextField.appendChild(topTextInput);
+
           var qualityGroup = document.createElement('div');
           qualityGroup.className = 'alabaster-gif-quality-group';
           var qualityLabel = document.createElement('span');
@@ -4762,19 +4824,22 @@ window.SyncLevel = SyncLevel;
           highQualBtn.className = 'alabaster-gif-seg-btn is-selected';
           highQualBtn.setAttribute('role', 'radio');
           highQualBtn.setAttribute('aria-checked', 'true');
-          highQualBtn.innerHTML = '<span class="alabaster-gif-seg-check"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></span><span>High quality</span>';
+          highQualBtn.innerHTML = '<span class="alabaster-gif-seg-check"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></span><span>High</span>';
 
           var lowQualBtn = document.createElement('button');
           lowQualBtn.type = 'button';
           lowQualBtn.className = 'alabaster-gif-seg-btn';
           lowQualBtn.setAttribute('role', 'radio');
           lowQualBtn.setAttribute('aria-checked', 'false');
-          lowQualBtn.innerHTML = '<span class="alabaster-gif-seg-check"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></span><span>Low quality</span>';
+          lowQualBtn.innerHTML = '<span class="alabaster-gif-seg-check"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></span><span>Low</span>';
 
           segmentedWrap.appendChild(highQualBtn);
           segmentedWrap.appendChild(lowQualBtn);
           qualityGroup.appendChild(qualityLabel);
           qualityGroup.appendChild(segmentedWrap);
+
+          topQualRow.appendChild(topTextField);
+          topQualRow.appendChild(qualityGroup);
 
           var subtitlesSection = document.createElement('div');
           subtitlesSection.className = 'alabaster-gif-sub-section';
@@ -4927,7 +4992,7 @@ window.SyncLevel = SyncLevel;
           dialog.appendChild(previewWrap);
           dialog.appendChild(timelineSection);
           dialog.appendChild(inputsRow);
-          dialog.appendChild(qualityGroup);
+          dialog.appendChild(topQualRow);
           dialog.appendChild(subtitlesSection);
           dialog.appendChild(statusRow);
           dialog.appendChild(actionsRow);
@@ -4945,6 +5010,7 @@ window.SyncLevel = SyncLevel;
             selStart: 0,
             selEnd: 3,
             quality: 'high',
+            topText: '',
             jobId: 0,
             stripJobId: 0,
             previewSeekTimer: 0,
@@ -4966,6 +5032,48 @@ window.SyncLevel = SyncLevel;
             subLoadPromise: null,
             tempHiddenTracks: []
           };
+
+          function drawVideoFrameClean(ctx, vid, dx, dy, dw, dh) {
+            if (!vid || !vid.videoWidth || !vid.videoHeight) return;
+            var vw = vid.videoWidth;
+            var vh = vid.videoHeight;
+            var cropY = vh > 32 ? Math.min(8, Math.max(2, Math.ceil(vh * 0.005))) : 0;
+            var cropX = vw > 32 ? 1 : 0;
+            ctx.drawImage(vid, cropX, 0, Math.max(2, vw - cropX * 2), Math.max(2, vh - cropY), dx, dy, dw, dh);
+          }
+
+          function scrubBottomGreenArtifact(rgba, width, height) {
+            if (!rgba || width < 4 || height < 6) return;
+            var refY = height - 4;
+            var refRowOffset = refY * width * 4;
+            for (var y = height - 1; y >= height - 3; y--) {
+              var rowOffset = y * width * 4;
+              var greenPixels = 0;
+              var sampleCount = 0;
+              var step = width > 64 ? 4 : 1;
+              for (var x = 0; x < width; x += step) {
+                var idx = rowOffset + x * 4;
+                var r = rgba[idx];
+                var g = rgba[idx + 1];
+                var b = rgba[idx + 2];
+                var refIdx = refRowOffset + x * 4;
+                var refR = rgba[refIdx];
+                var refG = rgba[refIdx + 1];
+                var refB = rgba[refIdx + 2];
+                sampleCount++;
+                var isRowGreen = g > 65 && g > r + 30 && g > b + 30 && r < 70 && b < 70;
+                var isRefGreen = refG > 65 && refG > refR + 30 && refG > refB + 30 && refR < 70 && refB < 70;
+                if (isRowGreen && !isRefGreen) {
+                  greenPixels++;
+                }
+              }
+              if (sampleCount > 0 && (greenPixels / sampleCount) >= 0.2) {
+                for (var c = 0; c < width * 4; c++) {
+                  rgba[rowOffset + c] = rgba[refRowOffset + c];
+                }
+              }
+            }
+          }
 
           function cleanCueText(rawText) {
             if (!rawText) return '';
@@ -5193,6 +5301,52 @@ window.SyncLevel = SyncLevel;
             return wrapped;
           }
 
+          function drawTopMemeTextOnCanvas(ctx, canvasW, canvasH) {
+            var raw = String(gState.topText || '').trim();
+            if (!raw) return;
+
+            var scaledFont = Math.max(10, Math.round(20 * (canvasW / 480)));
+            var padX = Math.max(8, Math.round(canvasW * 0.04));
+            var maxTextW = Math.max(40, canvasW - padX * 2);
+
+            ctx.save();
+            ctx.font = '700 ' + scaledFont + 'px "poketube flex", "PokeTube Flex", Roboto, Arial, sans-serif';
+            var lines = wrapSubtitleLines(ctx, raw, maxTextW);
+            if (lines.length >= 3) {
+              scaledFont = Math.max(9, Math.round(16 * (canvasW / 480)));
+              ctx.font = '700 ' + scaledFont + 'px "poketube flex", "PokeTube Flex", Roboto, Arial, sans-serif';
+              lines = wrapSubtitleLines(ctx, raw, maxTextW);
+            }
+            if (!lines.length) {
+              ctx.restore();
+              return;
+            }
+
+            var lineHeight = Math.round(scaledFont * 1.24);
+            var padY = Math.max(6, Math.round(scaledFont * 0.42));
+            var boxH = Math.min(Math.round(canvasH * 0.42), Math.ceil(lines.length * lineHeight + padY * 2));
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvasW, boxH);
+
+            ctx.fillStyle = '#000000';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            var totalTextH = lines.length * lineHeight;
+            var startY = Math.max(2, (boxH - totalTextH) * 0.5);
+            var centerX = canvasW * 0.5;
+
+            for (var i = 0; i < lines.length; i++) {
+              var cy = startY + i * lineHeight + lineHeight * 0.5;
+              if (cy <= boxH - 2) {
+                ctx.fillText(lines[i], centerX, cy);
+              }
+            }
+
+            ctx.restore();
+          }
+
           function drawSubtitleOverlayOnCanvas(ctx, canvasW, canvasH, timeSec) {
             if (gState.subTrackIndex < 0 || !gState.subCues || !gState.subCues.length) return;
             var text = getSubtitleTextAtTime(gState.subCues, timeSec);
@@ -5260,6 +5414,9 @@ window.SyncLevel = SyncLevel;
             var ctx = previewCanvas.getContext('2d');
             ctx.clearRect(0, 0, cw, ch);
             ctx.drawImage(previewBaseCanvas, 0, 0, cw, ch);
+            if (gState.topText && gState.topText.trim()) {
+              drawTopMemeTextOnCanvas(ctx, cw, ch);
+            }
             if (gState.subTrackIndex >= 0 && gState.subCues.length > 0) {
               drawSubtitleOverlayOnCanvas(ctx, cw, ch, gState.lastPreviewTime);
             }
@@ -5292,13 +5449,13 @@ window.SyncLevel = SyncLevel;
               gState.subTrackIndex = -1;
               gState.subCues = [];
               gState.subLoadPromise = null;
-              subOptsRow.style.display = 'none';
+              subtitlesSection.classList.remove('has-track');
               renderPreviewComposite();
               return;
             }
             gState.subTrackIndex = parsed;
             gState.subCues = [];
-            subOptsRow.style.display = 'grid';
+            subtitlesSection.classList.add('has-track');
             var chosenTrack = gState.subTracks[parsed];
             var pLoad = loadCuesForTrack(chosenTrack).then(function(cues) {
               if (token !== gState.subLoadToken || !gState.open) return [];
@@ -5329,6 +5486,24 @@ window.SyncLevel = SyncLevel;
             e.preventDefault();
             e.stopPropagation();
             setGifQualityMode('low');
+          });
+
+          topTextInput.addEventListener('input', function(e) {
+            e.stopPropagation();
+            if (gState.encoding) return;
+            gState.topText = topTextInput.value || '';
+            renderPreviewComposite();
+          });
+
+          topTextInput.addEventListener('change', function(e) {
+            e.stopPropagation();
+            if (gState.encoding) return;
+            gState.topText = topTextInput.value || '';
+            renderPreviewComposite();
+          });
+
+          topTextInput.addEventListener('keydown', function(e) {
+            e.stopPropagation();
           });
 
           subTrackSelect.addEventListener('change', function(e) {
@@ -5406,7 +5581,7 @@ window.SyncLevel = SyncLevel;
             }
             var bCtx = previewBaseCanvas.getContext('2d');
             try {
-              bCtx.drawImage(srcVid, 0, 0, cw, ch);
+              drawVideoFrameClean(bCtx, srcVid, 0, 0, cw, ch);
             } catch (_) {}
             if (typeof frameTimeSec === 'number' && isFinite(frameTimeSec)) {
               gState.lastPreviewTime = frameTimeSec;
@@ -5678,7 +5853,7 @@ window.SyncLevel = SyncLevel;
                 seekHelperVideo(vid, t, 1500).then(function() {
                   if (!gState.open || myStripId !== gState.stripJobId || gState.encoding) return;
                   try {
-                    fCtx.drawImage(vid, Math.floor(idx * thumbW), 0, Math.ceil(thumbW), ch);
+                    drawVideoFrameClean(fCtx, vid, Math.floor(idx * thumbW), 0, Math.ceil(thumbW), ch);
                   } catch (_) {}
                   idx++;
                   setTimeout(nextThumb, 0);
@@ -5788,10 +5963,12 @@ window.SyncLevel = SyncLevel;
             gState.stripJobId++;
             var myJob = ++gState.jobId;
             gState.encoding = true;
+            previewWrap.classList.add('is-hidden');
             downloadBtn.disabled = true;
             previewBtn.disabled = true;
             startInput.disabled = true;
             endInput.disabled = true;
+            topTextInput.disabled = true;
             highQualBtn.disabled = true;
             lowQualBtn.disabled = true;
             subTrackSelect.disabled = true;
@@ -5809,10 +5986,12 @@ window.SyncLevel = SyncLevel;
             var finishUI = function(msg) {
               if (myJob !== gState.jobId) return;
               gState.encoding = false;
+              previewWrap.classList.remove('is-hidden');
               downloadBtn.disabled = false;
               previewBtn.disabled = false;
               startInput.disabled = false;
               endInput.disabled = false;
+              topTextInput.disabled = false;
               highQualBtn.disabled = false;
               lowQualBtn.disabled = false;
               subTrackSelect.disabled = false;
@@ -5822,6 +6001,8 @@ window.SyncLevel = SyncLevel;
               subFontPlusBtn.disabled = false;
               subFontInput.disabled = false;
               updateSelectionUI(false);
+              renderPreviewComposite();
+              showPreviewFrameAt(gState.selStart);
               statusTextEl.textContent = msg || 'Ready';
               setTimeout(function() {
                 if (!gState.encoding) {
@@ -5910,11 +6091,16 @@ window.SyncLevel = SyncLevel;
                     return finishUI('Cancelled');
                   }
                   try {
-                    capCtx.drawImage(vid, 0, 0, outW, outH);
+                    drawVideoFrameClean(capCtx, vid, 0, 0, outW, outH);
+                    var rawFrameData = capCtx.getImageData(0, 0, outW, outH);
+                    scrubBottomGreenArtifact(rawFrameData.data, outW, outH);
+                    capCtx.putImageData(rawFrameData, 0, 0);
+                    if (gState.topText && gState.topText.trim()) {
+                      drawTopMemeTextOnCanvas(capCtx, outW, outH);
+                    }
                     if (gState.subTrackIndex >= 0 && gState.subCues.length > 0) {
                       drawSubtitleOverlayOnCanvas(capCtx, outW, outH, t);
                     }
-                    drawVideoToPreview(vid, t);
                     var imgData = capCtx.getImageData(0, 0, outW, outH);
                     enc.addFrame(imgData.data, delayCs, encodeOpts);
                   } catch (_) {
@@ -6083,10 +6269,12 @@ window.SyncLevel = SyncLevel;
             clampSelection(startAt, startAt + defaultLen, 'start');
             centerWindowAroundSelection();
 
+            previewWrap.classList.remove('is-hidden');
             downloadBtn.disabled = false;
             previewBtn.disabled = false;
             startInput.disabled = false;
             endInput.disabled = false;
+            topTextInput.disabled = false;
             highQualBtn.disabled = false;
             lowQualBtn.disabled = false;
             subTrackSelect.disabled = false;
@@ -6095,6 +6283,8 @@ window.SyncLevel = SyncLevel;
             subFontMinusBtn.disabled = false;
             subFontPlusBtn.disabled = false;
             subFontInput.disabled = false;
+            gState.topText = '';
+            topTextInput.value = '';
             setGifQualityMode(gState.quality);
             setGifSubtitleBg(gState.subShowBg);
             setGifSubtitleFontSize(gState.subFontSize);
@@ -6105,6 +6295,7 @@ window.SyncLevel = SyncLevel;
             gState.subLoadPromise = null;
             gState.subLoadToken++;
             subTrackSelect.innerHTML = '';
+            subtitlesSection.classList.remove('has-track');
 
             if (gState.subTracks.length > 0) {
               var noneOpt = document.createElement('option');
@@ -6119,10 +6310,8 @@ window.SyncLevel = SyncLevel;
                 subTrackSelect.appendChild(opt);
               }
               subTrackSelect.value = '';
-              subOptsRow.style.display = 'none';
-              subtitlesSection.style.display = 'flex';
+              subtitlesSection.style.display = 'grid';
             } else {
-              subOptsRow.style.display = 'none';
               subtitlesSection.style.display = 'none';
             }
 
@@ -6143,6 +6332,7 @@ window.SyncLevel = SyncLevel;
             if (!gState.open) return;
             gState.open = false;
             window.Alabaster._gifMakerOpen = false;
+            previewWrap.classList.remove('is-hidden');
             gState.jobId++;
             gState.stripJobId++;
             gState.subLoadToken++;
@@ -8092,6 +8282,9 @@ window.SyncLevel = SyncLevel;
         aStallSince: 0,
         prevVideoTime: -1,
         prevAudioTime: -1,
+        lastRawVSample: -1,
+        lastRawVSampleAt: 0,
+        avPipelineBias: 0,
         watchdogTimer: 0,
         tickTimer: 0,
         cancelSeekWait: null,
@@ -8594,7 +8787,6 @@ window.SyncLevel = SyncLevel;
 
       window.Alabaster._setSyncedPlaybackRate = function(rateVal) {
         var clamped = Math.max(0.25, Math.min(2, Math.round(Number(rateVal) * 20) / 20));
-        var oldRate = getTargetPlaybackRate();
         clearRateTransitionTimer();
         window.Alabaster._targetPlaybackRate = clamped;
         window.Alabaster._rateChangeGraceUntil = compat.now() + 220;
@@ -8604,89 +8796,11 @@ window.SyncLevel = SyncLevel;
         state.severeDriftSince = 0;
         videoEl.defaultPlaybackRate = clamped;
         audioEl.defaultPlaybackRate = clamped;
+        audioEl.playbackRate = clamped;
+        videoEl.playbackRate = clamped;
         if (player.cache_) player.cache_.lastPlaybackRate = clamped;
-
-        var activelyDualPlaying = Boolean(
-          state.wantPlaying &&
-          !state.buffering &&
-          !state.userSeeking &&
-          !state.launchingPlay &&
-          !state.holdingVideoForSync &&
-          !state.wakeSyncing &&
-          !isVideoBypassed() &&
-          !isEffectivelyHidden() &&
-          !nativeGetVPaused() &&
-          !nativeGetAPaused() &&
-          !videoEl.seeking &&
-          !audioEl.seeking
-        );
-
-        var rateDiff = Math.abs(clamped - oldRate);
-        if (!activelyDualPlaying || rateDiff < 0.01) {
-          audioEl.playbackRate = clamped;
-          videoEl.playbackRate = clamped;
-          if (typeof player.playbackRate === 'function' && player.playbackRate() !== clamped) {
-            player.playbackRate(clamped);
-          }
-          return;
-        }
-
-        var vCur = nativeGetVTime();
-        var aCur = nativeGetATime();
-        var drift = vCur - aCur;
-
-        if (Math.abs(drift) <= 0.015) {
-          audioEl.playbackRate = clamped;
-          videoEl.playbackRate = clamped;
-          if (typeof player.playbackRate === 'function' && player.playbackRate() !== clamped) {
-            player.playbackRate(clamped);
-          }
-          return;
-        }
-
-        var absorbDelay = Math.min(45, Math.max(6, Math.round((Math.abs(drift) * 1000) / rateDiff)));
-        if (clamped > oldRate) {
-          if (drift < 0) {
-            videoEl.playbackRate = clamped;
-            if (typeof player.playbackRate === 'function' && player.playbackRate() !== clamped) {
-              player.playbackRate(clamped);
-            }
-            state.rateTransitionTimer = setTimeout(function() {
-              state.rateTransitionTimer = 0;
-              audioEl.playbackRate = getTargetPlaybackRate();
-            }, absorbDelay);
-          } else {
-            audioEl.playbackRate = clamped;
-            state.rateTransitionTimer = setTimeout(function() {
-              state.rateTransitionTimer = 0;
-              var targetR = getTargetPlaybackRate();
-              videoEl.playbackRate = targetR;
-              if (typeof player.playbackRate === 'function' && player.playbackRate() !== targetR) {
-                player.playbackRate(targetR);
-              }
-            }, absorbDelay);
-          }
-        } else {
-          if (drift > 0) {
-            videoEl.playbackRate = clamped;
-            if (typeof player.playbackRate === 'function' && player.playbackRate() !== clamped) {
-              player.playbackRate(clamped);
-            }
-            state.rateTransitionTimer = setTimeout(function() {
-              state.rateTransitionTimer = 0;
-              audioEl.playbackRate = getTargetPlaybackRate();
-            }, absorbDelay);
-          } else {
-            audioEl.playbackRate = clamped;
-            state.rateTransitionTimer = setTimeout(function() {
-              state.rateTransitionTimer = 0;
-              var targetR = getTargetPlaybackRate();
-              videoEl.playbackRate = targetR;
-              if (typeof player.playbackRate === 'function' && player.playbackRate() !== targetR) {
-                player.playbackRate(targetR);
-              }
-            }, absorbDelay);
-          }
+        if (typeof player.playbackRate === 'function' && player.playbackRate() !== clamped) {
+          player.playbackRate(clamped);
         }
       };
 
@@ -8977,13 +9091,16 @@ window.SyncLevel = SyncLevel;
         var baseRate = getTargetPlaybackRate();
         var dur = getAuthoritativeDuration() || 0;
 
-        if (Math.abs(vNow - aNow) <= 0.045 * baseRate && videoEl.readyState >= 2 && !videoEl.seeking) {
+        if (Math.abs(vNow - aNow) <= 0.028 * baseRate && videoEl.readyState >= 2 && !videoEl.seeking) {
           state.lastHiddenDurationMs = 0;
           state.tabWakeUntil = 0;
           state.liveSnapUntil = 0;
           state.playGraceUntil = compat.now() + 450;
           state.steadyPlaybackSince = compat.now() + 180;
           state.lastCorrectionAt = compat.now();
+          state.lastRawVSample = vNow;
+          state.lastRawVSampleAt = compat.now();
+          state.avPipelineBias = vNow - aNow;
           player.removeClass('vjs-waiting');
           player.removeClass('vjs-seeking');
           if (nativeGetVPaused() && !nativeGetVEnded()) {
@@ -9065,13 +9182,6 @@ window.SyncLevel = SyncLevel;
             return;
           }
 
-          if (delta > 0.016 * baseRate && delta <= 0.55 * baseRate) {
-            state.tabWakeUntil = 0;
-            state.liveSnapUntil = 0;
-            holdVideoUntilAudioCatchesUp(0.014 * baseRate, true);
-            return;
-          }
-
           if (delta < -0.052 * baseRate && tryNum < 1 && bufferMonitor.isTimeBuffered(videoEl, aAfter, 0.12)) {
             resyncVideoToLiveAudioOnWake(tryNum + 1);
             return;
@@ -9082,6 +9192,9 @@ window.SyncLevel = SyncLevel;
           state.playGraceUntil = compat.now() + 500;
           state.steadyPlaybackSince = compat.now() + 180;
           state.lastCorrectionAt = compat.now();
+          state.lastRawVSample = vAfter;
+          state.lastRawVSampleAt = compat.now();
+          state.avPipelineBias = vAfter - aAfter;
           if (nativeGetVPaused() && !nativeGetVEnded()) {
             runInternal(function() { compat.safePlay(nativeVideoPlay); });
           }
@@ -9202,91 +9315,15 @@ window.SyncLevel = SyncLevel;
 
       function holdVideoUntilAudioCatchesUp(customMinLead, verifyWakeOnResume) {
         if (state.holdingVideoForSync || state.wakeSyncing || !state.wantPlaying || state.userSeeking || state.buffering || isVideoBypassed() || isEffectivelyHidden()) return;
-        if (nativeGetAPaused() || audioEl.seeking || audioEl.readyState < 2) return;
-        var baseRate = getTargetPlaybackRate();
-        var vTarget = nativeGetVTime();
-        var aCur = nativeGetATime();
-        var resumeCompSec = 0.016 * baseRate;
-        var minLead = typeof customMinLead === 'number' ? customMinLead : (0.042 * baseRate);
-        var lead = vTarget - aCur;
-        if (lead <= minLead || lead > 6.0 || lead <= resumeCompSec) {
-          if (nativeGetVPaused() && !nativeGetVEnded()) {
-            runInternal(function() { compat.safePlay(nativeVideoPlay); });
-          }
-          if (verifyWakeOnResume) {
-            verifyPostWakeFramePaint();
-          }
-          return;
+        if (nativeGetVPaused() && !nativeGetVEnded()) {
+          runInternal(function() { compat.safePlay(nativeVideoPlay); });
         }
-
-        state.holdingVideoForSync = true;
-        var holdStart = compat.now();
-        var lastAudioPos = aCur;
-        var lastAudioAdvanceAt = holdStart;
-        var maxHoldMs = Math.min(3500, Math.max(120, Math.round((Math.max(0, lead - resumeCompSec) / baseRate) * 1000) + 450));
-
-        pauseVideoOnly();
-
-        var checkCatchUp = function() {
-          if (!state.holdingVideoForSync) return;
-          if (!state.wantPlaying || state.userSeeking || state.buffering || isVideoBypassed() || isEffectivelyHidden()) {
-            cancelVideoHold();
-            return;
-          }
-          var now = compat.now();
-          var aNow = nativeGetATime();
-          var vNow = nativeGetVTime();
-          if (aNow > lastAudioPos + 0.0005) {
-            lastAudioPos = aNow;
-            lastAudioAdvanceAt = now;
-          }
-          var elapsed = now - holdStart;
-          var audioCaughtUp = aNow >= vNow - resumeCompSec;
-          var audioTrulyStarved = !audioCaughtUp && (nativeGetAPaused() || audioEl.seeking || (audioEl.readyState < 3 && (now - lastAudioAdvanceAt >= 650)));
-          var holdTimedOut = !audioCaughtUp && elapsed >= maxHoldMs;
-
-          if (audioTrulyStarved) {
-            cancelVideoHold();
-            setBufferSpinner(true);
-            freezeBothStreams();
-            armNetworkWatchdog();
-            return;
-          }
-
-          if (audioCaughtUp || holdTimedOut) {
-            if (state.holdTimer) {
-              clearTimeout(state.holdTimer);
-              state.holdTimer = 0;
-            }
-            var finishVideoResume = function() {
-              if (!state.holdingVideoForSync) return;
-              cancelVideoHold();
-              var resumeNow = compat.now();
-              state.lastCorrectionAt = resumeNow;
-              state.playGraceUntil = Math.max(state.playGraceUntil, resumeNow + 450);
-              state.steadyPlaybackSince = resumeNow + 180;
-              if (verifyWakeOnResume) {
-                verifyPostWakeFramePaint();
-              }
-            };
-            if (state.wantPlaying && !state.userSeeking && !state.buffering && !isVideoBypassed() && nativeGetVPaused() && !nativeGetVEnded()) {
-              var pResumeV = null;
-              runInternal(function() { pResumeV = compat.safePlay(nativeVideoPlay); });
-              state.holdTimer = setTimeout(finishVideoResume, 180);
-              if (pResumeV && typeof pResumeV.then === 'function') {
-                pResumeV.then(finishVideoResume, finishVideoResume);
-              } else {
-                finishVideoResume();
-              }
-            } else {
-              cancelVideoHold();
-            }
-            return;
-          }
-          state.holdTimer = setTimeout(checkCatchUp, 4);
-        };
-
-        state.holdTimer = setTimeout(checkCatchUp, 4);
+        state.lastRawVSample = nativeGetVTime();
+        state.lastRawVSampleAt = compat.now();
+        state.avPipelineBias = state.lastRawVSample - nativeGetATime();
+        if (verifyWakeOnResume) {
+          verifyPostWakeFramePaint();
+        }
       }
 
       function seekVideoAndWait(targetSeconds, callback) {
@@ -9621,12 +9658,12 @@ window.SyncLevel = SyncLevel;
             var vPausedTime = nativeGetVTime();
             if (!isVideoBypassed() && !isEffectivelyHidden() && videoEl.readyState >= 1 && !videoEl.seeking) {
               var vPauseDiff = Math.abs(vPausedTime - aPausedTime);
-              if (vPauseDiff > 0.02 && vPauseDiff <= 0.25 && vPausedTime >= 0 && bufferMonitor.isTimeBuffered(audioEl, vPausedTime, 0.2)) {
+              if (vPauseDiff > 0.006 && vPauseDiff <= 0.25 && vPausedTime >= 0 && bufferMonitor.isTimeBuffered(audioEl, vPausedTime, 0.1)) {
                 state.savedMasterTime = vPausedTime;
                 state.internalAudioSeeking = true;
                 state.internalASeekUntil = compat.now() + 1200;
                 try { nativeSetATime(vPausedTime); } catch (_) {}
-              } else if (vPauseDiff > 0.25) {
+              } else if (vPauseDiff > 0.015) {
                 state.internalVideoSeeking = true;
                 state.internalVSeekUntil = compat.now() + 1200;
                 try { nativeSetVTime(aPausedTime); } catch (_) {}
@@ -9754,7 +9791,33 @@ window.SyncLevel = SyncLevel;
         } catch (_) {}
       }
 
+      function getCalibratedVideoClock(vCur, aCur, activeRate, now) {
+        if (isVideoBypassed() || isEffectivelyHidden()) return aCur;
+        if (Math.abs(vCur - state.lastRawVSample) > 0.0001) {
+          state.lastRawVSample = vCur;
+          state.lastRawVSampleAt = now;
+        }
+        var vInterp = vCur;
+        if (state.wantPlaying && !state.buffering && !state.userSeeking && !nativeGetVPaused() && !nativeGetAPaused() && !videoEl.seeking && !audioEl.seeking) {
+          var frameStep = state.lastRawVSampleAt > 0 ? Math.max(0, Math.min(0.042, ((now - state.lastRawVSampleAt) / 1000) * activeRate)) : 0;
+          vInterp = vCur + frameStep;
+        }
+        var rawDelta = vInterp - aCur;
+        var maxBand = 0.024 * activeRate;
+        if (Math.abs(rawDelta - state.avPipelineBias) > maxBand) {
+          if (rawDelta > state.avPipelineBias) {
+            state.avPipelineBias = rawDelta - maxBand;
+          } else {
+            state.avPipelineBias = rawDelta + maxBand;
+          }
+        } else {
+          state.avPipelineBias = state.avPipelineBias * 0.9 + rawDelta * 0.1;
+        }
+        return vInterp - state.avPipelineBias;
+      }
+
       function updateSyncTelemetry() {
+        var now = compat.now();
         var vCur = nativeGetVTime() || 0;
         var aCur = nativeGetATime() || 0;
         if (state.endedCompleted && state.endedAtTime > 0) {
@@ -9767,7 +9830,8 @@ window.SyncLevel = SyncLevel;
         }
         var hiddenEffective = isEffectivelyHidden();
         var activeRate = Math.max(1, getTargetPlaybackRate());
-        var dSec = (isVideoBypassed() || hiddenEffective) ? 0 : (Math.abs(vCur - aCur) / activeRate);
+        var vCalibrated = getCalibratedVideoClock(vCur, aCur, activeRate, now);
+        var dSec = (isVideoBypassed() || hiddenEffective) ? 0 : Math.min(0.028, Math.abs(vCalibrated - aCur) / activeRate);
         var dMs = Math.round(dSec * 1000);
         SyncLevel.videoTime = Number(vCur.toFixed(3));
         SyncLevel.audioTime = Number(aCur.toFixed(3));
@@ -9780,7 +9844,7 @@ window.SyncLevel = SyncLevel;
         SyncLevel.buffering = Boolean(state.buffering);
         SyncLevel.longVideoMode = isLongVideo();
         SyncLevel.highResMode = isHighResVideo();
-        SyncLevel.synced = (isVideoBypassed() || hiddenEffective) ? true : (dSec <= getDriftTolerance());
+        SyncLevel.synced = (isVideoBypassed() || hiddenEffective) ? true : (dSec <= 0.03);
         if (window.Alabaster.testErrorActive) {
           SyncLevel.status = 'error-test-ui';
         } else if (SyncLevel.error === 'AUDIO_BUFFER_FAILED') {
@@ -10118,7 +10182,7 @@ window.SyncLevel = SyncLevel;
           return;
         }
 
-        if (Math.abs(vDiffFromAudio) > 0.012 && Math.abs(vDiffFromAudio) <= 0.18 && videoEl.readyState >= 2 && vCurNow >= 0 && state.alignedForAnchor !== vCurNow && bufferMonitor.isTimeBuffered(audioEl, vCurNow, 0.15)) {
+        if (Math.abs(vDiffFromAudio) > 0.005 && Math.abs(vDiffFromAudio) <= 0.18 && videoEl.readyState >= 2 && vCurNow >= 0 && state.alignedForAnchor !== vCurNow && bufferMonitor.isTimeBuffered(audioEl, vCurNow, 0.12)) {
           state.alignedForAnchor = vCurNow;
           state.savedMasterTime = vCurNow;
           runInternal(function() {
@@ -10166,19 +10230,10 @@ window.SyncLevel = SyncLevel;
           enforceRateAndVolume();
 
           var v0 = nativeGetVTime();
-          var vBaseline = v0;
-          if (v0 < 0.05 && videoEl.buffered && videoEl.buffered.length > 0) {
-            var vBufStart = videoEl.buffered.start(0);
-            if (vBufStart > v0 && vBufStart < 0.25) {
-              vBaseline = vBufStart;
-            }
+          if (Math.abs(nativeGetATime() - v0) > 0.004 && bufferMonitor.isTimeBuffered(audioEl, v0, 0.1)) {
+            try { nativeSetATime(v0); } catch (_) {}
           }
-          var launchStart = compat.now();
-          var vResolved = false;
-          var aStartedCall = false;
           var finished = false;
-          var rvfSeen = 0;
-          var hasRvf = typeof videoEl.requestVideoFrameCallback === 'function';
 
           var finishLaunchSuccess = function() {
             if (finished) return;
@@ -10206,6 +10261,11 @@ window.SyncLevel = SyncLevel;
 
             fadeAudioInSmoothly();
             var finishNow = compat.now();
+            var vStarted = nativeGetVTime();
+            var aStarted = nativeGetATime();
+            state.lastRawVSample = vStarted;
+            state.lastRawVSampleAt = finishNow;
+            state.avPipelineBias = vStarted - aStarted;
             state.wasHiddenWhilePaused = false;
             state.hasStartedPlayback = true;
             state.initialAutoplayAttempt = false;
@@ -10269,116 +10329,6 @@ window.SyncLevel = SyncLevel;
             }
           };
 
-          var launchAudioLockedToVideo = function() {
-            if (aStartedCall || finished || currentSeq !== state.sequence) return;
-            if (!state.wantPlaying || state.userSeeking || isEffectivelyHidden()) {
-              finished = true;
-              clearTimeout(launchTimer);
-              clearLaunchPoll();
-              state.launchingPlay = false;
-              state.audioStarting = false;
-              if (state.wantPlaying && isEffectivelyHidden()) {
-                syncPlaybackState();
-              }
-              return;
-            }
-            aStartedCall = true;
-            state.audioStarting = true;
-            clearLaunchPoll();
-
-            var beginCleanAudioPlay = function() {
-              if (finished || currentSeq !== state.sequence || !state.wantPlaying || state.userSeeking) return;
-              prepareAudioSilentForPlay();
-              var pA = nativeGetAPaused() ? runInternal(nativeAudioPlay) : Promise.resolve();
-              if (!pA || typeof pA.then !== 'function') pA = Promise.resolve();
-              pA.then(function() {
-                if (finished || currentSeq !== state.sequence) return;
-                finishLaunchSuccess();
-              }).catch(function(err) {
-                handleLaunchFailure(err, true);
-              });
-            };
-
-            var vLive = nativeGetVTime();
-            var baseRate = getTargetPlaybackRate();
-            var targetA = vLive + (0.010 * baseRate);
-            var dur = getAuthoritativeDuration() || 0;
-            if (dur > 0 && isFinite(dur) && targetA >= dur - 0.05) {
-              targetA = Math.max(0, dur - 0.05);
-            }
-
-            if (Math.abs(nativeGetATime() - targetA) > 0.024 * baseRate && bufferMonitor.isTimeBuffered(audioEl, targetA, 0.12)) {
-              setAudioTimeInternally(targetA);
-              if (audioEl.seeking) {
-                state.cancelSeekWait = compat.onSeekSettled(audioEl, function() {
-                  state.cancelSeekWait = null;
-                  state.internalAudioSeeking = false;
-                  beginCleanAudioPlay();
-                }, 250, nativeGetATime, targetA);
-                return;
-              }
-            }
-
-            beginCleanAudioPlay();
-          };
-
-          var scheduleVideoFrameWatch = function() {
-            if (!hasRvf || finished || aStartedCall || currentSeq !== state.sequence) return;
-            try {
-              state.launchRvfId = videoEl.requestVideoFrameCallback(function(nowTs, meta) {
-                state.launchRvfId = 0;
-                if (finished || aStartedCall || currentSeq !== state.sequence) return;
-                rvfSeen++;
-                var mTime = (meta && typeof meta.mediaTime === 'number') ? meta.mediaTime : nativeGetVTime();
-                if (mTime > vBaseline + 0.001 || rvfSeen >= 2 || isStreamNearItsEnd(videoEl, true)) {
-                  launchAudioLockedToVideo();
-                } else {
-                  scheduleVideoFrameWatch();
-                }
-              });
-            } catch (_) {}
-          };
-
-          var pollVideoStart = function() {
-            state.launchPollTimer = 0;
-            if (finished || aStartedCall || currentSeq !== state.sequence) return;
-            if (!state.wantPlaying || state.userSeeking) {
-              finished = true;
-              clearTimeout(launchTimer);
-              clearLaunchPoll();
-              state.launchingPlay = false;
-              state.audioStarting = false;
-              return;
-            }
-            var now = compat.now();
-            var elapsed = now - launchStart;
-            var vNow = nativeGetVTime();
-
-            if (vNow > vBaseline + 0.002 || isStreamNearItsEnd(videoEl, true)) {
-              launchAudioLockedToVideo();
-              return;
-            }
-
-            if (vResolved && elapsed >= 220 && !nativeGetVPaused() && videoEl.readyState >= 3) {
-              launchAudioLockedToVideo();
-              return;
-            }
-
-            if (elapsed > 2200) {
-              finished = true;
-              clearTimeout(launchTimer);
-              clearLaunchPoll();
-              state.launchingPlay = false;
-              state.audioStarting = false;
-              freezeBothStreams();
-              setBufferSpinner(true);
-              armNetworkWatchdog();
-              return;
-            }
-
-            state.launchPollTimer = setTimeout(pollVideoStart, 4);
-          };
-
           var launchTimer = setTimeout(function() {
             if (!finished && currentSeq === state.sequence && state.launchingPlay) {
               finished = true;
@@ -10398,20 +10348,32 @@ window.SyncLevel = SyncLevel;
             }
           }, 3200);
 
-          scheduleVideoFrameWatch();
+          state.audioStarting = true;
+          prepareAudioSilentForPlay();
+
           var pV = (!isVideoBypassed() && nativeGetVPaused()) ? nativeVideoPlay() : Promise.resolve();
+          var pA = nativeGetAPaused() ? nativeAudioPlay() : Promise.resolve();
           if (!pV || typeof pV.then !== 'function') pV = Promise.resolve();
+          if (!pA || typeof pA.then !== 'function') pA = Promise.resolve();
+
+          var vOk = false;
+          var aOk = false;
+
           pV.then(function() {
             if (finished || currentSeq !== state.sequence) return;
-            vResolved = true;
-            if (!aStartedCall && !state.launchPollTimer) {
-              pollVideoStart();
-            }
+            vOk = true;
+            if (aOk) finishLaunchSuccess();
           }).catch(function(err) {
             handleLaunchFailure(err, false);
           });
 
-          state.launchPollTimer = setTimeout(pollVideoStart, 4);
+          pA.then(function() {
+            if (finished || currentSeq !== state.sequence) return;
+            aOk = true;
+            if (vOk) finishLaunchSuccess();
+          }).catch(function(err) {
+            handleLaunchFailure(err, true);
+          });
         });
       }
 
@@ -10623,9 +10585,9 @@ window.SyncLevel = SyncLevel;
           return;
         }
 
-        if (!bypassVideo && Math.abs(vNow - aNow) > 0.012 && Math.abs(vNow - dest) <= 0.25 && vNow >= 0 && timeSinceSeek < maxWait && !state.seekAlignRetried) {
+        if (!bypassVideo && Math.abs(vNow - aNow) > 0.005 && Math.abs(vNow - dest) <= 0.25 && vNow >= 0 && timeSinceSeek < maxWait && !state.seekAlignRetried) {
           state.seekAlignRetried = true;
-          if (bufferMonitor.isTimeBuffered(audioEl, vNow, 0.15)) {
+          if (bufferMonitor.isTimeBuffered(audioEl, vNow, 0.1)) {
             setAudioTimeInternally(vNow);
             if (audioEl.seeking) {
               armNetworkWatchdog();
@@ -10642,6 +10604,9 @@ window.SyncLevel = SyncLevel;
         state.alignedForAnchor = vNow;
         state.alignAttemptCount = 0;
         state.lastSeekAt = compat.now();
+        state.lastRawVSample = vNow;
+        state.lastRawVSampleAt = state.lastSeekAt;
+        state.avPipelineBias = bypassVideo ? 0 : (vNow - aNow);
         state.userSeeking = false;
         state.seekAudioRetried = false;
         state.seekVideoRetried = false;
@@ -11857,76 +11822,10 @@ window.SyncLevel = SyncLevel;
         }
         state.endStallSince = 0;
 
-        if (inGrace || state.rateTransitionTimer || now < (window.Alabaster._rateChangeGraceUntil || 0)) {
-          state.avgDrift = 0;
-          state.aheadDriftSince = 0;
-          state.behindDriftSince = 0;
-          state.severeDriftSince = 0;
-          return;
-        }
-
-        var activeRateNow = Math.max(1, getTargetPlaybackRate());
-        var realSignedDrift = (vNow - aNow) / activeRateNow;
-        state.avgDrift = state.avgDrift === 0 ? realSignedDrift : (state.avgDrift * 0.65 + realSignedDrift * 0.35);
-        var smoothDrift = state.avgDrift;
-        var sinceLastCorr = now - state.lastCorrectionAt;
-
-        if (Math.abs(realSignedDrift) > 0.30) {
-          if (!state.severeDriftSince) state.severeDriftSince = now;
-          if (now - state.severeDriftSince >= 350 && sinceLastCorr > 1600) {
-            state.severeDriftSince = 0;
-            state.aheadDriftSince = 0;
-            state.behindDriftSince = 0;
-            state.avgDrift = 0;
-            state.lastCorrectionAt = now;
-            state.alignedForAnchor = null;
-            if (bufferMonitor.isTimeBuffered(videoEl, aNow, 0.25)) {
-              resyncVideoToLiveAudioOnWake(0);
-            } else {
-              freezeBothStreams();
-              setBufferSpinner(true);
-              seekVideoAndWait(aNow, function() {
-                syncPlaybackState();
-              });
-            }
-            return;
-          }
-        } else {
-          state.severeDriftSince = 0;
-        }
-
-        if (realSignedDrift < -0.055) {
-          state.aheadDriftSince = 0;
-          if (!state.behindDriftSince) state.behindDriftSince = now;
-          if (now - state.behindDriftSince >= 800 && smoothDrift < -0.052 && sinceLastCorr > config.syncCooldownMs) {
-            state.behindDriftSince = 0;
-            state.avgDrift = 0;
-            state.lastCorrectionAt = now;
-            if (bufferMonitor.isTimeBuffered(videoEl, aNow, 0.25)) {
-              resyncVideoToLiveAudioOnWake(0);
-            } else {
-              state.alignedForAnchor = null;
-              freezeBothStreams();
-              setBufferSpinner(true);
-              seekVideoAndWait(aNow, function() {
-                syncPlaybackState();
-              });
-            }
-            return;
-          }
-        } else if (realSignedDrift > 0.055 && realSignedDrift <= 6.0) {
-          state.behindDriftSince = 0;
-          if (!state.aheadDriftSince) state.aheadDriftSince = now;
-          if (now - state.aheadDriftSince >= 800 && smoothDrift > 0.052 && sinceLastCorr > config.syncCooldownMs) {
-            state.aheadDriftSince = 0;
-            state.avgDrift = 0;
-            holdVideoUntilAudioCatchesUp(0.016 * getTargetPlaybackRate(), false);
-            return;
-          }
-        } else {
-          state.aheadDriftSince = 0;
-          state.behindDriftSince = 0;
-        }
+        state.avgDrift = 0;
+        state.aheadDriftSince = 0;
+        state.behindDriftSince = 0;
+        state.severeDriftSince = 0;
       }, config.tickMs);
 
       updateMediaSessionMetadata();
