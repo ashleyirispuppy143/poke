@@ -20,11 +20,11 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Poke | Download Video</title>
+  <title>Poke | Download <%= title %></title>
   <meta name="viewport" content="width=device-width,initial-scale=1,shrink-to-fit=no,viewport-fit=cover" />
   <meta name="theme-color" content="<%= color %>"/>
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="PokeTube - Video Downloader" />
+  <meta property="og:title" content="PokeTube - Download <%= title %>" />
   <meta property="og:image" content="https://i.ytimg.com/vi/<%= v %>/maxresdefault.jpg" />
   
   <link rel="icon" href="/css/yt-ukraine.svg?v=7" />
@@ -448,15 +448,21 @@
   <main class="container">
     <div class="yt-primary">
       <a href="/watch?v=<%= v %>" class="player-wrap" aria-label="Play Video">
-        <img class="player-thumb" src="/vi/<%= v %>/maxresdefault.jpg" alt="Video thumbnail" loading="eager" />
+        <img class="player-thumb" src="/vi/<%= v %>/maxresdefault.jpg" alt="<%= title %> thumbnail" loading="eager" />
         <div class="play-overlay">
           <i class="fa-solid fa-play"></i>
         </div>
       </a>
 
-      <h1 class="video-title">Download Media</h1>
+      <h1 class="video-title"><%= title %></h1>
       
       <div class="video-meta">
+        <% if (authorUrl) { %>
+          <div class="subtitle">By <a href="<%= authorUrl %>" target="_blank" rel="noopener noreferrer"><%= author %></a></div>
+        <% } else { %>
+          <div class="subtitle">By <%= author %></div>
+        <% } %>
+        <span class="subtitle">•</span>
         <div class="subtitle">ID: <code><%= v %></code></div>
       </div>
 
