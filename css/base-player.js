@@ -681,7 +681,7 @@ window.SyncLevel = SyncLevel;
     }
 
     function create(width, height) {
-      //https://www.w3.org/Graphics/GIF/spec-gif89a.txt
+    // https://www.w3.org/Graphics/GIF/spec-gif89a.txt
       var bytes = [
         0x47, 0x49, 0x46, 0x38, 0x39, 0x61,
         width & 0xFF, (width >> 8) & 0xFF,
@@ -2112,6 +2112,143 @@ window.SyncLevel = SyncLevel;
       '}',
       '.alabaster-gif-seg-btn.is-selected .alabaster-gif-seg-check {',
       '  display: inline-flex !important;',
+      '}',
+      '.alabaster-gif-sub-section {',
+      '  display: none;',
+      '  flex-direction: column !important;',
+      '  gap: 12px !important;',
+      '  width: 100% !important;',
+      '  box-sizing: border-box !important;',
+      '  flex-shrink: 0 !important;',
+      '}',
+      '.alabaster-gif-select-wrap {',
+      '  position: relative !important;',
+      '  width: 100% !important;',
+      '  display: flex !important;',
+      '  align-items: center !important;',
+      '}',
+      '.video-js .alabaster-gif-select, .alabaster-gif-select {',
+      '  width: 100% !important;',
+      '  height: 42px !important;',
+      '  padding: 0 34px 0 12px !important;',
+      '  box-sizing: border-box !important;',
+      '  border-radius: 8px !important;',
+      '  border: 1px solid #494440 !important;',
+      '  background: #161412 !important;',
+      '  color: #f1f1f1 !important;',
+      '  font-family: "poketube flex", "PokeTube Flex", Roboto, sans-serif !important;',
+      '  font-size: 13.5px !important;',
+      '  font-weight: 500 !important;',
+      '  outline: none !important;',
+      '  cursor: pointer !important;',
+      '  -webkit-appearance: none !important;',
+      '  appearance: none !important;',
+      '  transition: border-color 0.14s ease !important;',
+      '}',
+      '.video-js .alabaster-gif-select:focus, .alabaster-gif-select:focus {',
+      '  border-color: #ffffff !important;',
+      '}',
+      '.video-js .alabaster-gif-select:disabled, .alabaster-gif-select:disabled {',
+      '  opacity: 0.45 !important;',
+      '  cursor: default !important;',
+      '}',
+      '.alabaster-gif-select option {',
+      '  background: #1c1917 !important;',
+      '  color: #f1f1f1 !important;',
+      '}',
+      '.alabaster-gif-select-chevron {',
+      '  position: absolute !important;',
+      '  right: 11px !important;',
+      '  top: 50% !important;',
+      '  transform: translateY(-50%) !important;',
+      '  pointer-events: none !important;',
+      '  color: #b8b2ae !important;',
+      '  display: inline-flex !important;',
+      '  align-items: center !important;',
+      '  justify-content: center !important;',
+      '}',
+      '.alabaster-gif-sub-opts-row {',
+      '  display: none;',
+      '  grid-template-columns: 1fr 1fr !important;',
+      '  gap: 12px !important;',
+      '  width: 100% !important;',
+      '  box-sizing: border-box !important;',
+      '}',
+      '.alabaster-gif-font-stepper {',
+      '  display: grid !important;',
+      '  grid-template-columns: 38px 1fr 38px !important;',
+      '  width: 100% !important;',
+      '  height: 40px !important;',
+      '  border: 1px solid #494440 !important;',
+      '  border-radius: 10px !important;',
+      '  overflow: hidden !important;',
+      '  background: #161412 !important;',
+      '  box-sizing: border-box !important;',
+      '}',
+      '.video-js .alabaster-gif-step-btn, .alabaster-gif-step-btn {',
+      '  width: 100% !important;',
+      '  height: 100% !important;',
+      '  margin: 0 !important;',
+      '  padding: 0 !important;',
+      '  border: none !important;',
+      '  border-radius: 0 !important;',
+      '  background: transparent !important;',
+      '  background-image: none !important;',
+      '  color: #e6e1de !important;',
+      '  font-family: "poketube flex", "PokeTube Flex", Roboto, sans-serif !important;',
+      '  font-size: 18px !important;',
+      '  font-weight: 500 !important;',
+      '  line-height: 1 !important;',
+      '  cursor: pointer !important;',
+      '  display: inline-flex !important;',
+      '  align-items: center !important;',
+      '  justify-content: center !important;',
+      '  box-shadow: none !important;',
+      '  transition: background 0.14s ease !important;',
+      '}',
+      '.video-js .alabaster-gif-step-btn:hover:not(:disabled), .alabaster-gif-step-btn:hover:not(:disabled) {',
+      '  background: #262220 !important;',
+      '}',
+      '.video-js .alabaster-gif-step-btn:disabled, .alabaster-gif-step-btn:disabled {',
+      '  opacity: 0.45 !important;',
+      '  cursor: default !important;',
+      '}',
+      '.alabaster-gif-font-input-wrap {',
+      '  display: flex !important;',
+      '  align-items: center !important;',
+      '  justify-content: center !important;',
+      '  gap: 2px !important;',
+      '  border-left: 1px solid #494440 !important;',
+      '  border-right: 1px solid #494440 !important;',
+      '  height: 100% !important;',
+      '  box-sizing: border-box !important;',
+      '  padding: 0 6px !important;',
+      '}',
+      '.video-js .alabaster-gif-font-input, .alabaster-gif-font-input {',
+      '  width: 34px !important;',
+      '  height: 100% !important;',
+      '  margin: 0 !important;',
+      '  padding: 0 !important;',
+      '  border: none !important;',
+      '  background: transparent !important;',
+      '  color: #f1f1f1 !important;',
+      '  font-family: "poketube flex", "PokeTube Flex", Roboto, monospace !important;',
+      '  font-size: 13.5px !important;',
+      '  font-weight: 600 !important;',
+      '  text-align: center !important;',
+      '  outline: none !important;',
+      '  user-select: text !important;',
+      '  -moz-appearance: textfield !important;',
+      '}',
+      '.alabaster-gif-font-input::-webkit-inner-spin-button, .alabaster-gif-font-input::-webkit-outer-spin-button {',
+      '  -webkit-appearance: none !important;',
+      '  margin: 0 !important;',
+      '}',
+      '.alabaster-gif-font-unit {',
+      '  font-size: 12px !important;',
+      '  font-weight: 500 !important;',
+      '  color: #b8b2ae !important;',
+      '  pointer-events: none !important;',
       '}',
       '.alabaster-gif-status-row {',
       '  display: flex !important;',
@@ -4507,6 +4644,10 @@ window.SyncLevel = SyncLevel;
           previewCanvas.height = 270;
           previewWrap.appendChild(previewCanvas);
 
+          var previewBaseCanvas = document.createElement('canvas');
+          previewBaseCanvas.width = 480;
+          previewBaseCanvas.height = 270;
+
           var timelineSection = document.createElement('div');
           timelineSection.className = 'alabaster-gif-timeline-section';
 
@@ -4635,6 +4776,108 @@ window.SyncLevel = SyncLevel;
           qualityGroup.appendChild(qualityLabel);
           qualityGroup.appendChild(segmentedWrap);
 
+          var subtitlesSection = document.createElement('div');
+          subtitlesSection.className = 'alabaster-gif-sub-section';
+
+          var subTrackField = document.createElement('div');
+          subTrackField.className = 'alabaster-gif-field';
+          var subTrackLabel = document.createElement('label');
+          subTrackLabel.className = 'alabaster-gif-field-label';
+          subTrackLabel.textContent = 'Subtitles';
+
+          var subSelectWrap = document.createElement('div');
+          subSelectWrap.className = 'alabaster-gif-select-wrap';
+          var subTrackSelect = document.createElement('select');
+          subTrackSelect.className = 'alabaster-gif-select';
+          subTrackSelect.setAttribute('aria-label', 'GIF subtitles');
+          var subSelectChevron = document.createElement('span');
+          subSelectChevron.className = 'alabaster-gif-select-chevron';
+          subSelectChevron.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+          subSelectWrap.appendChild(subTrackSelect);
+          subSelectWrap.appendChild(subSelectChevron);
+          subTrackField.appendChild(subTrackLabel);
+          subTrackField.appendChild(subSelectWrap);
+
+          var subOptsRow = document.createElement('div');
+          subOptsRow.className = 'alabaster-gif-sub-opts-row';
+
+          var subBgField = document.createElement('div');
+          subBgField.className = 'alabaster-gif-field';
+          var subBgLabel = document.createElement('span');
+          subBgLabel.className = 'alabaster-gif-field-label';
+          subBgLabel.textContent = 'Caption background';
+          var subBgSeg = document.createElement('div');
+          subBgSeg.className = 'alabaster-gif-segmented';
+          subBgSeg.setAttribute('role', 'radiogroup');
+          subBgSeg.setAttribute('aria-label', 'Caption background');
+
+          var subBgOnBtn = document.createElement('button');
+          subBgOnBtn.type = 'button';
+          subBgOnBtn.className = 'alabaster-gif-seg-btn is-selected';
+          subBgOnBtn.setAttribute('role', 'radio');
+          subBgOnBtn.setAttribute('aria-checked', 'true');
+          subBgOnBtn.innerHTML = '<span class="alabaster-gif-seg-check"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></span><span>On</span>';
+
+          var subBgOffBtn = document.createElement('button');
+          subBgOffBtn.type = 'button';
+          subBgOffBtn.className = 'alabaster-gif-seg-btn';
+          subBgOffBtn.setAttribute('role', 'radio');
+          subBgOffBtn.setAttribute('aria-checked', 'false');
+          subBgOffBtn.innerHTML = '<span class="alabaster-gif-seg-check"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></span><span>Off</span>';
+
+          subBgSeg.appendChild(subBgOnBtn);
+          subBgSeg.appendChild(subBgOffBtn);
+          subBgField.appendChild(subBgLabel);
+          subBgField.appendChild(subBgSeg);
+
+          var subFontField = document.createElement('div');
+          subFontField.className = 'alabaster-gif-field';
+          var subFontLabel = document.createElement('label');
+          subFontLabel.className = 'alabaster-gif-field-label';
+          subFontLabel.textContent = 'Font size';
+
+          var subFontStepper = document.createElement('div');
+          subFontStepper.className = 'alabaster-gif-font-stepper';
+
+          var subFontMinusBtn = document.createElement('button');
+          subFontMinusBtn.type = 'button';
+          subFontMinusBtn.className = 'alabaster-gif-step-btn';
+          subFontMinusBtn.setAttribute('aria-label', 'Decrease font size');
+          subFontMinusBtn.textContent = '-';
+
+          var subFontInputWrap = document.createElement('div');
+          subFontInputWrap.className = 'alabaster-gif-font-input-wrap';
+          var subFontInput = document.createElement('input');
+          subFontInput.type = 'number';
+          subFontInput.className = 'alabaster-gif-font-input';
+          subFontInput.min = '10';
+          subFontInput.max = '48';
+          subFontInput.step = '1';
+          subFontInput.value = '20';
+          subFontInput.setAttribute('aria-label', 'Subtitle font size');
+          var subFontUnit = document.createElement('span');
+          subFontUnit.className = 'alabaster-gif-font-unit';
+          subFontUnit.textContent = 'px';
+          subFontInputWrap.appendChild(subFontInput);
+          subFontInputWrap.appendChild(subFontUnit);
+
+          var subFontPlusBtn = document.createElement('button');
+          subFontPlusBtn.type = 'button';
+          subFontPlusBtn.className = 'alabaster-gif-step-btn';
+          subFontPlusBtn.setAttribute('aria-label', 'Increase font size');
+          subFontPlusBtn.textContent = '+';
+
+          subFontStepper.appendChild(subFontMinusBtn);
+          subFontStepper.appendChild(subFontInputWrap);
+          subFontStepper.appendChild(subFontPlusBtn);
+          subFontField.appendChild(subFontLabel);
+          subFontField.appendChild(subFontStepper);
+
+          subOptsRow.appendChild(subBgField);
+          subOptsRow.appendChild(subFontField);
+          subtitlesSection.appendChild(subTrackField);
+          subtitlesSection.appendChild(subOptsRow);
+
           var statusRow = document.createElement('div');
           statusRow.className = 'alabaster-gif-status-row';
 
@@ -4685,6 +4928,7 @@ window.SyncLevel = SyncLevel;
           dialog.appendChild(timelineSection);
           dialog.appendChild(inputsRow);
           dialog.appendChild(qualityGroup);
+          dialog.appendChild(subtitlesSection);
           dialog.appendChild(statusRow);
           dialog.appendChild(actionsRow);
           gifMakerBackdrop.appendChild(dialog);
@@ -4711,8 +4955,359 @@ window.SyncLevel = SyncLevel;
             offVideo: null,
             usingMainFallback: false,
             savedMainTime: 0,
-            wasMainPlaying: false
+            wasMainPlaying: false,
+            lastPreviewTime: 0,
+            subTracks: [],
+            subTrackIndex: -1,
+            subCues: [],
+            subShowBg: true,
+            subFontSize: 20,
+            subLoadToken: 0,
+            subLoadPromise: null,
+            tempHiddenTracks: []
           };
+
+          function cleanCueText(rawText) {
+            if (!rawText) return '';
+            var stripped = String(rawText)
+              .replace(/<\d{1,2}:\d{2}(?::\d{2})?[.,]\d{3}>/g, '')
+              .replace(/<\/?[a-zA-Z][^>]*>/g, '');
+            var tmp = document.createElement('textarea');
+            tmp.innerHTML = stripped;
+            return tmp.value
+              .replace(/\r\n/g, '\n')
+              .replace(/\r/g, '\n')
+              .split('\n')
+              .map(function(line) { return line.replace(/\s+/g, ' ').trim(); })
+              .filter(function(line) { return line.length > 0; })
+              .join('\n');
+          }
+
+          function parseVttTimestamp(raw) {
+            var parts = String(raw || '').trim().replace(',', '.').split(':');
+            if (parts.length === 2) {
+              return (parseFloat(parts[0]) || 0) * 60 + (parseFloat(parts[1]) || 0);
+            }
+            if (parts.length === 3) {
+              return (parseFloat(parts[0]) || 0) * 3600 + (parseFloat(parts[1]) || 0) * 60 + (parseFloat(parts[2]) || 0);
+            }
+            return NaN;
+          }
+
+          function parseVttTextToCues(vttText) {
+            var cues = [];
+            if (!vttText) return cues;
+            var blocks = String(vttText).replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').split(/\n{2,}/);
+            for (var i = 0; i < blocks.length; i++) {
+              var lines = blocks[i].split('\n');
+              var timeIdx = -1;
+              for (var j = 0; j < lines.length; j++) {
+                if (lines[j].indexOf('-->') !== -1) {
+                  timeIdx = j;
+                  break;
+                }
+              }
+              if (timeIdx === -1) continue;
+              var arrowParts = lines[timeIdx].split('-->');
+              if (arrowParts.length < 2) continue;
+              var startSec = parseVttTimestamp(arrowParts[0].trim());
+              var endToken = arrowParts[1].trim().split(/\s+/)[0];
+              var endSec = parseVttTimestamp(endToken);
+              if (isNaN(startSec) || isNaN(endSec) || endSec <= startSec) continue;
+              var cleaned = cleanCueText(lines.slice(timeIdx + 1).join('\n'));
+              if (cleaned) {
+                cues.push({ start: startSec, end: endSec, text: cleaned });
+              }
+            }
+            return cues;
+          }
+
+          function extractCuesFromTrackObject(track) {
+            if (!track || !track.cues || !track.cues.length) return [];
+            var out = [];
+            for (var i = 0; i < track.cues.length; i++) {
+              var c = track.cues[i];
+              if (!c) continue;
+              var txt = cleanCueText(c.text);
+              if (txt && typeof c.startTime === 'number' && typeof c.endTime === 'number') {
+                out.push({ start: c.startTime, end: c.endTime, text: txt });
+              }
+            }
+            return out;
+          }
+
+          function findTrackSrcUrl(track) {
+            if (!track) return '';
+            if (typeof track.src === 'string' && track.src.trim()) return track.src.trim();
+            var vNode = getVideoElementNode();
+            if (vNode) {
+              var domTracks = vNode.querySelectorAll('track');
+              for (var i = 0; i < domTracks.length; i++) {
+                var dt = domTracks[i];
+                if (dt.track === track) {
+                  return (dt.src || dt.getAttribute('src') || '').trim();
+                }
+              }
+              for (var j = 0; j < domTracks.length; j++) {
+                var dt2 = domTracks[j];
+                var sameLabel = String(dt2.label || dt2.getAttribute('label') || '').trim() === String(track.label || '').trim();
+                var sameLang = String(dt2.srclang || dt2.getAttribute('srclang') || '').trim() === String(track.language || '').trim();
+                if (sameLabel && sameLang) {
+                  return (dt2.src || dt2.getAttribute('src') || '').trim();
+                }
+              }
+            }
+            if (typeof player.remoteTextTrackEls === 'function') {
+              try {
+                var rEls = player.remoteTextTrackEls();
+                if (rEls && rEls.length) {
+                  for (var k = 0; k < rEls.length; k++) {
+                    var el = rEls[k];
+                    if (el && el.track === track && el.src) return String(el.src).trim();
+                  }
+                }
+              } catch (_) {}
+            }
+            return '';
+          }
+
+          function loadCuesForTrack(track) {
+            if (!track) return Promise.resolve([]);
+            var immediate = extractCuesFromTrackObject(track);
+            if (immediate.length > 0) return Promise.resolve(immediate);
+
+            if (track.mode === 'disabled') {
+              if (gState.tempHiddenTracks.indexOf(track) === -1) {
+                gState.tempHiddenTracks.push(track);
+              }
+              try { track.mode = 'hidden'; } catch (_) {}
+              var afterMode = extractCuesFromTrackObject(track);
+              if (afterMode.length > 0) return Promise.resolve(afterMode);
+            }
+
+            var srcUrl = findTrackSrcUrl(track);
+            return new Promise(function(resolve) {
+              var done = false;
+              var pollTimer = 0;
+              var startedAt = compat.now();
+              var fetchDone = !srcUrl || typeof window.fetch !== 'function';
+
+              var finish = function(result) {
+                if (done) return;
+                done = true;
+                if (pollTimer) clearTimeout(pollTimer);
+                resolve(result || []);
+              };
+
+              var pollTrack = function() {
+                pollTimer = 0;
+                if (done) return;
+                var loaded = extractCuesFromTrackObject(track);
+                if (loaded.length > 0) {
+                  finish(loaded);
+                  return;
+                }
+                if (compat.now() - startedAt >= 1800) {
+                  if (fetchDone) finish([]);
+                  return;
+                }
+                pollTimer = setTimeout(pollTrack, 80);
+              };
+
+              pollTimer = setTimeout(pollTrack, 60);
+
+              if (!fetchDone) {
+                window.fetch(srcUrl).then(function(resp) {
+                  if (!resp || !resp.ok) return '';
+                  return resp.text();
+                }).then(function(vttText) {
+                  fetchDone = true;
+                  var parsed = parseVttTextToCues(vttText);
+                  if (parsed.length > 0) {
+                    finish(parsed);
+                  } else if (compat.now() - startedAt >= 1800) {
+                    finish(extractCuesFromTrackObject(track));
+                  }
+                }).catch(function() {
+                  fetchDone = true;
+                  if (compat.now() - startedAt >= 1800) {
+                    finish(extractCuesFromTrackObject(track));
+                  }
+                });
+              }
+            });
+          }
+
+          function getSubtitleTextAtTime(cues, timeSec) {
+            if (!cues || !cues.length) return '';
+            var lines = [];
+            for (var i = 0; i < cues.length; i++) {
+              var c = cues[i];
+              if (timeSec >= c.start && timeSec < c.end) {
+                var parts = c.text.split('\n');
+                for (var j = 0; j < parts.length; j++) {
+                  var ln = parts[j].trim();
+                  if (ln && lines.indexOf(ln) === -1) {
+                    lines.push(ln);
+                  }
+                }
+              }
+            }
+            return lines.join('\n');
+          }
+
+          function wrapSubtitleLines(ctx, text, maxWidth) {
+            var paragraphs = String(text || '').split('\n');
+            var wrapped = [];
+            for (var p = 0; p < paragraphs.length; p++) {
+              var para = paragraphs[p].trim();
+              if (!para) continue;
+              var words = para.split(/\s+/);
+              var current = '';
+              for (var w = 0; w < words.length; w++) {
+                var word = words[w];
+                var test = current ? (current + ' ' + word) : word;
+                if (ctx.measureText(test).width <= maxWidth) {
+                  current = test;
+                } else {
+                  if (current) wrapped.push(current);
+                  if (ctx.measureText(word).width <= maxWidth) {
+                    current = word;
+                  } else {
+                    var chunk = '';
+                    for (var c = 0; c < word.length; c++) {
+                      var nextChunk = chunk + word.charAt(c);
+                      if (chunk && ctx.measureText(nextChunk).width > maxWidth) {
+                        wrapped.push(chunk);
+                        chunk = word.charAt(c);
+                      } else {
+                        chunk = nextChunk;
+                      }
+                    }
+                    current = chunk;
+                  }
+                }
+              }
+              if (current) wrapped.push(current);
+            }
+            return wrapped;
+          }
+
+          function drawSubtitleOverlayOnCanvas(ctx, canvasW, canvasH, timeSec) {
+            if (gState.subTrackIndex < 0 || !gState.subCues || !gState.subCues.length) return;
+            var text = getSubtitleTextAtTime(gState.subCues, timeSec);
+            if (!text) return;
+
+            var baseFont = Math.max(10, Math.min(48, Number(gState.subFontSize) || 20));
+            var scaledFont = Math.max(8, Math.round(baseFont * (canvasW / 480)));
+            var lineHeight = Math.round(scaledFont * 1.28);
+            var padX = Math.max(4, Math.round(scaledFont * 0.4));
+            var padY = Math.max(2, Math.round(scaledFont * 0.2));
+            var maxTextW = Math.max(40, canvasW - Math.max(16, padX * 2 + Math.round(canvasW * 0.08)));
+
+            ctx.save();
+            ctx.font = '600 ' + scaledFont + 'px "poketube flex", "PokeTube Flex", Roboto, Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            var lines = wrapSubtitleLines(ctx, text, maxTextW);
+            if (!lines.length) {
+              ctx.restore();
+              return;
+            }
+
+            var totalH = lines.length * lineHeight;
+            var bottomMargin = Math.max(8, Math.round(canvasH * 0.055));
+            var startY = Math.max(padY + 4, canvasH - bottomMargin - totalH);
+            var centerX = canvasW * 0.5;
+
+            if (gState.subShowBg) {
+              ctx.fillStyle = '#000000';
+              for (var i = 0; i < lines.length; i++) {
+                var tw = ctx.measureText(lines[i]).width;
+                var bw = Math.min(canvasW - 8, Math.ceil(tw + padX * 2));
+                var bx = Math.floor(centerX - bw * 0.5);
+                var by = Math.floor(startY + i * lineHeight - padY * 0.5);
+                var bh = Math.ceil(lineHeight + padY);
+                ctx.fillRect(bx, by, bw, bh);
+              }
+            }
+
+            for (var j = 0; j < lines.length; j++) {
+              var cy = startY + j * lineHeight + lineHeight * 0.5;
+              if (!gState.subShowBg) {
+                ctx.lineJoin = 'round';
+                ctx.miterLimit = 2;
+                ctx.lineWidth = Math.max(2, Math.round(scaledFont * 0.14));
+                ctx.strokeStyle = '#000000';
+                ctx.strokeText(lines[j], centerX, cy);
+              }
+              ctx.fillStyle = '#ffffff';
+              ctx.fillText(lines[j], centerX, cy);
+            }
+
+            ctx.restore();
+          }
+
+          function renderPreviewComposite() {
+            var cw = previewBaseCanvas.width;
+            var ch = previewBaseCanvas.height;
+            if (!cw || !ch) return;
+            if (previewCanvas.width !== cw || previewCanvas.height !== ch) {
+              previewCanvas.width = cw;
+              previewCanvas.height = ch;
+            }
+            var ctx = previewCanvas.getContext('2d');
+            ctx.clearRect(0, 0, cw, ch);
+            ctx.drawImage(previewBaseCanvas, 0, 0, cw, ch);
+            if (gState.subTrackIndex >= 0 && gState.subCues.length > 0) {
+              drawSubtitleOverlayOnCanvas(ctx, cw, ch, gState.lastPreviewTime);
+            }
+          }
+
+          function setGifSubtitleBg(showBg) {
+            if (gState.encoding) return;
+            gState.subShowBg = Boolean(showBg);
+            subBgOnBtn.classList.toggle('is-selected', gState.subShowBg);
+            subBgOnBtn.setAttribute('aria-checked', gState.subShowBg ? 'true' : 'false');
+            subBgOffBtn.classList.toggle('is-selected', !gState.subShowBg);
+            subBgOffBtn.setAttribute('aria-checked', !gState.subShowBg ? 'true' : 'false');
+            renderPreviewComposite();
+          }
+
+          function setGifSubtitleFontSize(sizeVal) {
+            if (gState.encoding) return;
+            var num = Math.round(Number(sizeVal));
+            if (isNaN(num) || !isFinite(num)) num = gState.subFontSize || 20;
+            var clamped = Math.max(10, Math.min(48, num));
+            gState.subFontSize = clamped;
+            subFontInput.value = String(clamped);
+            renderPreviewComposite();
+          }
+
+          function selectGifSubtitleTrackIndex(idxVal) {
+            var token = ++gState.subLoadToken;
+            var parsed = idxVal === '' || idxVal === null || idxVal === undefined ? -1 : parseInt(idxVal, 10);
+            if (isNaN(parsed) || parsed < 0 || parsed >= gState.subTracks.length) {
+              gState.subTrackIndex = -1;
+              gState.subCues = [];
+              gState.subLoadPromise = null;
+              subOptsRow.style.display = 'none';
+              renderPreviewComposite();
+              return;
+            }
+            gState.subTrackIndex = parsed;
+            gState.subCues = [];
+            subOptsRow.style.display = 'grid';
+            var chosenTrack = gState.subTracks[parsed];
+            var pLoad = loadCuesForTrack(chosenTrack).then(function(cues) {
+              if (token !== gState.subLoadToken || !gState.open) return [];
+              gState.subCues = cues || [];
+              renderPreviewComposite();
+              return gState.subCues;
+            });
+            gState.subLoadPromise = pLoad;
+          }
 
           function setGifQualityMode(mode) {
             if (gState.encoding) return;
@@ -4736,6 +5331,59 @@ window.SyncLevel = SyncLevel;
             setGifQualityMode('low');
           });
 
+          subTrackSelect.addEventListener('change', function(e) {
+            e.stopPropagation();
+            if (gState.encoding) return;
+            selectGifSubtitleTrackIndex(subTrackSelect.value);
+          });
+
+          subTrackSelect.addEventListener('keydown', function(e) {
+            e.stopPropagation();
+          });
+
+          subBgOnBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            setGifSubtitleBg(true);
+          });
+
+          subBgOffBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            setGifSubtitleBg(false);
+          });
+
+          subFontMinusBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            setGifSubtitleFontSize((gState.subFontSize || 20) - 2);
+          });
+
+          subFontPlusBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            setGifSubtitleFontSize((gState.subFontSize || 20) + 2);
+          });
+
+          subFontInput.addEventListener('change', function(e) {
+            e.stopPropagation();
+            setGifSubtitleFontSize(subFontInput.value);
+          });
+
+          subFontInput.addEventListener('input', function(e) {
+            e.stopPropagation();
+            var rawVal = parseInt(subFontInput.value, 10);
+            if (!isNaN(rawVal) && rawVal >= 10 && rawVal <= 48) {
+              gState.subFontSize = rawVal;
+              renderPreviewComposite();
+            }
+          });
+
+          subFontInput.addEventListener('keydown', function(e) {
+            e.stopPropagation();
+            if (e.key === 'Enter') setGifSubtitleFontSize(subFontInput.value);
+          });
+
           function getEffectiveDuration() {
             var vNode = getVideoElementNode();
             var d = Number(player.duration ? player.duration() : (vNode ? vNode.duration : 0));
@@ -4746,20 +5394,26 @@ window.SyncLevel = SyncLevel;
             return 0;
           }
 
-          function drawVideoToPreview(srcVid) {
+          function drawVideoToPreview(srcVid, frameTimeSec) {
             if (!srcVid || !srcVid.videoWidth || !srcVid.videoHeight) return;
             var maxW = 480;
             var aspect = srcVid.videoWidth / srcVid.videoHeight;
             var cw = maxW;
             var ch = Math.max(2, Math.round(cw / aspect));
-            if (previewCanvas.width !== cw || previewCanvas.height !== ch) {
-              previewCanvas.width = cw;
-              previewCanvas.height = ch;
+            if (previewBaseCanvas.width !== cw || previewBaseCanvas.height !== ch) {
+              previewBaseCanvas.width = cw;
+              previewBaseCanvas.height = ch;
             }
-            var ctx = previewCanvas.getContext('2d');
+            var bCtx = previewBaseCanvas.getContext('2d');
             try {
-              ctx.drawImage(srcVid, 0, 0, cw, ch);
+              bCtx.drawImage(srcVid, 0, 0, cw, ch);
             } catch (_) {}
+            if (typeof frameTimeSec === 'number' && isFinite(frameTimeSec)) {
+              gState.lastPreviewTime = frameTimeSec;
+            } else if (typeof srcVid.currentTime === 'number' && isFinite(srcVid.currentTime)) {
+              gState.lastPreviewTime = srcVid.currentTime;
+            }
+            renderPreviewComposite();
           }
 
           function seekHelperVideo(vid, timeSec, timeoutMs) {
@@ -4986,7 +5640,7 @@ window.SyncLevel = SyncLevel;
                 if (!vid || !gState.open || gState.encoding || gState.previewing || jobSnapshot !== gState.jobId) return;
                 seekHelperVideo(vid, timeSec, 1500).then(function() {
                   if (!gState.open || gState.encoding || gState.previewing || jobSnapshot !== gState.jobId) return;
-                  drawVideoToPreview(vid);
+                  drawVideoToPreview(vid, timeSec);
                 });
               });
             }, 45);
@@ -5015,7 +5669,7 @@ window.SyncLevel = SyncLevel;
                   statusTextEl.textContent = 'Ready';
                   seekHelperVideo(vid, gState.selStart, 1200).then(function() {
                     if (gState.open && myStripId === gState.stripJobId && !gState.previewing && !gState.encoding) {
-                      drawVideoToPreview(vid);
+                      drawVideoToPreview(vid, gState.selStart);
                     }
                   });
                   return;
@@ -5117,7 +5771,7 @@ window.SyncLevel = SyncLevel;
                     try { vid.currentTime = gState.selStart; } catch (_) {}
                     cur = gState.selStart;
                   }
-                  drawVideoToPreview(vid);
+                  drawVideoToPreview(vid, cur);
                   var span = Math.max(0.1, gState.winEnd - gState.winStart);
                   var pct = Math.max(0, Math.min(100, ((cur - gState.winStart) / span) * 100));
                   playheadEl.style.left = pct + '%';
@@ -5140,6 +5794,12 @@ window.SyncLevel = SyncLevel;
             endInput.disabled = true;
             highQualBtn.disabled = true;
             lowQualBtn.disabled = true;
+            subTrackSelect.disabled = true;
+            subBgOnBtn.disabled = true;
+            subBgOffBtn.disabled = true;
+            subFontMinusBtn.disabled = true;
+            subFontPlusBtn.disabled = true;
+            subFontInput.disabled = true;
             prevWinBtn.disabled = true;
             nextWinBtn.disabled = true;
             progressTrack.style.display = 'block';
@@ -5155,6 +5815,12 @@ window.SyncLevel = SyncLevel;
               endInput.disabled = false;
               highQualBtn.disabled = false;
               lowQualBtn.disabled = false;
+              subTrackSelect.disabled = false;
+              subBgOnBtn.disabled = false;
+              subBgOffBtn.disabled = false;
+              subFontMinusBtn.disabled = false;
+              subFontPlusBtn.disabled = false;
+              subFontInput.disabled = false;
               updateSelectionUI(false);
               statusTextEl.textContent = msg || 'Ready';
               setTimeout(function() {
@@ -5165,7 +5831,12 @@ window.SyncLevel = SyncLevel;
               }, 1200);
             };
 
-            ensureOffscreenVideo().then(function(vid) {
+            var subReadyPromise = (gState.subTrackIndex >= 0 && gState.subLoadPromise)
+              ? gState.subLoadPromise
+              : Promise.resolve(gState.subCues);
+
+            Promise.all([ensureOffscreenVideo(), subReadyPromise]).then(function(results) {
+              var vid = results[0];
               if (!vid || !gState.open || myJob !== gState.jobId) {
                 return finishUI('Cancelled');
               }
@@ -5240,7 +5911,10 @@ window.SyncLevel = SyncLevel;
                   }
                   try {
                     capCtx.drawImage(vid, 0, 0, outW, outH);
-                    drawVideoToPreview(vid);
+                    if (gState.subTrackIndex >= 0 && gState.subCues.length > 0) {
+                      drawSubtitleOverlayOnCanvas(capCtx, outW, outH, t);
+                    }
+                    drawVideoToPreview(vid, t);
                     var imgData = capCtx.getImageData(0, 0, outW, outH);
                     enc.addFrame(imgData.data, delayCs, encodeOpts);
                   } catch (_) {
@@ -5415,11 +6089,47 @@ window.SyncLevel = SyncLevel;
             endInput.disabled = false;
             highQualBtn.disabled = false;
             lowQualBtn.disabled = false;
+            subTrackSelect.disabled = false;
+            subBgOnBtn.disabled = false;
+            subBgOffBtn.disabled = false;
+            subFontMinusBtn.disabled = false;
+            subFontPlusBtn.disabled = false;
+            subFontInput.disabled = false;
             setGifQualityMode(gState.quality);
+            setGifSubtitleBg(gState.subShowBg);
+            setGifSubtitleFontSize(gState.subFontSize);
+
+            gState.subTracks = getCaptionTracks();
+            gState.subTrackIndex = -1;
+            gState.subCues = [];
+            gState.subLoadPromise = null;
+            gState.subLoadToken++;
+            subTrackSelect.innerHTML = '';
+
+            if (gState.subTracks.length > 0) {
+              var noneOpt = document.createElement('option');
+              noneOpt.value = '';
+              noneOpt.textContent = 'None';
+              subTrackSelect.appendChild(noneOpt);
+              for (var stIdx = 0; stIdx < gState.subTracks.length; stIdx++) {
+                var tr = gState.subTracks[stIdx];
+                var opt = document.createElement('option');
+                opt.value = String(stIdx);
+                opt.textContent = tr.label || tr.language || ('Subtitle ' + (stIdx + 1));
+                subTrackSelect.appendChild(opt);
+              }
+              subTrackSelect.value = '';
+              subOptsRow.style.display = 'none';
+              subtitlesSection.style.display = 'flex';
+            } else {
+              subOptsRow.style.display = 'none';
+              subtitlesSection.style.display = 'none';
+            }
+
             progressTrack.style.display = 'none';
             progressFill.style.width = '0%';
             updateSelectionUI(false);
-            drawVideoToPreview(vNode);
+            drawVideoToPreview(vNode, gState.savedMainTime);
 
             gifMakerBackdrop.style.display = 'flex';
             compat.raf(function() {
@@ -5435,12 +6145,22 @@ window.SyncLevel = SyncLevel;
             window.Alabaster._gifMakerOpen = false;
             gState.jobId++;
             gState.stripJobId++;
+            gState.subLoadToken++;
+            gState.subLoadPromise = null;
             gState.encoding = false;
             gState.dragMode = '';
             if (gState.previewSeekTimer) {
               clearTimeout(gState.previewSeekTimer);
               gState.previewSeekTimer = 0;
             }
+            for (var thIdx = 0; thIdx < gState.tempHiddenTracks.length; thIdx++) {
+              try {
+                if (gState.tempHiddenTracks[thIdx] && gState.tempHiddenTracks[thIdx].mode === 'hidden') {
+                  gState.tempHiddenTracks[thIdx].mode = 'disabled';
+                }
+              } catch (_) {}
+            }
+            gState.tempHiddenTracks = [];
             stopPreviewPlayback();
             destroyOffscreenVideo();
             if (gState.usingMainFallback) {
@@ -6246,6 +6966,7 @@ window.SyncLevel = SyncLevel;
         var btnWrap = document.createElement('div');
         btnWrap.style.cssText = 'display:flex;flex-direction:row;align-items:center;margin-top:8px;gap:12px;';
 
+        var refreshOnRetryClick = false;
         var retryBtn = document.createElement('button');
         retryBtn.type = 'button';
         retryBtn.style.cssText = 'padding:8px 18px;border-radius:999px;border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.1);color:#fff;font-size:13px;font-weight:600;cursor:pointer;transition:background 0.15s ease;';
@@ -6256,6 +6977,10 @@ window.SyncLevel = SyncLevel;
           evt.stopPropagation();
           if (window.Alabaster.testErrorActive) {
             window.Alabaster.DisableTestUI();
+            return;
+          }
+          if (refreshOnRetryClick) {
+            window.location.reload();
             return;
           }
           errOverlay.style.display = 'none';
@@ -6301,13 +7026,17 @@ window.SyncLevel = SyncLevel;
         errOverlay.appendChild(layoutWrap);
         rootEl.appendChild(errOverlay);
 
-        window.Alabaster._showErrorUI = function(subMsg, headlineMsg) {
+        window.Alabaster._showErrorUI = function(subMsg, headlineMsg, isTest, forceRefresh) {
+          refreshOnRetryClick = Boolean(forceRefresh);
+          retryBtn.textContent = refreshOnRetryClick ? 'Refresh page' : 'Retry';
           errHeadline.textContent = headlineMsg || 'Video unavailable';
           errSubText.textContent = subMsg || 'An error occurred while loading the media streams. Please try again later.';
           errOverlay.style.display = 'flex';
         };
 
         window.Alabaster._hideErrorUI = function() {
+          refreshOnRetryClick = false;
+          retryBtn.textContent = 'Retry';
           errOverlay.style.display = 'none';
         };
       }
@@ -7167,6 +7896,67 @@ window.SyncLevel = SyncLevel;
       compat.lockPitch(videoEl);
       compat.lockPitch(audioEl);
 
+      var MAX_AUDIO_RETRIES = 5;
+      var audioSourceSnapshot = {
+        hasDirectSrc: false,
+        directSrc: '',
+        sources: [],
+        fallbackSrc: ''
+      };
+
+      function captureCurrentAudioSources() {
+        var directAttr = audioEl.getAttribute('src');
+        var sourceNodes = audioEl.querySelectorAll('source');
+        var list = [];
+        for (var i = 0; i < sourceNodes.length; i++) {
+          var sAttr = sourceNodes[i].getAttribute('src') || sourceNodes[i].src || '';
+          if (sAttr && sAttr.trim()) {
+            list.push({
+              src: sAttr.trim(),
+              type: sourceNodes[i].getAttribute('type') || ''
+            });
+          }
+        }
+        if (directAttr && directAttr.trim()) {
+          audioSourceSnapshot.hasDirectSrc = true;
+          audioSourceSnapshot.directSrc = directAttr.trim();
+          audioSourceSnapshot.fallbackSrc = directAttr.trim();
+        } else if (list.length > 0) {
+          audioSourceSnapshot.hasDirectSrc = false;
+          audioSourceSnapshot.directSrc = '';
+          audioSourceSnapshot.sources = list;
+          audioSourceSnapshot.fallbackSrc = list[0].src;
+        } else if (audioEl.currentSrc && audioEl.currentSrc.trim() && !audioSourceSnapshot.fallbackSrc) {
+          audioSourceSnapshot.hasDirectSrc = true;
+          audioSourceSnapshot.directSrc = audioEl.currentSrc.trim();
+          audioSourceSnapshot.fallbackSrc = audioEl.currentSrc.trim();
+        }
+      }
+
+      captureCurrentAudioSources();
+
+      function restoreAudioSourcesOnly() {
+        var existing = audioEl.querySelectorAll('source');
+        for (var i = 0; i < existing.length; i++) {
+          if (existing[i].parentNode) existing[i].parentNode.removeChild(existing[i]);
+        }
+        if (audioSourceSnapshot.hasDirectSrc && audioSourceSnapshot.directSrc) {
+          audioEl.setAttribute('src', audioSourceSnapshot.directSrc);
+        } else if (audioSourceSnapshot.sources.length > 0) {
+          audioEl.removeAttribute('src');
+          for (var j = 0; j < audioSourceSnapshot.sources.length; j++) {
+            var sEl = document.createElement('source');
+            sEl.setAttribute('src', audioSourceSnapshot.sources[j].src);
+            if (audioSourceSnapshot.sources[j].type) {
+              sEl.setAttribute('type', audioSourceSnapshot.sources[j].type);
+            }
+            audioEl.appendChild(sEl);
+          }
+        } else if (audioSourceSnapshot.fallbackSrc) {
+          audioEl.setAttribute('src', audioSourceSnapshot.fallbackSrc);
+        }
+      }
+
       var nativeVideoPlay = HTMLMediaElement.prototype.play.bind(videoEl);
       var nativeVideoPause = HTMLMediaElement.prototype.pause.bind(videoEl);
       var nativeAudioPlay = HTMLMediaElement.prototype.play.bind(audioEl);
@@ -7253,6 +8043,18 @@ window.SyncLevel = SyncLevel;
         launchPollTimer: 0,
         launchRvfId: 0,
         audioWakeRetryCount: 0,
+        audioRetryCount: 0,
+        audioRetrying: false,
+        audioRetryTimer: 0,
+        audioRetryMetaHandler: null,
+        audioFailSince: 0,
+        audioSilentStallSince: 0,
+        audioLastBufTotal: 0,
+        audioLastBufEnd: 0,
+        audioLastReadyState: 0,
+        audioLastAdvancedTime: -1,
+        audioHealthyAdvanceTicks: 0,
+        audioNeedsReloadOnPlay: false,
         holdingVideoForSync: false,
         holdTimer: 0,
         wakeSyncing: false,
@@ -7304,6 +8106,298 @@ window.SyncLevel = SyncLevel;
         reprimeMetaHandler: null,
         lastPausedAt: 0
       };
+
+      function clearAudioRetryMetaHandler() {
+        if (state.audioRetryMetaHandler) {
+          audioEl.removeEventListener('loadedmetadata', state.audioRetryMetaHandler, false);
+          state.audioRetryMetaHandler = null;
+        }
+      }
+
+      function clearAudioRetryState() {
+        if (state.audioRetryTimer) {
+          clearTimeout(state.audioRetryTimer);
+          state.audioRetryTimer = 0;
+        }
+        clearAudioRetryMetaHandler();
+        state.audioRetrying = false;
+      }
+
+      function getAudioBufferMetrics(targetTime) {
+        var ranges = audioEl.buffered;
+        var count = ranges ? ranges.length : 0;
+        var total = 0;
+        var activeEnd = 0;
+        for (var i = 0; i < count; i++) {
+          var s = ranges.start(i);
+          var e = ranges.end(i);
+          total += Math.max(0, e - s);
+          if (targetTime >= s - 0.5 && targetTime <= e + 0.5) {
+            activeEnd = Math.max(activeEnd, e);
+          }
+        }
+        return {
+          total: total,
+          activeEnd: activeEnd,
+          ahead: bufferMonitor.aheadAt(audioEl, targetTime),
+          readyState: audioEl.readyState
+        };
+      }
+
+      function resetAudioHealthBaseline(targetTime) {
+        var t = targetTime !== undefined ? targetTime : (state.userSeeking ? state.seekTarget : (nativeGetATime() || state.savedMasterTime || 0));
+        var m = getAudioBufferMetrics(t);
+        state.audioFailSince = 0;
+        state.audioSilentStallSince = 0;
+        state.audioLastBufTotal = m.total;
+        state.audioLastBufEnd = m.activeEnd;
+        state.audioLastReadyState = m.readyState;
+        state.audioLastAdvancedTime = nativeGetATime() || 0;
+      }
+
+      function showAudioExhaustedErrorOverlay() {
+        clearAudioRetryState();
+        cancelVideoHold();
+        clearLaunchPoll();
+        cancelWakeSync();
+        clearWakeFrameCheck();
+        clearRateTransitionTimer();
+        clearAudioFadeTimer();
+        state.wantPlaying = false;
+        state.userSeeking = false;
+        state.initialAutoplayAttempt = false;
+        state.pendingBackgroundAutoplay = false;
+        state.audioFailSince = 0;
+        state.audioSilentStallSince = 0;
+        freezeBothStreams();
+        setBufferSpinner(false);
+        clearWatchdog();
+        clearPendingWait();
+        shield.deactivate();
+        markPlayerPausedUI(player);
+        SyncLevel.error = 'AUDIO_BUFFER_FAILED';
+        SyncLevel.status = 'audio-failed';
+        if (typeof window.Alabaster._showErrorUI === 'function') {
+          window.Alabaster._showErrorUI(
+            'Audio failed to buffer after 5 retries. Please refresh the page to fix this issue.',
+            'Audio unavailable',
+            false,
+            true
+          );
+        }
+      }
+
+      function triggerSilentAudioRetry() {
+        if (window.Alabaster.testErrorActive || state.audioRetrying || state.endedCompleted || isPlaybackCompleted()) return;
+        if (state.audioRetryCount >= MAX_AUDIO_RETRIES) {
+          showAudioExhaustedErrorOverlay();
+          return;
+        }
+        captureCurrentAudioSources();
+        if (!audioSourceSnapshot.directSrc && !audioSourceSnapshot.sources.length && !audioSourceSnapshot.fallbackSrc) {
+          showAudioExhaustedErrorOverlay();
+          return;
+        }
+        state.audioRetryCount++;
+        state.audioRetrying = true;
+        state.audioNeedsReloadOnPlay = false;
+        state.audioFailSince = 0;
+        state.audioSilentStallSince = 0;
+        state.audioHealthyAdvanceTicks = 0;
+        var attemptNum = state.audioRetryCount;
+        var resumeAt = state.userSeeking ? state.seekTarget : (getMasterAnchorTime() || state.savedMasterTime || 0);
+
+        clearAudioRetryMetaHandler();
+        if (state.audioRetryTimer) {
+          clearTimeout(state.audioRetryTimer);
+          state.audioRetryTimer = 0;
+        }
+        clearWatchdog();
+        clearPendingWait();
+        freezeBothStreams();
+        if ((state.wantPlaying || state.userSeeking) && !isEffectivelyHidden()) {
+          setBufferSpinner(true);
+        }
+
+        runInternal(function() {
+          try { nativeAudioPause(); } catch (_) {}
+          audioEl.removeAttribute('src');
+          var existingSources = audioEl.querySelectorAll('source');
+          for (var i = 0; i < existingSources.length; i++) {
+            if (existingSources[i].parentNode) existingSources[i].parentNode.removeChild(existingSources[i]);
+          }
+          try { audioEl.load(); } catch (_) {}
+        });
+
+        state.audioRetryTimer = setTimeout(function() {
+          state.audioRetryTimer = 0;
+          if (!state.audioRetrying) return;
+          runInternal(function() {
+            restoreAudioSourcesOnly();
+            audioEl.preload = 'auto';
+            try { audioEl.load(); } catch (_) {}
+          });
+          state.audioRetrying = false;
+          var targetPos = state.userSeeking ? state.seekTarget : (resumeAt || state.savedMasterTime || 0);
+          resetAudioHealthBaseline(targetPos);
+
+          if (!state.wantPlaying && !state.userSeeking) {
+            return;
+          }
+
+          var finishRetryRestore = function() {
+            clearAudioRetryMetaHandler();
+            var latestTarget = state.userSeeking ? state.seekTarget : (targetPos || state.savedMasterTime || 0);
+            if (!state.wantPlaying && !state.userSeeking) {
+              if (latestTarget > 0.05 && audioEl.readyState >= 1) {
+                setAudioTimeInternally(latestTarget);
+              }
+              return;
+            }
+            if (latestTarget > 0.05 && Math.abs(nativeGetATime() - latestTarget) > 0.08) {
+              setAudioTimeInternally(latestTarget);
+            }
+            if (state.userSeeking) {
+              state.seekStartTime = compat.now();
+              state.seekAudioRetried = false;
+              completeUserSeek();
+            } else {
+              syncPlaybackState();
+            }
+          };
+
+          if (audioEl.readyState >= 1) {
+            finishRetryRestore();
+          } else {
+            state.audioRetryMetaHandler = finishRetryRestore;
+            audioEl.addEventListener('loadedmetadata', finishRetryRestore, false);
+            armNetworkWatchdog();
+          }
+        }, 250 * attemptNum);
+      }
+
+      function checkAudioBufferHealth(now) {
+        if (window.Alabaster.testErrorActive || state.audioRetrying || state.endedCompleted || isPlaybackCompleted()) {
+          return false;
+        }
+        if (!state.wantPlaying && !state.userSeeking) {
+          state.audioFailSince = 0;
+          state.audioSilentStallSince = 0;
+          return false;
+        }
+        if (audioEl.ended || isStreamNearItsEnd(audioEl, false)) {
+          state.audioFailSince = 0;
+          state.audioSilentStallSince = 0;
+          return false;
+        }
+
+        var aCurLive = nativeGetATime() || 0;
+        var aCheckTime = state.userSeeking ? state.seekTarget : (audioEl.readyState === 0 ? (state.savedMasterTime || 0) : aCurLive);
+        var metrics = getAudioBufferMetrics(aCheckTime);
+        var aPausedNow = nativeGetAPaused();
+
+        if (!audioEl.error && !aPausedNow && !audioEl.seeking && audioEl.readyState >= 2) {
+          if (Math.abs(aCurLive - state.audioLastAdvancedTime) >= 0.015) {
+            state.audioLastAdvancedTime = aCurLive;
+            state.audioFailSince = 0;
+            state.audioSilentStallSince = 0;
+            state.audioHealthyAdvanceTicks++;
+            if (state.audioHealthyAdvanceTicks >= 8) {
+              state.audioRetryCount = 0;
+              state.audioNeedsReloadOnPlay = false;
+            }
+          } else if (state.wantPlaying && !state.userSeeking && !state.buffering && !state.launchingPlay) {
+            if (!state.audioSilentStallSince) {
+              state.audioSilentStallSince = now;
+            } else if (now - state.audioSilentStallSince >= 5500) {
+              state.audioSilentStallSince = 0;
+              triggerSilentAudioRetry();
+              return true;
+            }
+          }
+        } else {
+          state.audioSilentStallSince = 0;
+        }
+
+        var audioHasPlayableBuffer = Boolean(
+          !audioEl.error &&
+          !audioEl.seeking &&
+          (
+            (metrics.readyState >= 3 && metrics.ahead >= 0.12) ||
+            metrics.readyState >= 4 ||
+            (metrics.readyState >= 2 && metrics.ahead >= 0.25)
+          )
+        );
+
+        if (audioHasPlayableBuffer) {
+          state.audioFailSince = 0;
+          state.audioLastBufTotal = metrics.total;
+          state.audioLastBufEnd = metrics.activeEnd;
+          state.audioLastReadyState = metrics.readyState;
+          return false;
+        }
+
+        var madeProgress = Boolean(
+          metrics.total > state.audioLastBufTotal + 0.02 ||
+          metrics.activeEnd > state.audioLastBufEnd + 0.02 ||
+          (metrics.readyState >= 2 && state.audioLastReadyState < 2)
+        );
+
+        if (madeProgress) {
+          state.audioLastBufTotal = metrics.total;
+          state.audioLastBufEnd = metrics.activeEnd;
+          state.audioLastReadyState = metrics.readyState;
+          state.audioFailSince = 0;
+          return false;
+        }
+
+        if (metrics.total < state.audioLastBufTotal) {
+          state.audioLastBufTotal = metrics.total;
+          state.audioLastBufEnd = metrics.activeEnd;
+        }
+        if (metrics.readyState < state.audioLastReadyState) {
+          state.audioLastReadyState = metrics.readyState;
+        }
+
+        if (!state.audioFailSince) {
+          state.audioFailSince = now;
+          return false;
+        }
+
+        var failElapsed = now - state.audioFailSince;
+        var netState = audioEl.networkState;
+        var thresholdMs = 8000;
+
+        if (audioEl.error && audioEl.error.code !== 1) {
+          thresholdMs = 350;
+        } else if (netState === 3) {
+          thresholdMs = 1500;
+        } else if (netState === 0) {
+          thresholdMs = 3000;
+        } else if (netState === 1) {
+          thresholdMs = 3200;
+        } else if (netState === 2) {
+          var videoFlowingCleanly = Boolean(
+            !isVideoBypassed() &&
+            !isEffectivelyHidden() &&
+            videoEl.readyState >= 3 &&
+            bufferMonitor.ahead(videoEl, nativeGetVTime()) >= 1.5
+          );
+          if (state.audioRetryCount > 0 && metrics.readyState === 0 && metrics.total === 0) {
+            thresholdMs = 4500;
+          } else if (videoFlowingCleanly && metrics.readyState === 0 && metrics.total === 0) {
+            thresholdMs = 5500;
+          } else {
+            thresholdMs = 8000;
+          }
+        }
+
+        if (failElapsed >= thresholdMs) {
+          triggerSilentAudioRetry();
+          return true;
+        }
+        return false;
+      }
 
       function applyAudioOutputVolume() {
         var target = Math.max(0, Math.min(1, (videoEl.volume || 0) * state.audioFadeFactor));
@@ -7650,12 +8744,16 @@ window.SyncLevel = SyncLevel;
 
       SetAlabasterUI(player, function() {
         var resumePos = state.savedMasterTime || 0;
+        clearAudioRetryState();
         state.errorCount = 0;
+        state.audioRetryCount = 0;
+        state.audioNeedsReloadOnPlay = false;
         SyncLevel.error = null;
         if (window.Alabaster._hideErrorUI) window.Alabaster._hideErrorUI();
         state.startupShieldUntil = compat.now() + config.startupProtectionMs;
         runInternal(function() {
           videoEl.load();
+          restoreAudioSourcesOnly();
           audioEl.load();
           if (resumePos > 0.1) {
             state.internalVideoSeeking = true;
@@ -7666,6 +8764,7 @@ window.SyncLevel = SyncLevel;
             nativeSetATime(resumePos);
           }
         });
+        resetAudioHealthBaseline(resumePos);
         videoEl.play();
       });
 
@@ -8355,7 +9454,7 @@ window.SyncLevel = SyncLevel;
           setBufferSpinner(false);
           runInternal(function() {
             if (!nativeGetVPaused()) nativeVideoPause();
-            if (state.wantPlaying && nativeGetAPaused() && !state.audioStarting) {
+            if (state.wantPlaying && nativeGetAPaused() && !state.audioStarting && !state.audioRetrying) {
               prepareAudioSilentForPlay();
               var pAO = compat.safePlay(nativeAudioPlay);
               if (pAO && typeof pAO.then === 'function') {
@@ -8684,6 +9783,8 @@ window.SyncLevel = SyncLevel;
         SyncLevel.synced = (isVideoBypassed() || hiddenEffective) ? true : (dSec <= getDriftTolerance());
         if (window.Alabaster.testErrorActive) {
           SyncLevel.status = 'error-test-ui';
+        } else if (SyncLevel.error === 'AUDIO_BUFFER_FAILED') {
+          SyncLevel.status = 'audio-failed';
         } else if (state.userSeeking) {
           SyncLevel.status = 'seeking';
         } else if (state.buffering) {
@@ -8699,6 +9800,7 @@ window.SyncLevel = SyncLevel;
 
       function clearErrorOverlayOnHealthyStream() {
         if (window.Alabaster.testErrorActive) return;
+        if (SyncLevel.error === 'AUDIO_BUFFER_FAILED' && (state.audioRetrying || audioEl.readyState < 2)) return;
         if (!videoEl.error && !audioEl.error) {
           state.errorCount = 0;
           SyncLevel.error = null;
@@ -8754,14 +9856,38 @@ window.SyncLevel = SyncLevel;
       }
 
       listen(videoEl, 'error', function() { handleMediaError('VIDEO', videoEl); }, false);
-      listen(audioEl, 'error', function() { handleMediaError('AUDIO', audioEl); }, false);
+      listen(audioEl, 'error', function(evt) {
+        if (window.Alabaster.testErrorActive || state.audioRetrying) return;
+        var isSourceTarget = Boolean(evt && evt.target && evt.target !== audioEl && evt.target.tagName && evt.target.tagName.toLowerCase() === 'source');
+        var err = audioEl.error;
+        if (!isSourceTarget && !err) return;
+        if (!isSourceTarget && err && err.code === 1 && audioEl.readyState >= 2) return;
+        if (isSourceTarget) {
+          var nextSibling = evt.target.nextElementSibling;
+          while (nextSibling) {
+            if (nextSibling.tagName && nextSibling.tagName.toLowerCase() === 'source') {
+              return;
+            }
+            nextSibling = nextSibling.nextElementSibling;
+          }
+        }
+        if (!state.wantPlaying && !state.userSeeking) {
+          state.audioNeedsReloadOnPlay = true;
+          return;
+        }
+        var aCheck = state.userSeeking ? state.seekTarget : (nativeGetATime() || state.savedMasterTime || 0);
+        if (!err && audioEl.readyState >= 3 && bufferMonitor.ahead(audioEl, aCheck) >= 0.2) {
+          return;
+        }
+        triggerSilentAudioRetry();
+      }, true);
 
       function armNetworkWatchdog() {
         clearWatchdog();
         state.watchdogTimer = setTimeout(function() {
           state.watchdogTimer = 0;
           if (!state.wantPlaying && !state.userSeeking) return;
-          if (state.wakeSyncing || state.cancelSeekWait || state.launchingPlay || state.audioStarting || state.holdingVideoForSync) return;
+          if (state.audioRetrying || state.wakeSyncing || state.cancelSeekWait || state.launchingPlay || state.audioStarting || state.holdingVideoForSync) return;
 
           if (isPlaybackCompleted()) {
             onStreamEnded();
@@ -8771,7 +9897,7 @@ window.SyncLevel = SyncLevel;
           if (videoEl.networkState === 0 && !isVideoBypassed() && !isEffectivelyHidden()) {
             reprimeEvictedVideo(state.userSeeking ? state.seekTarget : getMasterAnchorTime(), false);
           }
-          if (audioEl.networkState === 0) {
+          if (audioEl.networkState === 0 && !state.audioRetrying) {
             try { audioEl.load(); } catch (_) {}
           }
 
@@ -8824,7 +9950,7 @@ window.SyncLevel = SyncLevel;
 
       function startLockstepPlayback() {
         if (!state.wantPlaying || state.userSeeking) return;
-        if (state.launchingPlay || state.audioStarting || state.holdingVideoForSync || state.wakeSyncing || state.cancelSeekWait) return;
+        if (state.audioRetrying || state.launchingPlay || state.audioStarting || state.holdingVideoForSync || state.wakeSyncing || state.cancelSeekWait) return;
 
         if (isPlaybackCompleted()) {
           onStreamEnded();
@@ -8897,6 +10023,8 @@ window.SyncLevel = SyncLevel;
                       return;
                     }
                     applyBlockedAutoplayPauseState();
+                  } else if (err && (err.name === 'NotSupportedError' || audioEl.error)) {
+                    triggerSilentAudioRetry();
                   } else if (state.wantPlaying && !state.userSeeking) {
                     armNetworkWatchdog();
                   }
@@ -9107,7 +10235,7 @@ window.SyncLevel = SyncLevel;
             if (navigator.mediaSession) navigator.mediaSession.playbackState = 'playing';
           };
 
-          var handleLaunchFailure = function(err) {
+          var handleLaunchFailure = function(err, isFromAudio) {
             if (finished || currentSeq !== state.sequence) return;
             var errName = err && err.name;
             finished = true;
@@ -9122,6 +10250,10 @@ window.SyncLevel = SyncLevel;
                 freezeBothStreams();
                 armNetworkWatchdog();
               }
+              return;
+            }
+            if (isFromAudio && (errName === 'NotSupportedError' || audioEl.error)) {
+              triggerSilentAudioRetry();
               return;
             }
             if (errName === 'NotAllowedError' || state.initialAutoplayAttempt) {
@@ -9162,7 +10294,9 @@ window.SyncLevel = SyncLevel;
               pA.then(function() {
                 if (finished || currentSeq !== state.sequence) return;
                 finishLaunchSuccess();
-              }).catch(handleLaunchFailure);
+              }).catch(function(err) {
+                handleLaunchFailure(err, true);
+              });
             };
 
             var vLive = nativeGetVTime();
@@ -9273,7 +10407,9 @@ window.SyncLevel = SyncLevel;
             if (!aStartedCall && !state.launchPollTimer) {
               pollVideoStart();
             }
-          }).catch(handleLaunchFailure);
+          }).catch(function(err) {
+            handleLaunchFailure(err, false);
+          });
 
           state.launchPollTimer = setTimeout(pollVideoStart, 4);
         });
@@ -9295,6 +10431,11 @@ window.SyncLevel = SyncLevel;
               fadeOut: Boolean(pauseOptions && pauseOptions.fadeOut)
             });
             shield.deactivate();
+            return;
+          }
+
+          if (state.audioRetrying) {
+            if (!isEffectivelyHidden()) setBufferSpinner(true);
             return;
           }
 
@@ -9399,6 +10540,7 @@ window.SyncLevel = SyncLevel;
         state.frozenDisplayTime = clamped;
         state.sequence++;
         state.seekStartTime = compat.now();
+        resetAudioHealthBaseline(clamped);
         clearPendingWait();
         clearWatchdog();
         setBufferSpinner(true);
@@ -9416,10 +10558,18 @@ window.SyncLevel = SyncLevel;
               try { nativeSetVTime(clamped); } catch (_) {}
             }
           }
-          state.internalAudioSeeking = true;
-          state.internalASeekUntil = compat.now() + 2000;
-          try { nativeSetATime(clamped); } catch (_) {}
+          if (!state.audioRetrying) {
+            state.internalAudioSeeking = true;
+            state.internalASeekUntil = compat.now() + 2000;
+            try { nativeSetATime(clamped); } catch (_) {}
+          }
         });
+
+        if (state.audioNeedsReloadOnPlay && !state.audioRetrying && (audioEl.error || audioEl.networkState === 3 || audioEl.readyState < 2)) {
+          state.audioNeedsReloadOnPlay = false;
+          triggerSilentAudioRetry();
+          return;
+        }
 
         armNetworkWatchdog();
         setTimeout(completeUserSeek, 0);
@@ -9427,6 +10577,7 @@ window.SyncLevel = SyncLevel;
 
       function completeUserSeek() {
         if (!state.userSeeking) return;
+        if (state.audioRetrying) return;
         var hiddenEffective = isEffectivelyHidden();
         var bypassVideo = isVideoBypassed() || hiddenEffective;
 
@@ -9554,6 +10705,7 @@ window.SyncLevel = SyncLevel;
         }
         if (!state.wantPlaying) {
           state.startupShieldUntil = compat.now() + config.startupProtectionMs;
+          resetAudioHealthBaseline();
         }
         if (state.userSeeking) {
           state.wantPlaying = true;
@@ -9601,6 +10753,11 @@ window.SyncLevel = SyncLevel;
             player.trigger('play');
           });
           if (navigator.mediaSession) navigator.mediaSession.playbackState = 'playing';
+        }
+        if (state.audioNeedsReloadOnPlay && !state.audioRetrying && (audioEl.error || audioEl.networkState === 3 || audioEl.readyState < 2)) {
+          state.audioNeedsReloadOnPlay = false;
+          triggerSilentAudioRetry();
+          return window.Promise ? Promise.resolve() : undefined;
         }
         syncPlaybackState();
         return window.Promise ? Promise.resolve() : undefined;
@@ -9697,7 +10854,7 @@ window.SyncLevel = SyncLevel;
         }
         if (becomingHidden || state.wakeSyncing) {
           evt.stopImmediatePropagation();
-          if (becomingHidden && state.wantPlaying && !state.userSeeking && !isVideoBypassed() && nativeGetAPaused() && !state.audioStarting && !audioEl.ended) {
+          if (becomingHidden && state.wantPlaying && !state.userSeeking && !state.audioRetrying && !isVideoBypassed() && nativeGetAPaused() && !state.audioStarting && !audioEl.ended) {
             prepareAudioSilentForPlay();
             runInternal(function() {
               var pBg = compat.safePlay(nativeAudioPlay);
@@ -9722,7 +10879,7 @@ window.SyncLevel = SyncLevel;
         evt.stopImmediatePropagation();
         state.hidden = Boolean(document.hidden);
         if (isEffectivelyHidden()) {
-          if (!state.userSeeking && nativeGetAPaused() && !state.audioStarting && !audioEl.ended) {
+          if (!state.userSeeking && !state.audioRetrying && nativeGetAPaused() && !state.audioStarting && !audioEl.ended) {
             prepareAudioSilentForPlay();
             runInternal(function() {
               var pBg2 = compat.safePlay(nativeAudioPlay);
@@ -9735,7 +10892,7 @@ window.SyncLevel = SyncLevel;
           }
           return;
         }
-        if (!state.buffering && !state.userSeeking && !state.cancelSeekWait && !state.launchingPlay && !state.holdingVideoForSync && !state.wakeSyncing && !isVideoBypassed()) {
+        if (!state.buffering && !state.userSeeking && !state.audioRetrying && !state.cancelSeekWait && !state.launchingPlay && !state.holdingVideoForSync && !state.wakeSyncing && !isVideoBypassed()) {
           syncPlaybackState();
         }
       }, true);
@@ -9751,7 +10908,7 @@ window.SyncLevel = SyncLevel;
           pauseVideoOnly();
           return;
         }
-        if (state.buffering || state.userSeeking) {
+        if (state.buffering || state.userSeeking || state.audioRetrying) {
           evt.stopImmediatePropagation();
           pauseVideoOnly();
         }
@@ -9763,7 +10920,7 @@ window.SyncLevel = SyncLevel;
           pauseAudioOnly(false);
           return;
         }
-        if ((state.buffering && !isEffectivelyHidden()) || state.userSeeking) {
+        if ((state.buffering && !isEffectivelyHidden()) || state.userSeeking || state.audioRetrying) {
           evt.stopImmediatePropagation();
           pauseAudioOnly(false);
         }
@@ -9853,7 +11010,7 @@ window.SyncLevel = SyncLevel;
         }
         if (state.userSeeking) {
           completeUserSeek();
-        } else if (state.wantPlaying && !state.cancelSeekWait && !state.launchingPlay && !state.holdingVideoForSync && !state.wakeSyncing) {
+        } else if (state.wantPlaying && !state.audioRetrying && !state.cancelSeekWait && !state.launchingPlay && !state.holdingVideoForSync && !state.wakeSyncing) {
           if (state.buffering || nativeGetVPaused() || nativeGetAPaused()) {
             syncPlaybackState();
           }
@@ -9864,7 +11021,7 @@ window.SyncLevel = SyncLevel;
         if (state.internalAudioSeeking) {
           state.internalAudioSeeking = false;
         }
-        if (state.wakeSyncing || isLiveSnapping() || isTabWaking()) {
+        if (state.audioRetrying || state.wakeSyncing || isLiveSnapping() || isTabWaking()) {
           return;
         }
         if (state.userSeeking) {
@@ -9924,7 +11081,7 @@ window.SyncLevel = SyncLevel;
 
       listen(audioEl, 'waiting', function() {
         state.steadyPlaybackSince = 0;
-        if (isEffectivelyHidden() || state.launchingPlay || !state.wantPlaying || state.userSeeking || state.endedCompleted || isPlaybackCompleted() || isStreamNearItsEnd(audioEl, false)) return;
+        if (state.audioRetrying || isEffectivelyHidden() || state.launchingPlay || !state.wantPlaying || state.userSeeking || state.endedCompleted || isPlaybackCompleted() || isStreamNearItsEnd(audioEl, false)) return;
         var aLead = bufferMonitor.ahead(audioEl, nativeGetATime());
         if (audioEl.readyState < 2 && aLead < 0.04) {
           setBufferSpinner(true);
@@ -9938,6 +11095,7 @@ window.SyncLevel = SyncLevel;
         if (videoEl.readyState >= 2 && audioEl.readyState >= 2) {
           clearErrorOverlayOnHealthyStream();
         }
+        if (state.audioRetrying) return;
         if (state.userSeeking) return completeUserSeek();
         if (!state.wantPlaying || isPlaybackCompleted()) return;
         if (state.cancelSeekWait || state.launchingPlay || state.audioStarting || state.holdingVideoForSync || state.wakeSyncing) return;
@@ -9995,7 +11153,7 @@ window.SyncLevel = SyncLevel;
             var aCurCheck = nativeGetATime() || 0;
             if (rawADur <= 0 || aCurCheck < rawADur - 0.06) {
               setBufferSpinner(false);
-              if (state.wantPlaying && nativeGetAPaused() && !state.audioStarting && audioEl.readyState >= 2 && !audioEl.seeking) {
+              if (state.wantPlaying && !state.audioRetrying && nativeGetAPaused() && !state.audioStarting && audioEl.readyState >= 2 && !audioEl.seeking) {
                 runInternal(function() { compat.safePlay(nativeAudioPlay); });
               }
               return;
@@ -10104,7 +11262,7 @@ window.SyncLevel = SyncLevel;
             state.savedMasterTime = aCur;
           }
           getAuthoritativeDuration();
-          if (!state.userSeeking && !isPlaybackCompleted()) {
+          if (!state.userSeeking && !state.audioRetrying && !isPlaybackCompleted()) {
             shield.activate();
             pauseVideoOnly();
             setBufferSpinner(false);
@@ -10158,6 +11316,8 @@ window.SyncLevel = SyncLevel;
           }
           return;
         }
+
+        if (state.audioRetrying) return;
 
         getAuthoritativeDuration();
 
@@ -10253,6 +11413,7 @@ window.SyncLevel = SyncLevel;
           !hiddenEffective &&
           !state.buffering &&
           !state.userSeeking &&
+          !state.audioRetrying &&
           !state.launchingPlay &&
           !state.holdingVideoForSync &&
           !state.wakeSyncing &&
@@ -10294,6 +11455,14 @@ window.SyncLevel = SyncLevel;
           bufferPctEl.style.display = 'block';
         } else if (bufferPctEl) {
           bufferPctEl.style.display = 'none';
+        }
+
+        if (state.audioRetrying) {
+          return;
+        }
+
+        if (checkAudioBufferHealth(now)) {
+          return;
         }
 
         if (state.userSeeking) {
@@ -10806,6 +11975,7 @@ window.SyncLevel = SyncLevel;
       }
 
       player.on('dispose', function() {
+        clearAudioRetryState();
         cancelVideoHold();
         clearLaunchPoll();
         cancelWakeSync();
