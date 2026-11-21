@@ -19,7 +19,7 @@
     const actualHost = typeof hostname !== 'undefined' && hostname ? hostname : 'poketube.fun';
     const proxyBase = typeof media_proxy !== 'undefined' && media_proxy ? media_proxy : '';
 
-     const hasInvvid = typeof invvid !== 'undefined' && invvid !== null;
+    const hasInvvid = typeof invvid !== 'undefined' && invvid !== null;
     const videoTitle = hasInvvid && invvid.title ? invvid.title : '';
     const channelName = hasInvvid && invvid.author ? invvid.author : '';
     const channelUrl = hasInvvid && invvid.authorId ? '/channel?id=' + invvid.authorId : (hasInvvid && invvid.authorUrl ? invvid.authorUrl : '#');
@@ -59,6 +59,11 @@
         thumb: getRecThumbUrl(r)
     }));
 
+    const clientCaptions = (hasInvvid && Array.isArray(invvid.captions)) ? invvid.captions.map(x => ({
+        src: `/api/subtitles?v=${encodeURIComponent(invvid.videoId || v)}&h=${encodeURIComponent(x.label || '')}`,
+        label: (x.label || '').replace("United States", "Simplified - USA")
+    })) : [];
+
     let encodedVidUrl = '';
     if (typeof vidurl !== 'undefined' && vidurl) {
         for(let i = 0; i < vidurl.length; i++) {
@@ -66,15 +71,13 @@
         }
     }
 
-    // Obfuscate the specific video path
     const pathStr = "/companion/latest_version?id=" + v + "&itag=18&local=true";
     let pathArr = [];
     for (let i = 0; i < pathStr.length; i++) {
-        pathArr.push(pathStr.charCodeAt(i) ^ 0x5A); // XOR obfuscation
+        pathArr.push(pathStr.charCodeAt(i) ^ 0x5A);
     }
     const obfPath = JSON.stringify(pathArr);
 
-    // Generate a random token for the signature decipher algorithm
     const rToken = Math.random().toString(36).substring(2, 15);
 %><!DOCTYPE html><html lang="en"><head>
     <meta charset="UTF-8">
@@ -167,7 +170,6 @@
             line-height: 1.4;
         }
 
-        /* --- Audio Only Mode Styles --- */
         .audio-wrapper-<%- v %> {
             width: 100vw;
             height: 100vh;
@@ -199,7 +201,6 @@
         .audio-extra-btn-<%- v %> svg { width: 18px; height: 18px; fill: currentColor; }
         .audio-logo-<%- v %> { height: 26px; flex-shrink: 0; display: block; margin-left: 8px; }
 
-        /* --- Normal Video Mode Styles --- */
         .video-wrapper-<%- v %> {
             position: relative;
             width: 100vw;
@@ -231,7 +232,7 @@
             display: block;
         }
 
-         .top-video-info-<%- v %> {
+        .top-video-info-<%- v %> {
             position: absolute;
             top: 0;
             left: 0;
@@ -416,6 +417,31 @@
         
         .custom-video-player-<%- v %>::-webkit-media-controls {
             display: none !important;
+        }
+
+        .subtitle-overlay-<%- v %> {
+            position: absolute;
+            left: 50%;
+            bottom: 12%;
+            transform: translateX(-50%);
+            max-width: 86%;
+            text-align: center;
+            z-index: 18;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            transition: bottom 0.2s ease;
+        }
+
+        .subtitle-cue-<%- v %> {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 6px;
+            line-height: 1.35;
+            white-space: pre-wrap;
+            word-break: break-word;
         }
 
         .custom-controls-<%- v %> {
@@ -670,7 +696,7 @@
             z-index: 25;
         }
 
-         .more-videos-drawer-<%- v %> {
+        .more-videos-drawer-<%- v %> {
             display: none;
             width: 100%;
             overflow-x: auto;
@@ -789,6 +815,12 @@
             line-height: 1;
         }
 
+        .fs-group-<%- v %> {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
         .fs-circle-btn-<%- v %> {
             background: rgba(0, 0, 0, 0.6);
             backdrop-filter: blur(4px);
@@ -802,13 +834,17 @@
             border: none;
             color: white;
             cursor: pointer;
-            transition: transform 0.1s, background-color 0.2s;
+            transition: transform 0.1s, background-color 0.2s, color 0.2s;
             padding: 0;
         }
         
         .fs-circle-btn-<%- v %>:hover {
             background: rgba(0, 0, 0, 0.8);
             transform: scale(1.05);
+        }
+
+        .fs-circle-btn-<%- v %>.is-active {
+            color: #ffabcc;
         }
         
         .fs-circle-btn-<%- v %> svg {
@@ -992,7 +1028,7 @@
             pointer-events: auto;
         }
 
-        .settings-grabber-area-<%- v %>, .quality-grabber-area-<%- v %>, .speed-grabber-area-<%- v %> {
+        .settings-grabber-area-<%- v %>, .quality-grabber-area-<%- v %>, .speed-grabber-area-<%- v %>, .subtitles-grabber-area-<%- v %>, .substyle-grabber-area-<%- v %> {
             padding: 12px;
             cursor: grab;
             display: flex;
@@ -1006,11 +1042,11 @@
             margin-top: -8px;
         }
 
-        .settings-grabber-area-<%- v %>:active, .quality-grabber-area-<%- v %>:active, .speed-grabber-area-<%- v %>:active {
+        .settings-grabber-area-<%- v %>:active, .quality-grabber-area-<%- v %>:active, .speed-grabber-area-<%- v %>:active, .subtitles-grabber-area-<%- v %>:active, .substyle-grabber-area-<%- v %>:active {
             cursor: grabbing;
         }
 
-        .settings-grabber-<%- v %>, .speed-panel-grabber-<%- v %> {
+        .settings-grabber-<%- v %>, .speed-panel-grabber-<%- v %>, .subtitles-panel-grabber-<%- v %>, .substyle-panel-grabber-<%- v %> {
             width: 40px;
             height: 4px;
             background: rgba(255, 255, 255, 0.26);
@@ -1075,6 +1111,9 @@
             font-size: 14.5px;
             font-weight: 500;
             white-space: nowrap;
+            max-width: 140px;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .settings-chevron-<%- v %> {
@@ -1088,8 +1127,9 @@
             grid-template-columns: 32px minmax(0, 1fr) 18px;
         }
 
-        /* --- Speed & Quality Panels UI --- */
-        .speed-panel-<%- v %> {
+        .speed-panel-<%- v %>,
+        .subtitles-panel-<%- v %>,
+        .substyle-panel-<%- v %> {
             position: absolute;
             left: 50%;
             bottom: 58px;
@@ -1111,13 +1151,181 @@
             transform: translate(-50%, 10px);
         }
 
-        .speed-panel-<%- v %>.is-open-<%- v %> {
+        .subtitles-panel-<%- v %> {
+            padding: 0 0 12px 0;
+            max-height: min(380px, calc(100% - 80px));
+            display: flex;
+            flex-direction: column;
+        }
+
+        .substyle-panel-<%- v %> {
+            padding: 0 18px 18px 18px;
+            max-height: min(420px, calc(100% - 80px));
+            overflow-y: auto;
+        }
+
+        .speed-panel-<%- v %>.is-open-<%- v %>,
+        .subtitles-panel-<%- v %>.is-open-<%- v %>,
+        .substyle-panel-<%- v %>.is-open-<%- v %> {
             opacity: 1;
             transform: translate(-50%, 0);
             pointer-events: auto;
         }
 
-         .quality-panel-<%- v %> {
+        .subtitles-header-<%- v %> {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px 10px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .subtitles-header-title-<%- v %> {
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .subtitles-customize-btn-<%- v %> {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: #ffabcc;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 14px;
+            cursor: pointer;
+            font-family: "PokeTube Flex", Arial, sans-serif;
+            transition: background 0.15s;
+        }
+
+        .subtitles-customize-btn-<%- v %>:hover {
+            background: rgba(255, 255, 255, 0.18);
+        }
+
+        .subtitles-list-<%- v %> {
+            overflow-y: auto;
+            max-height: 260px;
+            padding: 6px 0;
+        }
+
+        .subtitle-list-item-<%- v %> {
+            display: flex;
+            align-items: center;
+            padding: 11px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+
+        .subtitle-list-item-<%- v %>:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .subtitle-checkmark-<%- v %> {
+            width: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            opacity: 0;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        .subtitle-checkmark-<%- v %> svg {
+            width: 18px;
+            height: 18px;
+            fill: #ffabcc;
+        }
+
+        .subtitle-list-item-<%- v %>.is-active .subtitle-checkmark-<%- v %> {
+            opacity: 1;
+        }
+
+        .substyle-grid-<%- v %> {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 10px;
+        }
+
+        .substyle-row-<%- v %> {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .substyle-row-<%- v %> label {
+            font-size: 13.5px;
+            font-weight: 600;
+            color: #e0e0e0;
+        }
+
+        .substyle-row-<%- v %> select {
+            background: rgba(0, 0, 0, 0.55);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            padding: 6px 10px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-family: "PokeTube Flex", Arial, sans-serif;
+            outline: none;
+            min-width: 140px;
+            cursor: pointer;
+        }
+
+        .substyle-row-<%- v %> select:focus {
+            border-color: #ffabcc;
+        }
+
+        .substyle-row-<%- v %> select option {
+            background: #181818;
+            color: #fff;
+        }
+
+        .substyle-actions-<%- v %> {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .substyle-reset-btn-<%- v %> {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border: none;
+            padding: 7px 14px;
+            border-radius: 16px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: "PokeTube Flex", Arial, sans-serif;
+        }
+
+        .substyle-reset-btn-<%- v %>:hover {
+            background: rgba(255, 255, 255, 0.18);
+        }
+
+        .substyle-done-btn-<%- v %> {
+            background: #ffabcc;
+            color: #0f0f0f;
+            border: none;
+            padding: 7px 16px;
+            border-radius: 16px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: "PokeTube Flex", Arial, sans-serif;
+        }
+
+        .substyle-done-btn-<%- v %>:hover {
+            background: #e599b7;
+        }
+
+        .quality-panel-<%- v %> {
             position: absolute;
             left: 50%;
             bottom: 58px;
@@ -1287,7 +1495,6 @@
             margin-top: 3px;
         }
 
-        /* --- Embed Popup UI --- */
         .embed-popup-container-<%- v %> {
             position: absolute;
             top: 50%;
@@ -1414,7 +1621,6 @@
             height: 20px;
         }
 
-        /* --- Stats Overlay UI --- */
         .stats-overlay-<%- v %> {
             position: absolute;
             top: 10px;
@@ -1488,7 +1694,6 @@
             text-overflow: ellipsis;
         }
 
-        /* --- End Overlay UI --- */
         .end-overlay-<%- v %> {
             position: absolute;
             inset: 0;
@@ -1580,7 +1785,7 @@
                 width: 165px;
             }
 
-            .settings-panel-<%- v %>, .quality-panel-<%- v %>, .speed-panel-<%- v %> {
+            .settings-panel-<%- v %>, .quality-panel-<%- v %>, .speed-panel-<%- v %>, .subtitles-panel-<%- v %>, .substyle-panel-<%- v %> {
                 left: 50%;
                 bottom: 56px;
                 width: calc(100% - 16px);
@@ -1634,9 +1839,6 @@
             }
         }
 
-        /* =========================================
-           ShowHow Embed Guide FULL PAGE Styles
-           ========================================= */
         .showhow-topbar-<%- v %> {
             display: flex;
             align-items: center;
@@ -2354,7 +2556,7 @@
             (function() {
                 if (window._failsBotCheck || (window.self === window.top)) return;
 
-                const ClientProductName = "WEB_EMBEDDED_PLAYER"
+                const ClientProductName = "WEB_EMBEDDED_PLAYER";
                 const playerLink = document.querySelector('.player-link-<%- v %>');
                 const wrapper = document.querySelector('.video-wrapper-<%- v %>');
                 const logoLink = wrapper ? wrapper.querySelector('.logo-link-<%- v %>') : null;
@@ -2365,7 +2567,8 @@
                     authorUrl: <%- JSON.stringify(channelUrl) %>,
                     avatar: <%- JSON.stringify(proxiedAvatarUrl) %>,
                     firstRecThumb: <%- JSON.stringify(firstRecThumb) %>,
-                    recommendations: <%- JSON.stringify(clientRecs) %>
+                    recommendations: <%- JSON.stringify(clientRecs) %>,
+                    captions: <%- JSON.stringify(clientCaptions) %>
                 };
 
                 function escapeHtml(str) {
@@ -2391,6 +2594,7 @@
                 const codeIcon = 'M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z';
                 const statsIcon = 'M19 8h-1.81c-.45-.78-1.07-1.45-1.82-1.96l1.06-1.06-1.42-1.42-1.43 1.43C12.85 4.8 12.44 4.75 12 4.75s-.85.05-1.58.24L8.99 3.56 7.57 4.98 8.63 6.04C7.88 6.55 7.26 7.22 6.81 8H5v2h1.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H5v2h1.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H19v-2h-1.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H19V8zm-6 8h-2v-2h2v2zm0-4h-2V8h2v4z';
                 const checkIcon = 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z';
+                const ccIcon = 'M19 4H5c-1.11 0-2 .9-2 2v12c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v1c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1zm7 0h-1.5v-.5h-2v3h2V13H18v1c0 .55-.45 1-1 1h-3c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1z';
 
                 function getVideoUrl(itag, retryNonce) {
                     const _enc = '<%= encodedVidUrl %>';
@@ -2442,6 +2646,7 @@
                         video.playsInline = true;
                         video.preload = 'auto';
                         video.controls = false;
+                        video.crossOrigin = 'anonymous';
                         video.setAttribute('playsinline', '');
                         video.setAttribute('webkit-playsinline', '');
                         video.setAttribute('controlsList', 'nodownload noremoteplayback');
@@ -2449,6 +2654,19 @@
                         if ('disablePictureInPicture' in video) {
                             video.disablePictureInPicture = true; 
                         }
+
+                        if (Array.isArray(invMeta.captions)) {
+                            invMeta.captions.forEach((cap) => {
+                                const trackEl = document.createElement('track');
+                                trackEl.src = cap.src;
+                                trackEl.label = cap.label;
+                                trackEl.kind = 'subtitles';
+                                video.appendChild(trackEl);
+                            });
+                        }
+
+                        const subtitleOverlay = document.createElement('div');
+                        subtitleOverlay.className = 'subtitle-overlay-<%- v %>';
 
                         const audio = document.createElement('audio');
                         audio.className = 'custom-audio-player-<%- v %>';
@@ -2509,6 +2727,20 @@
                         ` : '';
 
                         const moreVideosBtnThumb = invMeta.firstRecThumb || posterSrc;
+                        const hasCaptions = Array.isArray(invMeta.captions) && invMeta.captions.length > 0;
+
+                        const subtitlesListHtml = `
+                            <div class="subtitle-list-item-<%- v %> is-active" data-sub-idx="-1">
+                                <div class="subtitle-checkmark-<%- v %>"><svg viewBox="0 0 24 24"><path d="${checkIcon}"/></svg></div>
+                                <span>Off</span>
+                            </div>
+                            ${hasCaptions ? invMeta.captions.map((cap, idx) => `
+                                <div class="subtitle-list-item-<%- v %>" data-sub-idx="${idx}">
+                                    <div class="subtitle-checkmark-<%- v %>"><svg viewBox="0 0 24 24"><path d="${checkIcon}"/></svg></div>
+                                    <span>${escapeHtml(cap.label)}</span>
+                                </div>
+                            `).join('') : ''}
+                        `;
 
                         const controls = document.createElement('div');
                         controls.className = 'custom-controls-<%- v %>';
@@ -2550,6 +2782,14 @@
                                     <span class="settings-value-<%- v %> quality-value-<%- v %>">Auto</span>
                                     <span class="settings-chevron-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${chevronIcon}"/></svg></span>
                                 </button>
+                                ${hasCaptions ? `
+                                <button class="settings-row-<%- v %> subtitles-row-<%- v %>" type="button">
+                                    <span class="settings-icon-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${ccIcon}"/></svg></span>
+                                    <span class="settings-label-<%- v %>">Subtitles/CC</span>
+                                    <span class="settings-value-<%- v %> subtitles-value-<%- v %>">Off</span>
+                                    <span class="settings-chevron-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${chevronIcon}"/></svg></span>
+                                </button>
+                                ` : ''}
                                 <button class="settings-row-<%- v %> speed-row-<%- v %>" type="button">
                                     <span class="settings-icon-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${speedIcon}"/></svg></span>
                                     <span class="settings-label-<%- v %>">Speed</span>
@@ -2599,6 +2839,96 @@
                                         <div class="quality-checkmark-<%- v %>"><svg viewBox="0 0 24 24"><path d="${checkIcon}"/></svg></div>
                                         <span>Auto (<span class="auto-quality-label-<%- v %>">360p</span>)</span>
                                     </div>
+                                </div>
+                            </div>
+
+                            <div class="subtitles-panel-<%- v %>" aria-hidden="true">
+                                <div class="subtitles-grabber-area-<%- v %>">
+                                    <div class="subtitles-panel-grabber-<%- v %>"></div>
+                                </div>
+                                <div class="subtitles-header-<%- v %>">
+                                    <span class="subtitles-header-title-<%- v %>">Subtitles/CC</span>
+                                    <button type="button" class="subtitles-customize-btn-<%- v %>">Options</button>
+                                </div>
+                                <div class="subtitles-list-<%- v %>">
+                                    ${subtitlesListHtml}
+                                </div>
+                            </div>
+
+                            <div class="substyle-panel-<%- v %>" aria-hidden="true">
+                                <div class="substyle-grabber-area-<%- v %>">
+                                    <div class="substyle-panel-grabber-<%- v %>"></div>
+                                </div>
+                                <div class="subtitles-header-title-<%- v %>" style="margin-bottom: 6px;">Subtitle Options</div>
+                                <div class="substyle-grid-<%- v %>">
+                                    <div class="substyle-row-<%- v %>">
+                                        <label>Font Size</label>
+                                        <select class="substyle-size-<%- v %>">
+                                            <option value="14">Small (75%)</option>
+                                            <option value="18" selected>Normal (100%)</option>
+                                            <option value="22">Large (125%)</option>
+                                            <option value="27">Extra Large (150%)</option>
+                                            <option value="34">Huge (200%)</option>
+                                        </select>
+                                    </div>
+                                    <div class="substyle-row-<%- v %>">
+                                        <label>Font Color</label>
+                                        <select class="substyle-color-<%- v %>">
+                                            <option value="#ffffff" selected>White</option>
+                                            <option value="#ffff00">Yellow</option>
+                                            <option value="#00ff00">Green</option>
+                                            <option value="#00ffff">Cyan</option>
+                                            <option value="#ffabcc">Pink</option>
+                                        </select>
+                                    </div>
+                                    <div class="substyle-row-<%- v %>">
+                                        <label>Font Family</label>
+                                        <select class="substyle-font-<%- v %>">
+                                            <option value='"PokeTube Flex", Arial, sans-serif' selected>Default</option>
+                                            <option value="Arial, Helvetica, sans-serif">Sans-serif</option>
+                                            <option value="Georgia, serif">Serif</option>
+                                            <option value='"Courier New", monospace'>Monospace</option>
+                                        </select>
+                                    </div>
+                                    <div class="substyle-row-<%- v %>">
+                                        <label>Background Color</label>
+                                        <select class="substyle-bgcolor-<%- v %>">
+                                            <option value="0,0,0" selected>Black</option>
+                                            <option value="30,30,30">Dark Gray</option>
+                                            <option value="0,0,128">Blue</option>
+                                            <option value="128,0,64">Purple</option>
+                                        </select>
+                                    </div>
+                                    <div class="substyle-row-<%- v %>">
+                                        <label>Background Opacity</label>
+                                        <select class="substyle-bgopacity-<%- v %>">
+                                            <option value="0">0%</option>
+                                            <option value="0.25">25%</option>
+                                            <option value="0.5">50%</option>
+                                            <option value="0.75" selected>75%</option>
+                                            <option value="1">100%</option>
+                                        </select>
+                                    </div>
+                                    <div class="substyle-row-<%- v %>">
+                                        <label>Edge Style</label>
+                                        <select class="substyle-edge-<%- v %>">
+                                            <option value="none">None</option>
+                                            <option value="shadow" selected>Drop Shadow</option>
+                                            <option value="outline">Outline</option>
+                                        </select>
+                                    </div>
+                                    <div class="substyle-row-<%- v %>">
+                                        <label>Position</label>
+                                        <select class="substyle-pos-<%- v %>">
+                                            <option value="10%" selected>Bottom</option>
+                                            <option value="22%">Raised</option>
+                                            <option value="78%">Top</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="substyle-actions-<%- v %>">
+                                    <button type="button" class="substyle-reset-btn-<%- v %>">Reset</button>
+                                    <button type="button" class="substyle-done-btn-<%- v %>">Done</button>
                                 </div>
                             </div>
 
@@ -2676,6 +3006,13 @@
                                         <div class="chapter-title-<%- v %>" style="color: #fff; font-size: 14px; font-weight: 600; font-family: 'PokeTube Flex', Arial, sans-serif; text-shadow: 0 1px 3px rgba(0,0,0,0.8);"></div>
                                     </div>
                                     <div class="fs-group-<%- v %>">
+                                        ${hasCaptions ? `
+                                        <button class="fs-circle-btn-<%- v %> cc-btn-<%- v %>" type="button" title="Subtitles/CC (c)" aria-label="Subtitles">
+                                            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                                <path d="${ccIcon}"/>
+                                            </svg>
+                                        </button>
+                                        ` : ''}
                                         <button class="fs-circle-btn-<%- v %> fs-btn-<%- v %>" type="button" title="Fullscreen" aria-label="Fullscreen">
                                             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                                                 <path d="${fullscreenIcon}"/>
@@ -2712,6 +3049,7 @@
 
                         wrapper.appendChild(audio);
                         wrapper.appendChild(video);
+                        wrapper.appendChild(subtitleOverlay);
                         wrapper.appendChild(endOverlay);
                         wrapper.appendChild(statsOverlayWrapper);
                         wrapper.appendChild(controls);
@@ -2734,6 +3072,113 @@
                         let hasTriggeredEnd = false;
                         
                         let lastDragEndTime = 0;
+
+                        let activeSubIdx = -1;
+                        let lastEnabledSubIdx = 0;
+
+                        const defaultSubStyle = {
+                            size: '18',
+                            color: '#ffffff',
+                            font: '"PokeTube Flex", Arial, sans-serif',
+                            bgColor: '0,0,0',
+                            bgOpacity: '0.75',
+                            edge: 'shadow',
+                            pos: '10%'
+                        };
+                        let subStyle = Object.assign({}, defaultSubStyle);
+                        try {
+                            const saved = localStorage.getItem('poke_embed_substyle');
+                            if (saved) subStyle = Object.assign({}, defaultSubStyle, JSON.parse(saved));
+                        } catch(e) {}
+
+                        function saveSubStyle() {
+                            try {
+                                localStorage.setItem('poke_embed_substyle', JSON.stringify(subStyle));
+                            } catch(e) {}
+                        }
+
+                        function getSubEdgeCss(edge) {
+                            if (edge === 'outline') {
+                                return '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000';
+                            }
+                            if (edge === 'shadow') {
+                                return '0 2px 4px rgba(0,0,0,0.9)';
+                            }
+                            return 'none';
+                        }
+
+                        function applySubStyle() {
+                            subtitleOverlay.style.bottom = subStyle.pos;
+                            const cues = subtitleOverlay.querySelectorAll('.subtitle-cue-<%- v %>');
+                            cues.forEach(cueEl => {
+                                cueEl.style.fontSize = subStyle.size + 'px';
+                                cueEl.style.color = subStyle.color;
+                                cueEl.style.fontFamily = subStyle.font;
+                                cueEl.style.backgroundColor = `rgba(${subStyle.bgColor}, ${subStyle.bgOpacity})`;
+                                cueEl.style.textShadow = getSubEdgeCss(subStyle.edge);
+                            });
+                        }
+
+                        function renderActiveCues() {
+                            subtitleOverlay.innerHTML = '';
+                            if (activeSubIdx < 0 || !video.textTracks || !video.textTracks[activeSubIdx]) return;
+                            const track = video.textTracks[activeSubIdx];
+                            const cues = track.activeCues;
+                            if (!cues || cues.length === 0) return;
+                            for (let i = 0; i < cues.length; i++) {
+                                const span = document.createElement('span');
+                                span.className = 'subtitle-cue-<%- v %>';
+                                span.textContent = cues[i].text.replace(/<[^>]*>/g, '');
+                                subtitleOverlay.appendChild(span);
+                            }
+                            applySubStyle();
+                        }
+
+                        function setSubtitleTrack(idx, silent = false) {
+                            activeSubIdx = idx;
+                            if (idx >= 0) lastEnabledSubIdx = idx;
+                            if (video.textTracks) {
+                                for (let i = 0; i < video.textTracks.length; i++) {
+                                    const t = video.textTracks[i];
+                                    t.oncuechange = null;
+                                    if (i === idx) {
+                                        t.mode = 'hidden';
+                                        t.oncuechange = renderActiveCues;
+                                    } else {
+                                        t.mode = 'disabled';
+                                    }
+                                }
+                            }
+                            renderActiveCues();
+
+                            const subValEl = controls.querySelector('.subtitles-value-<%- v %>');
+                            const ccBtnEl = controls.querySelector('.cc-btn-<%- v %>');
+                            const subItems = controls.querySelectorAll('.subtitle-list-item-<%- v %>');
+
+                            subItems.forEach(item => {
+                                const itemIdx = parseInt(item.getAttribute('data-sub-idx'), 10);
+                                item.classList.toggle('is-active', itemIdx === idx);
+                            });
+
+                            if (idx >= 0 && invMeta.captions[idx]) {
+                                if (subValEl) subValEl.innerText = invMeta.captions[idx].label;
+                                if (ccBtnEl) ccBtnEl.classList.add('is-active');
+                                if (!silent) showToast(`Subtitles: ${invMeta.captions[idx].label}`, 1800);
+                            } else {
+                                if (subValEl) subValEl.innerText = 'Off';
+                                if (ccBtnEl) ccBtnEl.classList.remove('is-active');
+                                if (!silent) showToast('Subtitles: Off', 1800);
+                            }
+                        }
+
+                        function toggleSubtitles() {
+                            if (!hasCaptions) return;
+                            if (activeSubIdx >= 0) {
+                                setSubtitleTrack(-1);
+                            } else {
+                                setSubtitleTrack(lastEnabledSubIdx < invMeta.captions.length ? lastEnabledSubIdx : 0);
+                            }
+                        }
 
                         function getPrimaryMedia() {
                             return isDualPlaying ? audio : video;
@@ -2824,7 +3269,7 @@
                             if (isDualPlaying) {
                                 audio.volume = v;
                                 audio.muted = (v === 0);
-                                video.muted = true; // Video ALWAYS muted in dual mode
+                                video.muted = true;
                             } else {
                                 video.volume = v;
                                 video.muted = (v === 0);
@@ -2963,7 +3408,6 @@
                             };
                         }
 
-                        // --- UI References ---
                         const playPauseBtn = controls.querySelector('.play-pause-btn-<%- v %>');
                         const playPausePathEl = controls.querySelector('.play-pause-path');
                         const muteBtn = controls.querySelector('.mute-btn-<%- v %>');
@@ -2973,6 +3417,7 @@
                         const volFill = controls.querySelector('.volume-slider-fill-<%- v %>');
                         const volThumb = controls.querySelector('.volume-slider-thumb-<%- v %>');
                         const fsBtn = controls.querySelector('.fs-btn-<%- v %>');
+                        const ccBtn = controls.querySelector('.cc-btn-<%- v %>');
                         const progressContainer = controls.querySelector('.progress-container-<%- v %>');
                         const progressFill = controls.querySelector('.progress-fill-<%- v %>');
                         const progressThumb = controls.querySelector('.progress-thumb-<%- v %>');
@@ -2988,6 +3433,24 @@
                         const qualityPanel = controls.querySelector('.quality-panel-<%- v %>');
                         const qualityGrabberArea = controls.querySelector('.quality-grabber-area-<%- v %>');
                         const qualityListItems = controls.querySelectorAll('.quality-list-item-<%- v %>');
+
+                        const subtitlesRow = controls.querySelector('.subtitles-row-<%- v %>');
+                        const subtitlesPanel = controls.querySelector('.subtitles-panel-<%- v %>');
+                        const subtitlesGrabberArea = controls.querySelector('.subtitles-grabber-area-<%- v %>');
+                        const subtitleListItems = controls.querySelectorAll('.subtitle-list-item-<%- v %>');
+                        const subtitlesCustomizeBtn = controls.querySelector('.subtitles-customize-btn-<%- v %>');
+
+                        const substylePanel = controls.querySelector('.substyle-panel-<%- v %>');
+                        const substyleGrabberArea = controls.querySelector('.substyle-grabber-area-<%- v %>');
+                        const substyleSize = controls.querySelector('.substyle-size-<%- v %>');
+                        const substyleColor = controls.querySelector('.substyle-color-<%- v %>');
+                        const substyleFont = controls.querySelector('.substyle-font-<%- v %>');
+                        const substyleBgColor = controls.querySelector('.substyle-bgcolor-<%- v %>');
+                        const substyleBgOpacity = controls.querySelector('.substyle-bgopacity-<%- v %>');
+                        const substyleEdge = controls.querySelector('.substyle-edge-<%- v %>');
+                        const substylePos = controls.querySelector('.substyle-pos-<%- v %>');
+                        const substyleResetBtn = controls.querySelector('.substyle-reset-btn-<%- v %>');
+                        const substyleDoneBtn = controls.querySelector('.substyle-done-btn-<%- v %>');
 
                         const speedRow = controls.querySelector('.speed-row-<%- v %>');
                         const speedValue = controls.querySelector('.speed-value-<%- v %>');
@@ -3017,6 +3480,18 @@
                         
                         const restartBtn = endOverlay.querySelector('.restart-btn-<%- v %>');
                         const linkBtn = controls.querySelector('.link-btn-<%- v %>');
+
+                        function syncSubstyleInputs() {
+                            if (substyleSize) substyleSize.value = subStyle.size;
+                            if (substyleColor) substyleColor.value = subStyle.color;
+                            if (substyleFont) substyleFont.value = subStyle.font;
+                            if (substyleBgColor) substyleBgColor.value = subStyle.bgColor;
+                            if (substyleBgOpacity) substyleBgOpacity.value = subStyle.bgOpacity;
+                            if (substyleEdge) substyleEdge.value = subStyle.edge;
+                            if (substylePos) substylePos.value = subStyle.pos;
+                        }
+                        syncSubstyleInputs();
+                        applySubStyle();
 
                         let showRemainingTime = false;
                         let retryCount = 0;
@@ -3072,6 +3547,8 @@
                                 setVolumeOpen(false);
                                 if (speedPanel) speedPanel.classList.remove('is-open-<%- v %>');
                                 if (qualityPanel) qualityPanel.classList.remove('is-open-<%- v %>');
+                                if (subtitlesPanel) subtitlesPanel.classList.remove('is-open-<%- v %>');
+                                if (substylePanel) substylePanel.classList.remove('is-open-<%- v %>');
                                 if (embedPanel) embedPanel.classList.remove('is-open-<%- v %>');
                             }
                             settingsPanel.style.transform = '';
@@ -3084,7 +3561,7 @@
                             setSettingsOpen(false);
                             setVolumeOpen(false);
                             if (moreVideosDrawer) moreVideosDrawer.classList.remove('is-open-<%- v %>');
-                            [speedPanel, qualityPanel, embedPanel, settingsPanel].forEach(p => {
+                            [speedPanel, qualityPanel, subtitlesPanel, substylePanel, embedPanel, settingsPanel].forEach(p => {
                                 if(p) {
                                     p.classList.remove('is-open-<%- v %>');
                                     p.setAttribute('aria-hidden', 'true');
@@ -3243,13 +3720,24 @@
                             updateTime();
                         }
 
+                        function isAnyPanelOpen() {
+                            const isMoreOpen = moreVideosDrawer && moreVideosDrawer.classList.contains('is-open-<%- v %>');
+                            return isMoreOpen ||
+                                settingsPanel.classList.contains('is-open-<%- v %>') ||
+                                speedPanel.classList.contains('is-open-<%- v %>') ||
+                                qualityPanel.classList.contains('is-open-<%- v %>') ||
+                                subtitlesPanel.classList.contains('is-open-<%- v %>') ||
+                                substylePanel.classList.contains('is-open-<%- v %>') ||
+                                embedPanel.classList.contains('is-open-<%- v %>') ||
+                                volGroup.classList.contains('is-volume-open-<%- v %>');
+                        }
+
                         function showControls() {
                             controls.style.opacity = '1';
                             wrapper.style.cursor = 'default';
                             clearTimeout(hideTimeout);
                             hideTimeout = setTimeout(() => {
-                                const isMoreOpen = moreVideosDrawer && moreVideosDrawer.classList.contains('is-open-<%- v %>');
-                                if (!getPrimaryMedia().paused && !isMoreOpen && !settingsPanel.classList.contains('is-open-<%- v %>') && !speedPanel.classList.contains('is-open-<%- v %>') && !qualityPanel.classList.contains('is-open-<%- v %>') && !embedPanel.classList.contains('is-open-<%- v %>') && !volGroup.classList.contains('is-volume-open-<%- v %>')) {
+                                if (!getPrimaryMedia().paused && !isAnyPanelOpen()) {
                                     controls.style.opacity = '0';
                                     wrapper.style.cursor = 'none';
                                 }
@@ -3347,7 +3835,6 @@
                             `;
                         }
 
-                        // --- Event Listeners Mapping ---
                         const bindMediaEvent = (evt, handler) => {
                             video.addEventListener(evt, (e) => { if(!isDualPlaying || e.target === video) handler(e, video); });
                             audio.addEventListener(evt, (e) => { if(isDualPlaying && e.target === audio) handler(e, audio); });
@@ -3362,6 +3849,9 @@
                                 video.currentTime = pendingSeekTime;
                                 if (isDualPlaying) audio.currentTime = pendingSeekTime;
                                 isSeekingPending = false;
+                            }
+                            if (activeSubIdx >= 0) {
+                                setSubtitleTrack(activeSubIdx, true);
                             }
                             updateTime();
                         });
@@ -3394,6 +3884,7 @@
                         video.addEventListener('seeked', () => {
                             video.style.opacity = '1';
                             if (!isRetrying) setBuffering(false);
+                            renderActiveCues();
                         });
 
                         video.addEventListener('error', () => { queueRetry(); });
@@ -3420,7 +3911,6 @@
                         video.addEventListener('ended', onEndedHandler);
                         audio.addEventListener('ended', onEndedHandler);
 
-                        // The Central Synchronization Loop
                         setInterval(() => {
                             if (!isIntendedToPlay || isRetrying) return; 
 
@@ -3504,7 +3994,7 @@
                             }
                         });
 
-                         video.addEventListener('seeking', () => {
+                        video.addEventListener('seeking', () => {
                             if (getDuration() && (getDuration() - getCurrentTime() <= 20)) {
                                 hasSeekedNearEnd = true;
                                 isNaturalEnd = false;
@@ -3517,7 +4007,6 @@
                             }
                         });
 
-                        // Interaction setup
                         volGroup.addEventListener('click', (event) => event.stopPropagation());
                         volGroup.addEventListener('pointerenter', () => setVolumeOpen(true));
                         volGroup.addEventListener('pointerleave', () => setVolumeOpen(false));
@@ -3565,10 +4054,14 @@
                         makeDraggable(settingsPanel, settingsGrabberArea);
                         makeDraggable(qualityPanel, qualityGrabberArea);
                         makeDraggable(speedPanel, speedGrabberArea);
+                        makeDraggable(subtitlesPanel, subtitlesGrabberArea);
+                        makeDraggable(substylePanel, substyleGrabberArea);
 
                         settingsPanel.addEventListener('click', (e) => e.stopPropagation());
                         qualityPanel.addEventListener('click', (e) => e.stopPropagation());
                         speedPanel.addEventListener('click', (e) => e.stopPropagation());
+                        subtitlesPanel.addEventListener('click', (e) => e.stopPropagation());
+                        substylePanel.addEventListener('click', (e) => e.stopPropagation());
                         embedPanel.addEventListener('click', (e) => e.stopPropagation());
                         statsOverlay.addEventListener('click', (e) => e.stopPropagation());
                         controls.querySelector('.bottom-area-<%- v %>').addEventListener('click', (e) => e.stopPropagation());
@@ -3668,6 +4161,14 @@
                             }
                         });
 
+                        if (ccBtn) {
+                            ccBtn.addEventListener('click', (event) => {
+                                event.stopPropagation();
+                                toggleSubtitles();
+                                showControls();
+                            });
+                        }
+
                         fsBtn.addEventListener('click', (event) => {
                             event.stopPropagation();
                             closeAllPanels();
@@ -3748,6 +4249,7 @@
                             'f':          (p) => { toggleFullscreen(p); return true; },
 
                             'm':          (p) => { toggleMute(p); return true; },
+                            'c':          (p) => { toggleSubtitles(); return true; },
 
                             'arrowright':  (p) => { seekBy( SEEK_STEP); return true; },
                             'arrowleft':   (p) => { seekBy(-SEEK_STEP); return true; },
@@ -3818,6 +4320,68 @@
                                 closeAllPanels();
                             });
                         });
+
+                        if (subtitlesRow) {
+                            subtitlesRow.addEventListener('click', (event) => {
+                                event.stopPropagation();
+                                setSettingsOpen(false);
+                                subtitlesPanel.style.transform = '';
+                                subtitlesPanel.classList.add('is-open-<%- v %>');
+                                subtitlesPanel.setAttribute('aria-hidden', 'false');
+                            });
+                        }
+
+                        subtitleListItems.forEach(item => {
+                            item.addEventListener('click', () => {
+                                const idx = parseInt(item.getAttribute('data-sub-idx'), 10);
+                                setSubtitleTrack(idx);
+                                closeAllPanels();
+                            });
+                        });
+
+                        if (subtitlesCustomizeBtn) {
+                            subtitlesCustomizeBtn.addEventListener('click', (event) => {
+                                event.stopPropagation();
+                                subtitlesPanel.classList.remove('is-open-<%- v %>');
+                                subtitlesPanel.setAttribute('aria-hidden', 'true');
+                                substylePanel.style.transform = '';
+                                substylePanel.classList.add('is-open-<%- v %>');
+                                substylePanel.setAttribute('aria-hidden', 'false');
+                            });
+                        }
+
+                        function onSubstyleChange() {
+                            subStyle.size = substyleSize.value;
+                            subStyle.color = substyleColor.value;
+                            subStyle.font = substyleFont.value;
+                            subStyle.bgColor = substyleBgColor.value;
+                            subStyle.bgOpacity = substyleBgOpacity.value;
+                            subStyle.edge = substyleEdge.value;
+                            subStyle.pos = substylePos.value;
+                            saveSubStyle();
+                            applySubStyle();
+                        }
+
+                        [substyleSize, substyleColor, substyleFont, substyleBgColor, substyleBgOpacity, substyleEdge, substylePos].forEach(el => {
+                            if (el) el.addEventListener('change', onSubstyleChange);
+                        });
+
+                        if (substyleResetBtn) {
+                            substyleResetBtn.addEventListener('click', () => {
+                                subStyle = Object.assign({}, defaultSubStyle);
+                                syncSubstyleInputs();
+                                saveSubStyle();
+                                applySubStyle();
+                                showToast('Subtitle options reset', 1500);
+                            });
+                        }
+
+                        if (substyleDoneBtn) {
+                            substyleDoneBtn.addEventListener('click', () => {
+                                substylePanel.classList.remove('is-open-<%- v %>');
+                                substylePanel.setAttribute('aria-hidden', 'true');
+                            });
+                        }
 
                         speedRow.addEventListener('click', (event) => {
                             event.stopPropagation();
@@ -3925,14 +4489,9 @@
                         video.addEventListener('click', () => {
                             if (Date.now() - lastDragEndTime < 200) return;
                             
-                            const anyPanelOpen = settingsPanel.classList.contains('is-open-<%- v %>') || 
-                                                 speedPanel.classList.contains('is-open-<%- v %>') || 
-                                                 qualityPanel.classList.contains('is-open-<%- v %>') ||
-                                                 embedPanel.classList.contains('is-open-<%- v %>') ||
-                                                 volGroup.classList.contains('is-volume-open-<%- v %>') ||
-                                                 (moreVideosDrawer && moreVideosDrawer.classList.contains('is-open-<%- v %>'));
+                            const anyOpen = isAnyPanelOpen();
                             closeAllPanels();
-                            if (anyPanelOpen) return;
+                            if (anyOpen) return;
                             togglePlay();
                         });
                         
@@ -3954,13 +4513,11 @@
                             }
                         });
                         wrapper.addEventListener('mouseleave', () => {
-                            const isMoreOpen = moreVideosDrawer && moreVideosDrawer.classList.contains('is-open-<%- v %>');
-                            if (!getPrimaryMedia().paused && !isMoreOpen && !settingsPanel.classList.contains('is-open-<%- v %>') && !speedPanel.classList.contains('is-open-<%- v %>') && !qualityPanel.classList.contains('is-open-<%- v %>') && !embedPanel.classList.contains('is-open-<%- v %>') && !volGroup.classList.contains('is-volume-open-<%- v %>')) {
+                            if (!getPrimaryMedia().paused && !isAnyPanelOpen()) {
                                 controls.style.opacity = '0';
                             }
                         });
 
-                        // --- Init Flow ---
                         setBuffering(true); 
                         
                         if (forcedQuality === '720p') {
