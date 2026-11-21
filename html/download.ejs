@@ -457,11 +457,7 @@
       <h1 class="video-title"><%= title %></h1>
       
       <div class="video-meta">
-        <% if (authorUrl) { %>
-          <div class="subtitle">By <a href="<%= authorUrl %>" target="_blank" rel="noopener noreferrer"><%= author %></a></div>
-        <% } else { %>
           <div class="subtitle">By <%= author %></div>
-        <% } %>
         <span class="subtitle">•</span>
         <div class="subtitle">ID: <code><%= v %></code></div>
       </div>
