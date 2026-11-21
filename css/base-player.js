@@ -2915,6 +2915,23 @@ window.SyncLevel = SyncLevel;
         }
       };
 
+      var handleJumpTimeLinkClick = function(evt) {
+        var target = evt.target;
+        var link = target && target.closest ? target.closest('a[data-jump-time], a[data-onclick="jump_to_time"]') : null;
+        if (!link) return;
+        var rawJump = link.getAttribute('data-jump-time');
+        var jumpSec = (rawJump !== null && rawJump !== '') ? parseFloat(rawJump) : compat.parseClockText(link.textContent || '');
+        if (isNaN(jumpSec) || !isFinite(jumpSec) || jumpSec < 0) return;
+        evt.preventDefault();
+        evt.stopPropagation();
+        var vNode = (rootEl && rootEl.querySelector('video')) || document.querySelector('video.video-js, video');
+        if (typeof player.currentTime === 'function') {
+          player.currentTime(jumpSec);
+        } else if (vNode) {
+          vNode.currentTime = jumpSec;
+        }
+      };
+
       if (rootEl && !rootEl.querySelector('.alabaster-fs-desc-toggle')) {
         fsDescToggle = document.createElement('button');
         fsDescToggle.type = 'button';
@@ -3189,6 +3206,8 @@ window.SyncLevel = SyncLevel;
           fsDescDrawer.addEventListener(evName, stopEventBubble, false);
         });
 
+        fsDescDrawer.addEventListener('click', handleJumpTimeLinkClick, false);
+
         ['mousedown', 'pointerdown', 'touchstart', 'touchend'].forEach(function(evName) {
           fsDescToggle.addEventListener(evName, stopEventBubble, false);
         });
@@ -3409,6 +3428,8 @@ window.SyncLevel = SyncLevel;
             evt.stopPropagation();
           }, false);
         });
+
+        fsCommentsDrawer.addEventListener('click', handleJumpTimeLinkClick, false);
 
         fsCommentsClose.addEventListener('click', function(evt) {
           evt.preventDefault();
