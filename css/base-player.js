@@ -2106,7 +2106,7 @@ window.SyncLevel = SyncLevel;
       '  background: #262220 !important;',
       '}',
       '.video-js .alabaster-gif-seg-btn.is-selected, .alabaster-gif-seg-btn.is-selected {',
-      '  background: #d4d4d4 !important;',
+      '  background: #111111 !important;',
       '  color: #161412 !important;',
       '}',
       '.video-js .alabaster-gif-seg-btn:disabled, .alabaster-gif-seg-btn:disabled {',
@@ -4799,7 +4799,7 @@ window.SyncLevel = SyncLevel;
           topTextField.className = 'alabaster-gif-field';
           var topTextLabel = document.createElement('label');
           topTextLabel.className = 'alabaster-gif-field-label';
-          topTextLabel.textContent = 'Top text (white meme bar)';
+          topTextLabel.textContent = 'Top text';
           var topTextInput = document.createElement('input');
           topTextInput.type = 'text';
           topTextInput.className = 'alabaster-gif-input';
