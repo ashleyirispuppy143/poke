@@ -57,15 +57,11 @@
   const title    = `${VideoData?.title} | Poke`;
 
   const twitterTags = [
-    { name: "twitter:card", content: "player" },
     { name: "twitter:author", content: VideoData?.author },
     { name: "twitter:url", content: url },
     { name: "twitter:title", content: title },
     { name: "twitter:description", content: desc },
-    { name: "twitter:image", content: image },
-    { name: "twitter:player", content: embedUrl },
-    { name: "twitter:player:width", content: "560" },
-    { name: "twitter:player:height", content: "315" },
+    { name: "twitter:card", content: "summary_large_image" },
   ];
 
   const facebookTags = [
