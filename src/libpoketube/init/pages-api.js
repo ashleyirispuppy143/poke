@@ -160,6 +160,8 @@ module.exports = function (app, config, renderTemplate) {
       return res.status(404).send("Image not found");
     }
   });
+
+  
  
   app.get("/api/geo", async (req, res) => {
     try {
@@ -193,6 +195,7 @@ module.exports = function (app, config, renderTemplate) {
 
 
 
+  
   app.get("/ggpht/:v", async function (req, res) {
     var url = `https://image-proxy.poketube.fun/proxy?url=https://yt3.ggpht.com/${req.params.v}`;
 
@@ -272,6 +275,82 @@ module.exports = function (app, config, renderTemplate) {
 
     res.redirect(url);
   });
+
+  
+let cachedPlayerId = null;
+let playerIdExpiresAt = 0;
+const PLAYER_ID_TTL = 30 * 60 * 1000;  
+
+async function getYouTubePlayerId(fetch) {
+  const now = Date.now();
+  if (cachedPlayerId && now < playerIdExpiresAt) {
+    return cachedPlayerId;
+  }
+
+  try {
+    const res = await fetch("https://www.youtube.com/iframe_api");
+    if (!res.ok) return cachedPlayerId;
+
+    const text = await res.text();
+    const match = text.match(/\\?\/s\\?\/player\\?\/([a-zA-Z0-9_-]+)\\?\//);
+
+    if (match?.[1]) {
+      cachedPlayerId = match[1];
+      playerIdExpiresAt = now + PLAYER_ID_TTL;
+    }
+    return cachedPlayerId;
+  } catch {
+    return cachedPlayerId;
+  }
+}
+
+app.get("/api/innertube/v1/player", async (req, res) => {
+  const id = req.query.v || req.query.videoId;
+  if (!id) {
+    return res.status(400).json({ error: "Missing video ID (?v= or ?videoId=)" });
+  }
+
+  try {
+    const { fetch } = await import("undici");
+
+    const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${id}`)}&format=json`;
+    const rydUrl = `https://ryd-proxy.kavin.rocks/votes/${encodeURIComponent(id)}&hash=d0550b6e28c8f93533a569c314d5b4e2`;
+
+    const [oembed, ryd, playerId] = await Promise.all([
+      fetch(oembedUrl)
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+      fetch(rydUrl, {
+        headers: typeof headers !== "undefined" ? headers : {},
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+      getYouTubePlayerId(fetch),
+    ]);
+
+    if (!oembed && !ryd) {
+      return res.status(404).json({ error: "Video not found or unavailable" });
+    }
+
+    return res.json({
+      video_id: id,
+      player_id: playerId || null,
+      type: oembed?.type || null,
+      title: oembed?.title || null,
+      author_name: oembed?.author_name || null,
+      author_url: oembed?.author_url || null,
+      thumbnail_url: oembed?.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+      engagement: {
+        views: parseInt(ryd?.viewCount, 10) || 0,
+        likes: parseInt(ryd?.likes, 10) || 0,
+        dislikes: parseInt(ryd?.dislikes, 10) || 0,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+});
 
 app.get("/api/getYoutubeUrl", async function (req, res) {
   var v = req.query.v;
