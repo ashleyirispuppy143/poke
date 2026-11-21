@@ -783,20 +783,24 @@ window.SyncLevel = SyncLevel;
     try {
       var savedVol = getStorageValue('volume');
       var savedMute = getStorageValue('muted');
+      var isMutedSaved = savedMute === '1' || savedMute === 'true';
       if (savedVol !== null) {
         var v = parseFloat(savedVol);
         if (!isNaN(v) && isFinite(v)) {
           var clamped = Math.max(0, Math.min(1, v));
+          if (clamped <= 0.005 && !isMutedSaved) {
+            clamped = 1;
+            setStorageValue('volume', '1');
+          }
           if (typeof player.volume === 'function') player.volume(clamped);
           if (videoEl) videoEl.volume = clamped;
           if (audioEl) audioEl.volume = clamped;
         }
       }
       if (savedMute !== null) {
-        var m = savedMute === '1' || savedMute === 'true';
-        if (typeof player.muted === 'function') player.muted(m);
-        if (videoEl) videoEl.muted = m;
-        if (audioEl) audioEl.muted = m;
+        if (typeof player.muted === 'function') player.muted(isMutedSaved);
+        if (videoEl) videoEl.muted = isMutedSaved;
+        if (audioEl) audioEl.muted = isMutedSaved;
       }
     } catch (_) {}
     setTimeout(function() { restoring = false; }, 120);
@@ -5934,7 +5938,9 @@ window.SyncLevel = SyncLevel;
               playheadEl.style.display = 'block';
               seekHelperVideo(vid, gState.selStart, 1200).then(function() {
                 if (!gState.previewing || !gState.open) return;
-                vid.muted = true;
+                if (vid !== getVideoElementNode()) {
+                  vid.muted = true;
+                }
                 try {
                   var p = vid.play();
                   if (p && typeof p.catch === 'function') p.catch(function() {});
@@ -7907,108 +7913,12 @@ window.SyncLevel = SyncLevel;
           try { videoEl.load(); } catch (_) {}
         }
 
-        var nativeMuxPlay = HTMLMediaElement.prototype.play.bind(videoEl);
         var nativeMuxPause = HTMLMediaElement.prototype.pause.bind(videoEl);
-        var muxFadeTimer = 0;
-        var muxFadingOut = false;
-        var muxSavedVol = videoEl.volume;
-        var muxInternalVol = false;
-
-        var setMuxVolumeSilent = function(v) {
-          window.Alabaster._suppressVolumePersistUntil = compat.now() + 90;
-          muxInternalVol = true;
-          try { videoEl.volume = Math.max(0, Math.min(1, v)); } catch (_) {}
-          setTimeout(function() { muxInternalVol = false; }, 45);
-        };
-
-        videoEl.addEventListener('volumechange', function(evt) {
-          if (muxInternalVol || compat.now() < (window.Alabaster._suppressVolumePersistUntil || 0)) {
-            evt.stopImmediatePropagation();
-            return;
-          }
-          muxSavedVol = videoEl.volume;
-        }, true);
-
-        var clearMuxFade = function() {
-          if (muxFadeTimer) {
-            clearTimeout(muxFadeTimer);
-            muxFadeTimer = 0;
-          }
-          muxFadingOut = false;
-        };
-
-        var fadeMuxIn = function(targetVol) {
-          clearMuxFade();
-          var steps = [0.06, 0.18, 0.36, 0.58, 0.78, 0.92, 1.0];
-          var idx = 0;
-          var tick = function() {
-            muxFadeTimer = 0;
-            if (videoEl.paused || muxFadingOut) return;
-            setMuxVolumeSilent(targetVol * steps[idx]);
-            idx++;
-            if (idx < steps.length) {
-              muxFadeTimer = setTimeout(tick, 4);
-            }
-          };
-          muxFadeTimer = setTimeout(tick, 10);
-        };
-
-        videoEl.play = function() {
-          var targetVol = muxFadingOut ? muxSavedVol : videoEl.volume;
-          if (!muxFadingOut) muxSavedVol = targetVol;
-          clearMuxFade();
-          var shouldFade = Boolean(!videoEl.muted && targetVol > 0.01 && videoEl.paused);
-          if (shouldFade) {
-            setMuxVolumeSilent(0);
-          }
-          var p = nativeMuxPlay();
-          if (shouldFade) {
-            if (p && typeof p.then === 'function') {
-              p.then(function() {
-                fadeMuxIn(targetVol);
-              }).catch(function() {
-                setMuxVolumeSilent(targetVol);
-              });
-            } else {
-              fadeMuxIn(targetVol);
-            }
-          }
-          return p;
-        };
-
-        videoEl.pause = function() {
-          if (videoEl.paused || videoEl.muted || videoEl.volume <= 0.01 || videoEl.ended) {
-            clearMuxFade();
-            return nativeMuxPause();
-          }
-          if (muxFadingOut) return;
-          clearMuxFade();
-          muxFadingOut = true;
-          muxSavedVol = videoEl.volume;
-          var startVol = muxSavedVol;
-          var steps = [0.76, 0.52, 0.30, 0.12, 0.0];
-          var idx = 0;
-          var tickOut = function() {
-            muxFadeTimer = 0;
-            if (!muxFadingOut) return;
-            setMuxVolumeSilent(startVol * steps[idx]);
-            idx++;
-            if (idx < steps.length) {
-              muxFadeTimer = setTimeout(tickOut, 4);
-            } else {
-              muxFadingOut = false;
-              try { nativeMuxPause(); } catch (_) {}
-              setMuxVolumeSilent(startVol);
-            }
-          };
-          tickOut();
-        };
 
         videoEl.addEventListener('timeupdate', function() {
           sampleVideoFrameStats(videoEl, !videoEl.paused && !videoEl.seeking && !document.hidden);
         }, false);
         videoEl.addEventListener('ended', function() {
-          clearMuxFade();
           player.removeClass('vjs-waiting');
           player.removeClass('vjs-seeking');
           player.addClass('vjs-ended');
@@ -8157,6 +8067,16 @@ window.SyncLevel = SyncLevel;
       var nativeSetVTime = timeDesc && timeDesc.set ? timeDesc.set.bind(videoEl) : function(v) { videoEl.currentTime = v; };
       var nativeGetATime = timeDesc && timeDesc.get ? timeDesc.get.bind(audioEl) : function() { return audioEl.currentTime; };
       var nativeSetATime = timeDesc && timeDesc.set ? timeDesc.set.bind(audioEl) : function(v) { audioEl.currentTime = v; };
+
+      var volDesc = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'volume');
+      var nativeGetVVol = volDesc && volDesc.get ? volDesc.get.bind(videoEl) : function() { return videoEl.volume; };
+      var nativeGetAVol = volDesc && volDesc.get ? volDesc.get.bind(audioEl) : function() { return audioEl.volume; };
+      var nativeSetAVol = volDesc && volDesc.set ? volDesc.set.bind(audioEl) : function(v) { audioEl.volume = v; };
+
+      var mutedDesc = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'muted');
+      var nativeGetVMuted = mutedDesc && mutedDesc.get ? mutedDesc.get.bind(videoEl) : function() { return videoEl.muted; };
+      var nativeGetAMuted = mutedDesc && mutedDesc.get ? mutedDesc.get.bind(audioEl) : function() { return audioEl.muted; };
+      var nativeSetAMuted = mutedDesc && mutedDesc.set ? mutedDesc.set.bind(audioEl) : function(m) { audioEl.muted = m; };
 
       var durDesc = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'duration');
       var nativeGetVDur = durDesc && durDesc.get ? durDesc.get.bind(videoEl) : null;
@@ -8593,12 +8513,17 @@ window.SyncLevel = SyncLevel;
       }
 
       function applyAudioOutputVolume() {
-        var target = Math.max(0, Math.min(1, (videoEl.volume || 0) * state.audioFadeFactor));
-        if (Math.abs(audioEl.volume - target) > 0.0005) {
-          audioEl.volume = target;
+        state.audioFadeFactor = 1;
+        var rawVVol = nativeGetVVol();
+        var vVol = (typeof rawVVol === 'number' && !isNaN(rawVVol) && isFinite(rawVVol)) ? rawVVol : 1;
+        var target = Math.max(0, Math.min(1, vVol));
+        var curAVol = nativeGetAVol();
+        if (Math.abs(curAVol - target) > 0.0005) {
+          try { nativeSetAVol(target); } catch (_) {}
         }
-        if (audioEl.muted !== videoEl.muted) {
-          audioEl.muted = videoEl.muted;
+        var vMuted = Boolean(nativeGetVMuted());
+        if (Boolean(nativeGetAMuted()) !== vMuted) {
+          try { nativeSetAMuted(vMuted); } catch (_) {}
         }
       }
 
@@ -8608,92 +8533,28 @@ window.SyncLevel = SyncLevel;
           state.audioFadeTimer = 0;
         }
         state.audioFadingOut = false;
+        state.audioFadeFactor = 1;
       }
 
       function prepareAudioSilentForPlay() {
         clearAudioFadeTimer();
-        if (videoEl.muted || videoEl.volume <= 0.01) {
-          state.audioFadeFactor = 1;
-          applyAudioOutputVolume();
-          return;
-        }
-        state.audioFadeFactor = 0;
-        audioEl.volume = 0;
+        applyAudioOutputVolume();
       }
 
       function fadeAudioInSmoothly() {
         clearAudioFadeTimer();
-        if (videoEl.muted || videoEl.volume <= 0.01) {
-          state.audioFadeFactor = 1;
-          applyAudioOutputVolume();
-          return;
-        }
-        var steps = [0.08, 0.22, 0.42, 0.64, 0.82, 0.94, 1.0];
-        var idx = 0;
-        var startFactor = state.audioFadeFactor;
-        while (idx < steps.length && steps[idx] <= startFactor + 0.02) {
-          idx++;
-        }
-        if (idx >= steps.length) {
-          state.audioFadeFactor = 1;
-          applyAudioOutputVolume();
-          return;
-        }
-        var stepIn = function() {
-          state.audioFadeTimer = 0;
-          if (!state.wantPlaying || state.audioFadingOut || nativeGetAPaused()) return;
-          state.audioFadeFactor = steps[idx];
-          applyAudioOutputVolume();
-          idx++;
-          if (idx < steps.length) {
-            state.audioFadeTimer = setTimeout(stepIn, 4);
-          }
-        };
-        state.audioFadeTimer = setTimeout(stepIn, startFactor < 0.05 ? 10 : 4);
+        applyAudioOutputVolume();
       }
 
       function fadeOutAndPauseAudio(onComplete) {
         clearAudioFadeTimer();
-        if (nativeGetAPaused() || videoEl.muted || videoEl.volume <= 0.01 || audioEl.ended) {
-          state.audioFadeFactor = 1;
-          runInternal(function() {
-            if (!nativeGetAPaused()) {
-              try { nativeAudioPause(); } catch (_) {}
-            }
-          });
-          applyAudioOutputVolume();
-          if (typeof onComplete === 'function') onComplete();
-          return;
-        }
-        state.audioFadingOut = true;
-        var startFactor = state.audioFadeFactor > 0.01 ? state.audioFadeFactor : 1;
-        var steps = [0.76, 0.52, 0.30, 0.12, 0.0];
-        var idx = 0;
-        var stepOut = function() {
-          state.audioFadeTimer = 0;
-          if (!state.audioFadingOut || state.wantPlaying) {
-            state.audioFadingOut = false;
-            return;
+        runInternal(function() {
+          if (!nativeGetAPaused()) {
+            try { nativeAudioPause(); } catch (_) {}
           }
-          state.audioFadeFactor = startFactor * steps[idx];
-          applyAudioOutputVolume();
-          idx++;
-          if (idx < steps.length) {
-            state.audioFadeTimer = setTimeout(stepOut, 4);
-          } else {
-            state.audioFadingOut = false;
-            audioEl.volume = 0;
-            runInternal(function() {
-              if (!nativeGetAPaused()) {
-                try { nativeAudioPause(); } catch (_) {}
-              }
-            });
-            state.audioFadeFactor = 1;
-            applyAudioOutputVolume();
-            if (typeof onComplete === 'function') onComplete();
-          }
-        };
-        stepOut();
+        });
+        applyAudioOutputVolume();
+        if (typeof onComplete === 'function') onComplete();
       }
 
       audioEl.play = function() {
@@ -8717,6 +8578,43 @@ window.SyncLevel = SyncLevel;
               var target = Number(val);
               if (!isNaN(target)) nativeSetATime(target);
             }
+          }
+        });
+      }
+
+      if (volDesc && volDesc.get && volDesc.set) {
+        Object.defineProperty(audioEl, 'volume', {
+          configurable: true,
+          enumerable: true,
+          get: function() {
+            return nativeGetAVol();
+          },
+          set: function(val) {
+            if (state.internalDepth > 0) {
+              var target = Number(val);
+              if (!isNaN(target) && isFinite(target)) {
+                nativeSetAVol(Math.max(0, Math.min(1, target)));
+              }
+              return;
+            }
+            applyAudioOutputVolume();
+          }
+        });
+      }
+
+      if (mutedDesc && mutedDesc.get && mutedDesc.set) {
+        Object.defineProperty(audioEl, 'muted', {
+          configurable: true,
+          enumerable: true,
+          get: function() {
+            return nativeGetAMuted();
+          },
+          set: function(val) {
+            if (state.internalDepth > 0) {
+              nativeSetAMuted(Boolean(val));
+              return;
+            }
+            applyAudioOutputVolume();
           }
         });
       }
@@ -10508,7 +10406,6 @@ window.SyncLevel = SyncLevel;
         setBufferSpinner(true);
         player.addClass('vjs-seeking');
 
-        audioEl.volume = 0;
         freezeBothStreams();
         runInternal(function() {
           if (!isVideoBypassed() && !isEffectivelyHidden()) {
@@ -11094,6 +10991,8 @@ window.SyncLevel = SyncLevel;
       }, false);
 
       player.on('volumechange', enforceRateAndVolume);
+      listen(videoEl, 'volumechange', enforceRateAndVolume, false);
+      listen(audioEl, 'volumechange', applyAudioOutputVolume, false);
 
       player.on('ratechange', function() {
         if (!state.rateTransitionTimer && compat.now() >= (window.Alabaster._rateChangeGraceUntil || 0)) {
