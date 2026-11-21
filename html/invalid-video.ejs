@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Video Unavailable <%= (locals.v) ? '- ' + v : '' %></title>
     <style>
-        @import url('https://p.poketube.fun/https://fonts.bunny.net/css?family=roboto:400,500&display=swap');
+        @import url('https://p.poketube.fun/https://fonts.bunny.net/css?family=roboto:400,500,700&display=swap');
 
         body {
             margin: 0;
-            padding: 0;
+            padding: 32px 0;
             font-family: 'Roboto', Arial, sans-serif;
             background-color: #000000;
             color: #f1f1f1;
@@ -17,6 +17,7 @@
             align-items: center;
             justify-content: center;
             min-height: 100vh;
+            box-sizing: border-box;
         }
 
         #error-container {
@@ -56,7 +57,7 @@
             text-align: left;
             display: inline-block;
             padding: 0;
-            margin: 0 auto 36px auto;
+            margin: 0 auto 28px auto;
             font-size: 14px;
             color: #aaaaaa;
             line-height: 1.6;
@@ -79,6 +80,79 @@
             position: absolute;
             left: 0;
             color: #717171;
+        }
+
+        .metadata-wrapper {
+            margin: 0 auto 28px auto;
+            text-align: center;
+        }
+
+        .metadata-heading {
+            font-size: 13px;
+            font-weight: 500;
+            color: #aaaaaa;
+            margin: 0 0 12px 0;
+            letter-spacing: 0.2px;
+        }
+
+        .yt-metadata-card {
+            background-color: #161616;
+            border: 1px solid #272727;
+            border-radius: 16px;
+            padding: 14px;
+            text-align: center;
+            transition: border-color 0.2s ease, background-color 0.2s ease;
+        }
+
+        .yt-metadata-card:hover {
+            background-color: #1c1c1c;
+            border-color: #383838;
+        }
+
+        .yt-thumb-wrap {
+            display: block;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            border-radius: 12px;
+            overflow: hidden;
+            background-color: #272727;
+            margin-bottom: 14px;
+        }
+
+        .yt-thumb {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            border-radius: 12px;
+        }
+
+        .yt-meta-title {
+            font-size: 16px;
+            font-weight: 500;
+            color: #f1f1f1;
+            margin: 0 0 6px 0;
+            line-height: 1.4;
+            word-break: break-word;
+            text-align: center;
+        }
+
+        .yt-meta-author {
+            font-size: 14px;
+            color: #aaaaaa;
+            margin: 0;
+            text-align: center;
+        }
+
+        .yt-meta-author a {
+            color: #aaaaaa;
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+
+        .yt-meta-author a:hover {
+            color: #f1f1f1;
+            text-decoration: underline;
         }
 
         .actions {
@@ -200,6 +274,21 @@
             locals.err_reason === "AGE_RESTRICTED" ||
             /sign in to confirm your age|this video is age-restricted/i.test(issueErrorMessage);
 
+        const metaTitle = (locals.oembed && locals.oembed.title) || locals.title || "";
+        const metaAuthor = (locals.oembed && locals.oembed.author_name) || locals.author || "";
+        const metaAuthorUrl = (locals.oembed && locals.oembed.author_url) || locals.authorUrl || "";
+        const rawThumbUrl =
+            (locals.oembed && locals.oembed.thumbnail_url) ||
+            locals.thumbnailUrl ||
+            (locals.v ? `https://i.ytimg.com/vi/${encodeURIComponent(locals.v)}/hqdefault.jpg` : "");
+
+        const mediaProxyBase = String(locals.mediaproxy || "").replace(/\/+$/, "");
+        const proxiedThumbUrl = rawThumbUrl
+            ? `${mediaProxyBase}/proxy?url=${encodeURIComponent(rawThumbUrl)}`
+            : "";
+
+        const hasMetadata = Boolean(metaTitle || metaAuthor);
+
         const issueTitle = `[Video Error] ${issueVideoId} | ${issueErrorMessage}`;
 
         const issueBody = [
@@ -286,6 +375,29 @@
                 <li>The video was taken down for Terms of Service violations.</li>
                 <li>The video ID provided is invalid.</li>
             </ul>
+        <% } %>
+
+        <% if (hasMetadata) { %>
+            <div class="metadata-wrapper">
+                <p class="metadata-heading">You can still view the metadata</p>
+                <div class="yt-metadata-card">
+                    <% if (proxiedThumbUrl) { %>
+                        <div class="yt-thumb-wrap">
+                            <img class="yt-thumb" src="<%= proxiedThumbUrl %>" alt="<%= metaTitle || 'Video thumbnail' %>" loading="lazy" />
+                        </div>
+                    <% } %>
+
+                    <% if (metaTitle) { %>
+                        <h2 class="yt-meta-title"><%= metaTitle %></h2>
+                    <% } %>
+
+                    <% if (metaAuthor) { %>
+                        <p class="yt-meta-author">
+                                <%= metaAuthor %>
+                        </p>
+                    <% } %>
+                </div>
+            </div>
         <% } %>
 
         <div class="actions">
