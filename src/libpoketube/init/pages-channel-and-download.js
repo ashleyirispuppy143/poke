@@ -59,24 +59,39 @@ const ChannelTabs = {
 };
 
 module.exports = function (app, config, renderTemplate) {
-  app.get("/download", async (req, res) => {
-    try {
-      const v = req.query.v;
-      if (!v) res.redirect("/");
-      const thumbnailUrl = `https://i.ytimg.com/vi/${v}/maxresdefault.jpg`;
-      const colors = await modules.getColors(thumbnailUrl);
-      const color = colors[0].hex();
+app.get("/download", async (req, res) => {
+  try {
+    const v = req.query.v;
+    if (!v) return res.redirect("/");
 
-      renderTemplate(res, req, "download.ejs", {
-        v,
-        color,
-        isMobile: req.useragent.isMobile,
-      });
-    } catch (error) {
-      res.redirect("/");
-    }
-  });
+    const { fetch } = await import("undici");
+    const thumbnailUrl = `https://i.ytimg.com/vi/${encodeURIComponent(v)}/maxresdefault.jpg`;
+    const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${v}`)}&format=json`;
 
+    const [colors, oembed] = await Promise.all([
+      modules.getColors(thumbnailUrl),
+      fetch(oembedUrl)
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+    ]);
+
+    const color = colors[0].hex();
+
+    renderTemplate(res, req, "download.ejs", {
+      v,
+      color,
+      isMobile: req.useragent.isMobile,
+      oembed,
+      title: oembed?.title || "Unknown Title",
+      author: oembed?.author_name || "Unknown Author",
+      authorUrl: oembed?.author_url || null,
+    });
+  } catch (error) {
+    res.redirect("/");
+  }
+});
+
+  
   app.get("/old/watch", async function (req, res) {
     var v = req.query.v;
     var e = req.query.e;
