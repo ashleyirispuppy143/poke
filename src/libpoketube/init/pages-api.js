@@ -456,544 +456,558 @@ const oneHourMs = 3600 * 1000;
       res.status(500).json({ error: "Proxy error" });
     }
   });
+
   app.get("/api/getEngagementData", async (req, res) => {
   const { fetch } = await import("undici");
   const id = req.query.v;
   const view = req.query.view;
-  let videoTitle = "Unknown Title";
 
-  if (req.query.t) {
-    try {
-      videoTitle = Buffer.from(req.query.t, "base64").toString("utf-8");
-    } catch (e) {}
+  if (!id) {
+    return res.status(400).json("pls gib ID :3");
   }
 
-  if (view === 'gui' && videoTitle === "Unknown Title") {
-    return res.status(400).json("pls gib base64 title via ?t= :3");
-  }
+  const escapeHtml = (str) =>
+    String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
 
   try {
-    if (id) {
-      const apiUrl = `https://ryd-proxy.kavin.rocks/votes/${id}&hash=d0550b6e28c8f93533a569c314d5b4e2`;
-      const response = await fetch(apiUrl, {
-        headers: typeof headers !== 'undefined' ? headers : {},
-      });
-      
-      if (response.status === 400) {
-        const error = await response.json();
-        return res.status(400).send(error);
-      }
-      
-      const engagement = await response.json();
-      const likes = parseInt(engagement.likes) || 0;
-      const dislikes = parseInt(engagement.dislikes) || 0;
-      const views = parseInt(engagement.viewCount) || 0;
-      const total = likes + dislikes;
-      const likePercentage = total > 0 ? ((likes / total) * 100).toFixed(2) : 0;
-      const dislikePercentage = total > 0 ? ((dislikes / total) * 100).toFixed(2) : 0;
-      const ratingNum = parseFloat(engagement.rating) || 0;
-      const starPercentage = (ratingNum / 5) * 100;
-      
-      const getLikePercentageColor = (percentage) => {
-        if (percentage >= 80) return "green";
-        else if (percentage >= 50) return "orange";
-        else return "red";
-      };
-      
-      const getDislikePercentageColor = (percentage) => {
-        if (percentage >= 50) return "red";
-        else if (percentage >= 20) return "orange";
-        else return "green";
-      };
-      
-      const likeColor = getLikePercentageColor(likePercentage);
-      const dislikeColor = getDislikePercentageColor(dislikePercentage);
-      
-      const userScore = (
-        parseFloat(likePercentage) -
-        parseFloat(dislikePercentage) / 2
-      ).toFixed(2);
-      
-      const getUserScoreLabel = (score) => {
-        if (score >= 98) return "Masterpiece";
-        else if (score >= 80) return "Overwhelmingly Positive";
-        else if (score >= 60) return "Positive";
-        else if (score >= 40) return "Mixed";
-        else if (score >= 20) return "Negative";
-        else return "Overwhelmingly Negative";
-      };
-      
-      const userScoreLabel = getUserScoreLabel(userScore);
-      
-      const userScoreColor =
-        userScore >= 98 ? "rainbow" :
-        userScore >= 80 ? "green" :
-        userScore >= 50 ? "orange" :
-        "red";
-        
-      const respon = {
-        view_count: views,
-        like_count: likes,
-        dislike_count: dislikes,
-        YouTube_rating: engagement.rating,
-        user_ReceptionScore: {
-          label: userScoreLabel,
-          score: userScore,
-          color: userScoreColor,
+    const apiUrl = `https://ryd-proxy.kavin.rocks/votes/${encodeURIComponent(id)}&hash=d0550b6e28c8f93533a569c314d5b4e2`;
+    const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${id}`)}&format=json`;
+
+    const rydPromise = fetch(apiUrl, {
+      headers: typeof headers !== "undefined" ? headers : {},
+    });
+
+    const oembedPromise =
+      view === "gui"
+        ? fetch(oembedUrl)
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null)
+        : Promise.resolve(null);
+
+    const [response, oembedData] = await Promise.all([rydPromise, oembedPromise]);
+
+    if (response.status === 400) {
+      const error = await response.json();
+      return res.status(400).send(error);
+    }
+
+    const videoTitle = oembedData?.title || "Unknown Title";
+    const engagement = await response.json();
+
+    const likes = parseInt(engagement.likes) || 0;
+    const dislikes = parseInt(engagement.dislikes) || 0;
+    const views = parseInt(engagement.viewCount) || 0;
+    const total = likes + dislikes;
+    const likePercentage = total > 0 ? ((likes / total) * 100).toFixed(2) : 0;
+    const dislikePercentage = total > 0 ? ((dislikes / total) * 100).toFixed(2) : 0;
+    const ratingNum = parseFloat(engagement.rating) || 0;
+    const starPercentage = (ratingNum / 5) * 100;
+
+    const getLikePercentageColor = (percentage) => {
+      if (percentage >= 80) return "green";
+      else if (percentage >= 50) return "orange";
+      else return "red";
+    };
+
+    const getDislikePercentageColor = (percentage) => {
+      if (percentage >= 50) return "red";
+      else if (percentage >= 20) return "orange";
+      else return "green";
+    };
+
+    const likeColor = getLikePercentageColor(likePercentage);
+    const dislikeColor = getDislikePercentageColor(dislikePercentage);
+
+    const userScore = (
+      parseFloat(likePercentage) -
+      parseFloat(dislikePercentage) / 2
+    ).toFixed(2);
+
+    const getUserScoreLabel = (score) => {
+      if (score >= 98) return "Masterpiece";
+      else if (score >= 80) return "Overwhelmingly Positive";
+      else if (score >= 60) return "Positive";
+      else if (score >= 40) return "Mixed";
+      else if (score >= 20) return "Negative";
+      else return "Overwhelmingly Negative";
+    };
+
+    const userScoreLabel = getUserScoreLabel(userScore);
+
+    const userScoreColor =
+      userScore >= 98 ? "rainbow" :
+      userScore >= 80 ? "green" :
+      userScore >= 50 ? "orange" :
+      "red";
+
+    const respon = {
+      view_count: views,
+      like_count: likes,
+      dislike_count: dislikes,
+      YouTube_rating: engagement.rating,
+      user_ReceptionScore: {
+        label: userScoreLabel,
+        score: userScore,
+        color: userScoreColor,
+      },
+      display: {
+        likeColor: likeColor,
+        dislikeColor: dislikeColor,
+        percentage: {
+          likePercentage: `${likePercentage}%`,
+          dislikePercentage: `${dislikePercentage}%`,
         },
-        display: {
-          likeColor: likeColor,
-          dislikeColor: dislikeColor,
-          percentage: {
-            likePercentage: `${likePercentage}%`,
-            dislikePercentage: `${dislikePercentage}%`,
-          },
-        },
-        raw_stats: engagement,
-      };
+      },
+      raw_stats: engagement,
+    };
 
-      if (view === 'gui') {
-        const svgStar = `<svg viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>`;
-        const starsHTML = svgStar.repeat(5);
+    if (view === "gui") {
+      const safeId = escapeHtml(id);
+      const safeTitle = escapeHtml(videoTitle);
+      const svgStar = `<svg viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>`;
+      const starsHTML = svgStar.repeat(5);
 
-        const html = `
-          <!DOCTYPE html>
-          <html lang="en">
-          <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Engagement Stats</title>
-            <style>
-              @font-face {
-                font-family: "PokeTube Flex";
-                src: url("/static/robotoflex.ttf");
-                font-style: normal;
-                font-stretch: 1% 800%;
-                font-display: swap;
-              }
-              
-              * {
-                box-sizing: border-box;
-                margin: 0;
-                padding: 0;
-              }
+      const html = `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>${safeTitle} - Engagement Stats</title>
+          <style>
+            @font-face {
+              font-family: "PokeTube Flex";
+              src: url("/static/robotoflex.ttf");
+              font-style: normal;
+              font-stretch: 1% 800%;
+              font-display: swap;
+            }
+            
+            * {
+              box-sizing: border-box;
+              margin: 0;
+              padding: 0;
+            }
 
-              body { 
-                font-family: "PokeTube Flex", Arial, sans-serif; 
-                background-color: #0f0f0f;
-                color: #f1f1f1; 
-                display: flex; 
-                justify-content: center; 
-                align-items: center; 
-                min-height: 100vh; 
-                padding: 16px;
-                font-variation-settings: "wdth" 120, "wght" 400;
-              }
-              
-              .card { 
-                background-color: #0f0f0f; 
-                padding: 24px; 
-                border: 1px solid #272727; 
-                border-radius: 16px; 
-                max-width: 640px; 
-                width: 100%;
-              }
-              
-              .thumbnail-container {
-                position: relative;
-                display: block;
-                width: 100%;
-                aspect-ratio: 16/9;
-                border-radius: 12px;
-                margin-bottom: 16px;
-                overflow: hidden;
-                cursor: pointer;
-                border: 2px solid #000000;
-              }
-              
-              .thumbnail {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-                transition: filter 0.2s ease, transform 0.3s ease;
-                display: block;
-              }
-              
-              .play-button {
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                width: 64px;
-                height: 64px;
-                background-color: rgba(0, 0, 0, 0.6);
-                backdrop-filter: blur(4px);
-                border-radius: 50%;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                opacity: 0;
-                transition: opacity 0.2s ease, transform 0.2s ease;
-              }
-              
-              .play-button svg {
-                width: 32px;
-                height: 32px;
-                fill: #ffffff;
-                margin-left: 4px;
-              }
-              
-              .thumbnail-container:hover .thumbnail {
-                filter: brightness(0.6);
-                transform: scale(1.02);
-              }
-              
-              .thumbnail-container:hover .play-button {
-                opacity: 1;
-                transform: translate(-50%, -50%) scale(1.05);
-              }
-              
-              .video-title {
-                font-size: clamp(1.3rem, 3vw, 1.6rem);
-                font-weight: 800;
-                margin-bottom: 6px;
-                font-variation-settings: "wdth" 150, "wght" 800;
-                line-height: 1.3;
-                word-wrap: break-word;
-                text-align: center;
-              }
-              
-              .video-views {
-                font-size: 1.05rem;
-                color: #aaaaaa;
-                margin-bottom: 16px;
-                font-variation-settings: "wdth" 130, "wght" 500;
-                text-align: center;
-              }
-              
-              .pill { 
-                display: flex; 
-                align-items: center; 
-                background: #272727; 
-                border-radius: 20px; 
-                padding: 0 16px; 
-                height: 40px; 
-                width: max-content; 
-                margin: 0 auto 16px auto;
-                font-variation-settings: "wdth" 130, "wght" 600;
-              }
-              
-              .pill-section { 
-                display: flex; 
-                align-items: center; 
-                gap: 8px; 
-                font-size: 15px; 
-                font-weight: 600; 
-                color: #f1f1f1; 
-              }
-              
-              .divider { 
-                width: 1px; 
-                height: 24px; 
-                background-color: #3f3f3f; 
-                margin: 0 16px; 
-              }
-              
-              .ratio-bar { 
-                width: 100%; 
-                height: 4px; 
-                background-color: #cc0000;
-                border-radius: 4px; 
-                overflow: hidden; 
-                display: flex; 
-                margin-bottom: 20px; 
-              }
-              
-              .ratio-like { 
-                width: ${likePercentage}%; 
-                background-color: #2ba640; 
-                height: 100%; 
-                border-radius: 4px; 
-              }
-              
-              .reception { 
-                background: #1a1a1a; 
-                border: 1px solid #272727;
-                padding: 16px; 
-                border-radius: 12px; 
-                margin-bottom: 16px; 
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                gap: 12px;
-              }
+            body { 
+              font-family: "PokeTube Flex", Arial, sans-serif; 
+              background-color: #0f0f0f;
+              color: #f1f1f1; 
+              display: flex; 
+              justify-content: center; 
+              align-items: center; 
+              min-height: 100vh; 
+              padding: 16px;
+              font-variation-settings: "wdth" 120, "wght" 400;
+            }
+            
+            .card { 
+              background-color: #0f0f0f; 
+              padding: 24px; 
+              border: 1px solid #272727; 
+              border-radius: 16px; 
+              max-width: 640px; 
+              width: 100%;
+            }
+            
+            .thumbnail-container {
+              position: relative;
+              display: block;
+              width: 100%;
+              aspect-ratio: 16/9;
+              border-radius: 12px;
+              margin-bottom: 16px;
+              overflow: hidden;
+              cursor: pointer;
+              border: 2px solid #000000;
+            }
+            
+            .thumbnail {
+              width: 100%;
+              height: 100%;
+              object-fit: cover;
+              transition: filter 0.2s ease, transform 0.3s ease;
+              display: block;
+            }
+            
+            .play-button {
+              position: absolute;
+              top: 50%;
+              left: 50%;
+              transform: translate(-50%, -50%);
+              width: 64px;
+              height: 64px;
+              background-color: rgba(0, 0, 0, 0.6);
+              backdrop-filter: blur(4px);
+              border-radius: 50%;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              opacity: 0;
+              transition: opacity 0.2s ease, transform 0.2s ease;
+            }
+            
+            .play-button svg {
+              width: 32px;
+              height: 32px;
+              fill: #ffffff;
+              margin-left: 4px;
+            }
+            
+            .thumbnail-container:hover .thumbnail {
+              filter: brightness(0.6);
+              transform: scale(1.02);
+            }
+            
+            .thumbnail-container:hover .play-button {
+              opacity: 1;
+              transform: translate(-50%, -50%) scale(1.05);
+            }
+            
+            .video-title {
+              font-size: clamp(1.3rem, 3vw, 1.6rem);
+              font-weight: 800;
+              margin-bottom: 6px;
+              font-variation-settings: "wdth" 150, "wght" 800;
+              line-height: 1.3;
+              word-wrap: break-word;
+              text-align: center;
+            }
+            
+            .video-views {
+              font-size: 1.05rem;
+              color: #aaaaaa;
+              margin-bottom: 16px;
+              font-variation-settings: "wdth" 130, "wght" 500;
+              text-align: center;
+            }
+            
+            .pill { 
+              display: flex; 
+              align-items: center; 
+              background: #272727; 
+              border-radius: 20px; 
+              padding: 0 16px; 
+              height: 40px; 
+              width: max-content; 
+              margin: 0 auto 16px auto;
+              font-variation-settings: "wdth" 130, "wght" 600;
+            }
+            
+            .pill-section { 
+              display: flex; 
+              align-items: center; 
+              gap: 8px; 
+              font-size: 15px; 
+              font-weight: 600; 
+              color: #f1f1f1; 
+            }
+            
+            .divider { 
+              width: 1px; 
+              height: 24px; 
+              background-color: #3f3f3f; 
+              margin: 0 16px; 
+            }
+            
+            .ratio-bar { 
+              width: 100%; 
+              height: 4px; 
+              background-color: #cc0000;
+              border-radius: 4px; 
+              overflow: hidden; 
+              display: flex; 
+              margin-bottom: 20px; 
+            }
+            
+            .ratio-like { 
+              width: ${likePercentage}%; 
+              background-color: #2ba640; 
+              height: 100%; 
+              border-radius: 4px; 
+            }
+            
+            .reception { 
+              background: #1a1a1a; 
+              border: 1px solid #272727;
+              padding: 16px; 
+              border-radius: 12px; 
+              margin-bottom: 16px; 
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              gap: 12px;
+            }
 
-              .reception-header {
-                text-align: center;
-              }
-              
-              .reception-title { 
-                font-size: 13px; 
-                color: #aaaaaa; 
-                text-transform: uppercase; 
-                letter-spacing: 0.8px; 
-                margin-bottom: 6px; 
-                font-variation-settings: "wdth" 140, "wght" 700;
-              }
-              
-              .score-label { 
-                font-size: 24px; 
-                font-weight: bold; 
-                font-variation-settings: "wdth" 150, "wght" 800;
-              }
+            .reception-header {
+              text-align: center;
+            }
+            
+            .reception-title { 
+              font-size: 13px; 
+              color: #aaaaaa; 
+              text-transform: uppercase; 
+              letter-spacing: 0.8px; 
+              margin-bottom: 6px; 
+              font-variation-settings: "wdth" 140, "wght" 700;
+            }
+            
+            .score-label { 
+              font-size: 24px; 
+              font-weight: bold; 
+              font-variation-settings: "wdth" 150, "wght" 800;
+            }
 
-              .reception-stats {
-                display: flex;
-                justify-content: space-evenly;
-                align-items: center;
-                width: 100%;
-                background: #111111;
-                padding: 12px;
-                border-radius: 8px;
-                border: 1px solid #222;
-              }
-              
-              .score-number { 
-                font-size: 16px; 
-                color: #aaaaaa; 
-                font-variation-settings: "wdth" 125, "wght" 600;
-              }
-              
-              .star-container {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-              }
-              
-              /* Exact Fractional SVG Stars */
-              .star-rating-wrapper {
-                position: relative;
-                display: flex;
-                width: 120px; /* 5 stars * 24px */
-                height: 24px;
-              }
-              
-              .stars-bg, .stars-fg {
-                display: flex;
-                position: absolute;
-                top: 0;
-                left: 0;
-                height: 100%;
-              }
+            .reception-stats {
+              display: flex;
+              justify-content: space-evenly;
+              align-items: center;
+              width: 100%;
+              background: #111111;
+              padding: 12px;
+              border-radius: 8px;
+              border: 1px solid #222;
+            }
+            
+            .score-number { 
+              font-size: 16px; 
+              color: #aaaaaa; 
+              font-variation-settings: "wdth" 125, "wght" 600;
+            }
+            
+            .star-container {
+              display: flex;
+              align-items: center;
+              gap: 10px;
+            }
+            
+            .star-rating-wrapper {
+              position: relative;
+              display: flex;
+              width: 120px;
+              height: 24px;
+            }
+            
+            .stars-bg, .stars-fg {
+              display: flex;
+              position: absolute;
+              top: 0;
+              left: 0;
+              height: 100%;
+            }
 
-              .stars-bg svg {
-                width: 24px;
-                height: 24px;
-                fill: #333333;
-              }
-              
-              .stars-fg {
-                overflow: hidden;
-                width: ${starPercentage}%; /* Exact clipping */
-              }
+            .stars-bg svg {
+              width: 24px;
+              height: 24px;
+              fill: #333333;
+            }
+            
+            .stars-fg {
+              overflow: hidden;
+              width: ${starPercentage}%;
+            }
 
-              .stars-fg div {
-                display: flex;
-                width: 120px; /* Force to full 5-star width inside the clipped div */
-              }
-              
-              .stars-fg svg {
-                width: 24px;
-                height: 24px;
-                fill: #f1c40f;
-                filter: drop-shadow(0px 0px 4px rgba(241, 196, 15, 0.4));
-                flex-shrink: 0;
-              }
-              
-              .rating-text {
-                font-size: 18px;
-                font-weight: bold;
-                color: #f1f1f1;
-                font-variation-settings: "wdth" 140, "wght" 800;
-              }
+            .stars-fg div {
+              display: flex;
+              width: 120px;
+            }
+            
+            .stars-fg svg {
+              width: 24px;
+              height: 24px;
+              fill: #f1c40f;
+              filter: drop-shadow(0px 0px 4px rgba(241, 196, 15, 0.4));
+              flex-shrink: 0;
+            }
+            
+            .rating-text {
+              font-size: 18px;
+              font-weight: bold;
+              color: #f1f1f1;
+              font-variation-settings: "wdth" 140, "wght" 800;
+            }
 
-              .green { color: #2ba640; }
-              .orange { color: #f57c00; }
-              .red { color: #cc0000; }
-              
-              .rainbow { 
-                  background: linear-gradient(90deg, #ff6b6b, #feca57, #1dd1a1, #5f27cd, #ff9ff3);
-                  -webkit-background-clip: text;
-                  -webkit-text-fill-color: transparent;
-                  animation: rainbow-anim 3s linear infinite;
-                  background-size: 200% 100%;
-                  text-shadow: 0px 0px 10px rgba(255, 255, 255, 0.15);
-              }
-              
-              @keyframes rainbow-anim { 
-                0% { background-position: 100% 0; } 
-                100% { background-position: -100% 0; } 
-              }
-              
-              .info-section {
-                margin-top: 16px;
-                font-size: 13px;
-                color: #aaaaaa;
-                text-align: center;
-                line-height: 1.6;
-                font-variation-settings: "wdth" 130, "wght" 500;
-              }
-              
-              .info-section a {
-                color: #3ea6ff;
-                text-decoration: none;
-                font-variation-settings: "wdth" 130, "wght" 600;
-                transition: color 0.2s ease;
-              }
-              
-              .info-section a:hover {
-                text-decoration: underline;
-                color: #6ebcff;
-              }
-              
-              details { 
-                font-size: 13px; 
-                color: #aaa; 
-                background: #181818; 
-                padding: 12px; 
-                border-radius: 8px; 
-                border: 1px solid #272727; 
-                font-variation-settings: "wdth" 120, "wght" 500; 
-                margin-bottom: 8px; 
-                transition: background 0.2s ease;
-              }
-              
-              details:hover { 
-                background: #1f1f1f; 
-              }
-              
-              summary { 
-                cursor: pointer; 
-                user-select: none; 
-                font-weight: 600; 
-                outline: none; 
-                font-variation-settings: "wdth" 135, "wght" 700; 
-                margin-bottom: 4px; 
-              }
-              
-              details p { 
-                margin-top: 8px; 
-                line-height: 1.5; 
-                color: #ccc; 
-              }
-              
-              pre { 
-                overflow-x: auto; 
-                color: #e1e1e1; 
-                margin-top: 10px; 
-                font-family: monospace; 
-                font-variation-settings: normal; 
-                background: #121212; 
-                padding: 10px; 
-                border-radius: 6px;
-                border: 1px solid #272727;
-              }
-              
-              pre::-webkit-scrollbar {
-                height: 6px;
-              }
-              
-              pre::-webkit-scrollbar-thumb {
-                background: #444;
-                border-radius: 3px;
-              }
-              
-              pre::-webkit-scrollbar-track {
-                background: #121212;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="card">
-              <a href="/watch?v=${id}" class="thumbnail-container">
-                <img src="https://i.ytimg.com/vi/${id}/hqdefault.jpg" onerror="this.src='https://i.ytimg.com/vi/${id}/default.jpg'" class="thumbnail" alt="Video Thumbnail" />
-                <div class="play-button">
-                  <svg viewBox="0 0 24 24">
-                    <path d="M8 5v14l11-7z"></path>
-                  </svg>
-                </div>
-              </a>
-              
-              <h1 class="video-title">${videoTitle}</h1>
-              <div class="video-views">${views.toLocaleString()} views</div>
-              
-              <div class="pill">
-                <div class="pill-section">
-                  👍 ${likes.toLocaleString()}
-                </div>
-                <div class="divider"></div>
-                <div class="pill-section">
-                  👎 ${dislikes.toLocaleString()}
-                </div>
+            .green { color: #2ba640; }
+            .orange { color: #f57c00; }
+            .red { color: #cc0000; }
+            
+            .rainbow { 
+              background: linear-gradient(90deg, #ff6b6b, #feca57, #1dd1a1, #5f27cd, #ff9ff3);
+              -webkit-background-clip: text;
+              -webkit-text-fill-color: transparent;
+              animation: rainbow-anim 3s linear infinite;
+              background-size: 200% 100%;
+              text-shadow: 0px 0px 10px rgba(255, 255, 255, 0.15);
+            }
+            
+            @keyframes rainbow-anim { 
+              0% { background-position: 100% 0; } 
+              100% { background-position: -100% 0; } 
+            }
+            
+            .info-section {
+              margin-top: 16px;
+              font-size: 13px;
+              color: #aaaaaa;
+              text-align: center;
+              line-height: 1.6;
+              font-variation-settings: "wdth" 130, "wght" 500;
+            }
+            
+            .info-section a {
+              color: #3ea6ff;
+              text-decoration: none;
+              font-variation-settings: "wdth" 130, "wght" 600;
+              transition: color 0.2s ease;
+            }
+            
+            .info-section a:hover {
+              text-decoration: underline;
+              color: #6ebcff;
+            }
+            
+            details { 
+              font-size: 13px; 
+              color: #aaa; 
+              background: #181818; 
+              padding: 12px; 
+              border-radius: 8px; 
+              border: 1px solid #272727; 
+              font-variation-settings: "wdth" 120, "wght" 500; 
+              margin-bottom: 8px; 
+              transition: background 0.2s ease;
+            }
+            
+            details:hover { 
+              background: #1f1f1f; 
+            }
+            
+            summary { 
+              cursor: pointer; 
+              user-select: none; 
+              font-weight: 600; 
+              outline: none; 
+              font-variation-settings: "wdth" 135, "wght" 700; 
+              margin-bottom: 4px; 
+            }
+            
+            details p { 
+              margin-top: 8px; 
+              line-height: 1.5; 
+              color: #ccc; 
+            }
+            
+            pre { 
+              overflow-x: auto; 
+              color: #e1e1e1; 
+              margin-top: 10px; 
+              font-family: monospace; 
+              font-variation-settings: normal; 
+              background: #121212; 
+              padding: 10px; 
+              border-radius: 6px;
+              border: 1px solid #272727;
+            }
+            
+            pre::-webkit-scrollbar {
+              height: 6px;
+            }
+            
+            pre::-webkit-scrollbar-thumb {
+              background: #444;
+              border-radius: 3px;
+            }
+            
+            pre::-webkit-scrollbar-track {
+              background: #121212;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <a href="/watch?v=${safeId}" class="thumbnail-container">
+              <img src="https://i.ytimg.com/vi/${safeId}/hqdefault.jpg" onerror="this.src='https://i.ytimg.com/vi/${safeId}/default.jpg'" class="thumbnail" alt="Video Thumbnail" />
+              <div class="play-button">
+                <svg viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z"></path>
+                </svg>
               </div>
-              
-              <div class="ratio-bar">
-                <div class="ratio-like"></div>
+            </a>
+            
+            <h1 class="video-title">${safeTitle}</h1>
+            <div class="video-views">${views.toLocaleString()} views</div>
+            
+            <div class="pill">
+              <div class="pill-section">
+                👍 ${likes.toLocaleString()}
               </div>
-              
-              <div class="reception">
-                <div class="reception-header">
-                  <div class="reception-title">Community Reception</div>
-                  <div class="score-label ${userScoreColor}">${userScoreLabel}</div>
-                </div>
-                <div class="reception-stats">
-                  <div class="score-number">Score: <span class="${userScoreColor}">${userScore}</span></div>
-                  <div class="star-container" title="${ratingNum} out of 5">
-                    <div class="star-rating-wrapper">
-                      <div class="stars-bg">
-                        ${starsHTML}
-                      </div>
-                      <div class="stars-fg">
-                        <div>
-                          ${starsHTML}
-                        </div>
-                      </div>
-                    </div>
-                    <div class="rating-text">${ratingNum.toFixed(1)}</div>
-                  </div>
-                </div>
-              </div>
-
-              <details>
-                <summary>ℹ️ About this data</summary>
-                <p>These stats are pulled entirely from the Return YouTube Dislike (RYD) API. RYD provides estimations for dislikes based on their extension users and historical data. They do not provide other video metadata like the title natively, which is why it must be passed manually.</p>
-              </details>
-
-              <details>
-                <summary>🤓 Nerd Stats (Raw JSON)</summary>
-                <pre><code>${JSON.stringify(respon, null, 2)}</code></pre>
-              </details>
-
-              <div class="info-section">
-                Data is fetched from <a href="https://www.returnyoutubedislike.com/" target="_blank">Return YouTube Dislike</a>.<br>
-                Consider <a href="https://www.returnyoutubedislike.com/donate" target="_blank">donating</a> to help them out!
+              <div class="divider"></div>
+              <div class="pill-section">
+                👎 ${dislikes.toLocaleString()}
               </div>
             </div>
-          </body>
-          </html>
-        `;
-        return res.send(html);
-      }
+            
+            <div class="ratio-bar">
+              <div class="ratio-like"></div>
+            </div>
+            
+            <div class="reception">
+              <div class="reception-header">
+                <div class="reception-title">Community Reception</div>
+                <div class="score-label ${userScoreColor}">${userScoreLabel}</div>
+              </div>
+              <div class="reception-stats">
+                <div class="score-number">Score: <span class="${userScoreColor}">${userScore}</span></div>
+                <div class="star-container" title="${ratingNum} out of 5">
+                  <div class="star-rating-wrapper">
+                    <div class="stars-bg">
+                      ${starsHTML}
+                    </div>
+                    <div class="stars-fg">
+                      <div>
+                        ${starsHTML}
+                      </div>
+                    </div>
+                  </div>
+                  <div class="rating-text">${ratingNum.toFixed(1)}</div>
+                </div>
+              </div>
+            </div>
 
-      res.send(respon);
-    } else {
-      res.status(400).json("pls gib ID :3");
+            <details>
+              <summary>ℹ️ About this data</summary>
+              <p>Engagement stats are pulled from the Return YouTube Dislike (RYD) API, which estimates dislikes using extension users and historical data.</p>
+            </details>
+
+            <details>
+              <summary>🤓 Nerd Stats (Raw JSON)</summary>
+              <pre><code>${escapeHtml(JSON.stringify(respon, null, 2))}</code></pre>
+            </details>
+
+            <div class="info-section">
+              Data is fetched from <a href="https://www.returnyoutubedislike.com/" target="_blank">Return YouTube Dislike</a>.<br>
+              Consider <a href="https://www.returnyoutubedislike.com/donate" target="_blank">donating</a> to help them out!
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+      return res.send(html);
     }
+
+    res.send(respon);
   } catch (error) {
     res.status(500).json("whoops (error 500) >~<");
   }
 });
-   app.get("/feeds/videos.xml", async (req, res) => {
+  
+  
+  app.get("/feeds/videos.xml", async (req, res) => {
   const channelId = req.query.channel_id;
   const playlistId = req.query.playlist_id;
 
