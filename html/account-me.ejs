@@ -37,14 +37,12 @@
     }
 
     a { text-decoration: none; color: inherit; }
-    button, input { font-family: inherit; }
+    button, input, textarea { font-family: inherit; }
 
-    /* Custom Scrollbar */
     ::-webkit-scrollbar { width: 8px; height: 8px; background: var(--scrollbar-bg); }
     ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: #909090; }
 
-    /* ── Top Header Bar ── */
     .top-navbar {
       height: 56px;
       display: flex;
@@ -66,7 +64,7 @@
       align-items: center;
       padding: 8px;
     }
-    
+
     .brand-logo img {
       height: 24px;
       object-fit: contain;
@@ -75,23 +73,22 @@
     .actions-section {
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 12px;
       justify-content: flex-end;
     }
 
-    /* ── Account Info (Moved to header) ── */
     .account-info-wrapper {
       display: flex;
       flex-direction: column;
       align-items: flex-end;
-      margin-right: 8px;
+      margin-right: 4px;
     }
 
     .user-info {
       font-size: 13px;
       color: var(--text-secondary);
     }
-    
+
     .blurred-id {
       color: var(--text-primary);
       filter: blur(5px);
@@ -110,7 +107,7 @@
       font-weight: 400;
       margin-top: 2px;
     }
-    
+
     .user-warning span {
       color: var(--danger-color);
       font-weight: 500;
@@ -122,14 +119,61 @@
       color: var(--text-primary);
       padding: 6px 12px;
       border-radius: 18px;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 500;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: background 0.2s, border-color 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
     }
     .action-btn:hover { background: var(--bg-surface); }
 
-    /* ── E2EE Badge ── */
+    .action-btn.accent {
+      background: var(--accent-bg);
+      border-color: rgba(62, 166, 255, 0.35);
+      color: var(--accent-color);
+    }
+    .action-btn.accent:hover { background: rgba(62, 166, 255, 0.22); }
+
+    .notif-bell-btn {
+      position: relative;
+      background: none;
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+    .notif-bell-btn:hover { background: var(--bg-surface); }
+    .notif-bell-btn svg { width: 18px; height: 18px; fill: currentColor; }
+
+    .notif-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 9px;
+      background: var(--danger-color);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 600;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+    .notif-badge.visible { display: flex; }
+
     .e2ee-badge {
       display: flex;
       align-items: center;
@@ -145,7 +189,6 @@
     .e2ee-badge svg { width: 14px; height: 14px; fill: var(--e2ee-color); }
     .e2ee-badge span { font-size: 13px; font-weight: 500; color: var(--e2ee-color); }
 
-    /* ── Utilities Bar (Filter, Sort) ── */
     .utilities-bar {
       display: flex;
       align-items: center;
@@ -223,7 +266,7 @@
       display: flex;
       gap: 6px;
     }
-    
+
     .sort-chip {
       background-color: var(--bg-surface);
       border: 1px solid var(--border-color);
@@ -241,12 +284,11 @@
       border-color: var(--text-primary);
     }
 
-    /* ── Content Area ── */
     .app-body {
       display: flex;
       flex: 1;
       overflow: hidden;
-      min-height: 0; 
+      min-height: 0;
     }
 
     .content-area {
@@ -256,10 +298,9 @@
       background-color: var(--bg-base);
       position: relative;
       overflow: hidden;
-      min-height: 0; 
+      min-height: 0;
     }
 
-    /* ── Horizontal Channel Carousel ── */
     .channel-ribbon-wrapper {
       position: relative;
       display: flex;
@@ -279,7 +320,7 @@
       height: 40px;
       border-radius: 50%;
       cursor: pointer;
-      display: none; 
+      display: none;
       align-items: center;
       justify-content: center;
       position: absolute;
@@ -295,7 +336,7 @@
       gap: 16px;
       overflow-x: auto;
       scroll-behavior: smooth;
-      padding: 0 50px; 
+      padding: 4px 50px;
       width: 100%;
       -ms-overflow-style: none;
       scrollbar-width: none;
@@ -306,7 +347,7 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      width: 72px;
+      width: 76px;
       cursor: pointer;
       flex-shrink: 0;
     }
@@ -319,9 +360,9 @@
       margin-bottom: 6px;
       transition: transform 0.1s;
     }
-    
+
     .channel-card:hover .channel-avatar-wrapper { transform: scale(1.05); }
-    
+
     .channel-card.selected .channel-avatar-wrapper {
       box-shadow: 0 0 0 2px var(--text-primary);
     }
@@ -360,6 +401,39 @@
     }
     .channel-avatar-wrapper:hover .unsub-overlay { opacity: 1; }
 
+    .channel-notif-toggle {
+      position: absolute;
+      top: -4px;
+      right: -6px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 1px solid var(--border-color);
+      background: var(--bg-surface);
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 8;
+      padding: 0;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .channel-notif-toggle:hover {
+      background: var(--bg-surface-hover);
+      color: var(--text-primary);
+    }
+    .channel-notif-toggle.enabled {
+      background: var(--accent-bg);
+      border-color: var(--accent-color);
+      color: var(--accent-color);
+    }
+    .channel-notif-toggle svg {
+      width: 12px;
+      height: 12px;
+      fill: currentColor;
+    }
+
     .channel-title {
       font-size: 12px;
       color: var(--text-secondary);
@@ -375,7 +449,6 @@
       font-weight: 500;
     }
 
-    /* ── Iframe Feed Viewer ── */
     .feed-header {
       display: flex;
       align-items: center;
@@ -384,15 +457,31 @@
       background: var(--bg-base);
       border-bottom: 1px solid var(--border-color);
       flex-shrink: 0;
+      gap: 12px;
     }
 
     .feed-title-wrapper {
       display: flex;
       align-items: center;
       gap: 10px;
+      min-width: 0;
     }
-    
-    .feed-title { font-size: 1.1rem; font-weight: 600; margin: 0; }
+
+    .feed-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .feed-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
 
     .open-channel-link {
       display: none;
@@ -407,7 +496,28 @@
       color: var(--text-primary);
       background-color: var(--bg-surface);
     }
-    
+
+    .feed-notif-btn {
+      background: none;
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      padding: 4px 10px;
+      border-radius: 14px;
+      font-size: 12px;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      gap: 5px;
+      font-weight: 500;
+    }
+    .feed-notif-btn:hover { background: var(--bg-surface); color: var(--text-primary); }
+    .feed-notif-btn.enabled {
+      background: var(--accent-bg);
+      border-color: rgba(62, 166, 255, 0.4);
+      color: var(--accent-color);
+    }
+    .feed-notif-btn svg { width: 14px; height: 14px; fill: currentColor; }
+
     .close-feed-btn {
       background: none;
       border: 1px solid var(--border-color);
@@ -424,11 +534,11 @@
     .feed-viewport {
       flex: 1;
       display: flex;
-      flex-direction: column; 
+      flex-direction: column;
       background-color: #000;
       position: relative;
       overflow: hidden;
-      min-height: 0; 
+      min-height: 0;
     }
 
     iframe {
@@ -453,13 +563,12 @@
       font-size: 15px;
       z-index: 10;
     }
-    
+
     .empty-state svg {
       margin-bottom: 16px;
       fill: var(--border-color);
     }
 
-    /* ── Loading State ── */
     .loading-state {
       position: absolute;
       inset: 0;
@@ -488,18 +597,34 @@
       to { transform: rotate(360deg); }
     }
 
-    /* ── Confirmation Modal ── */
-    .confirm-overlay {
+    .confirm-overlay,
+    .e2ee-overlay,
+    .json-overlay,
+    .modal-overlay {
       display: none;
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.6);
+      background: rgba(0, 0, 0, 0.7);
       z-index: 3000;
       align-items: center;
       justify-content: center;
       animation: fadeIn 0.15s ease;
     }
-    .confirm-overlay.open { display: flex; }
+    .e2ee-overlay { z-index: 2000; background: rgba(0, 0, 0, 0.65); }
+    .json-overlay { z-index: 4000; }
+    .modal-overlay { z-index: 3500; }
+
+    .confirm-overlay.open,
+    .e2ee-overlay.open,
+    .json-overlay.open,
+    .modal-overlay.open { display: flex; }
+
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    @keyframes popIn {
+      from { transform: scale(0.95); opacity: 0; }
+      to   { transform: scale(1); opacity: 1; }
+    }
 
     .confirm-modal {
       background: #212121;
@@ -541,21 +666,6 @@
     .btn-confirm { color: var(--accent-color); }
     .btn-confirm:hover { background: rgba(62, 166, 255, 0.15); }
 
-    /* ── E2EE Modal ── */
-    .e2ee-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.65);
-      z-index: 2000;
-      align-items: center;
-      justify-content: center;
-      animation: fadeIn 0.15s ease;
-    }
-    .e2ee-overlay.open { display: flex; }
-
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
     .e2ee-modal {
       background: var(--bg-surface);
       border: 1px solid var(--border-color);
@@ -567,17 +677,12 @@
       animation: popIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
 
-    @keyframes popIn {
-      from { transform: scale(0.9); opacity: 0; }
-      to   { transform: scale(1); opacity: 1; }
-    }
-
     .e2ee-modal h2 { margin: 0 0 16px; font-size: 1.25rem; font-weight: 600; }
     .e2ee-modal p { margin: 0 0 16px; font-size: 14px; color: var(--text-secondary); line-height: 1.5; }
-    
+
     .e2ee-list { margin: 0 0 24px; padding-left: 20px; color: var(--text-secondary); font-size: 14px; line-height: 1.6; }
     .e2ee-list li { margin-bottom: 8px; }
-    
+
     .modal-close-btn {
       width: 100%;
       padding: 10px;
@@ -591,59 +696,62 @@
     }
     .modal-close-btn:hover { filter: brightness(1.1); }
 
-    /* ── JSON Viewer Modal ── */
-    .json-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.7);
-      z-index: 4000;
-      align-items: center;
-      justify-content: center;
-      animation: fadeIn 0.15s ease;
-    }
-    .json-overlay.open { display: flex; }
-
-    .json-modal {
+    .json-modal,
+    .panel-modal {
       background: var(--bg-surface);
       border: 1px solid var(--border-color);
       border-radius: 12px;
       display: flex;
       flex-direction: column;
       max-width: 800px;
-      width: 90%;
-      max-height: 80vh;
-      box-shadow: 0 24px 38px 3px rgba(0,0,0,0.2);
+      width: 92%;
+      max-height: 82vh;
+      box-shadow: 0 24px 38px 3px rgba(0,0,0,0.3);
       animation: popIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      overflow: hidden;
     }
 
-    .json-header {
+    .panel-modal.narrow { max-width: 560px; }
+
+    .json-header,
+    .panel-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 16px 24px;
+      padding: 16px 20px;
       border-bottom: 1px solid var(--border-color);
       flex-shrink: 0;
+      gap: 12px;
     }
 
-    .json-header h3 { 
-      margin: 0; 
-      font-size: 1.1rem; 
+    .json-header h3,
+    .panel-header h3 {
+      margin: 0;
+      font-size: 1.05rem;
       color: var(--text-primary);
     }
 
-    .close-json-btn { 
-      background: none; 
-      border: none; 
-      color: var(--text-secondary); 
-      font-size: 1.2rem; 
-      cursor: pointer; 
-      padding: 4px;
+    .panel-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
-    .close-json-btn:hover { color: var(--text-primary); }
 
-    .json-content {
-      padding: 16px 24px;
+    .close-json-btn,
+    .close-panel-btn {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 1.1rem;
+      cursor: pointer;
+      padding: 4px 6px;
+    }
+    .close-json-btn:hover,
+    .close-panel-btn:hover { color: var(--text-primary); }
+
+    .json-content,
+    .panel-body {
+      padding: 16px 20px;
       overflow-y: auto;
       flex: 1;
     }
@@ -661,11 +769,224 @@
       word-wrap: break-word;
     }
 
-    /* ── Responsive ── */
+    .small-btn {
+      background: var(--bg-base);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 5px 10px;
+      border-radius: 14px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .small-btn:hover { background: var(--bg-surface-hover); }
+    .small-btn.active {
+      background: var(--accent-bg);
+      border-color: var(--accent-color);
+      color: var(--accent-color);
+    }
+
+    .notif-meta-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 20px;
+      background: #181818;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 12px;
+      color: var(--text-secondary);
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .notif-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .notif-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 10px;
+      border-radius: 8px;
+      background: var(--bg-base);
+      border: 1px solid var(--border-color);
+      transition: background 0.15s, border-color 0.15s;
+      position: relative;
+    }
+    .notif-item:hover {
+      background: #1a1a1a;
+      border-color: #444;
+    }
+    .notif-item.unread {
+      border-color: rgba(62, 166, 255, 0.45);
+      background: rgba(38, 56, 80, 0.28);
+    }
+
+    .notif-unread-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-color);
+      flex-shrink: 0;
+      margin-top: 6px;
+      visibility: hidden;
+    }
+    .notif-item.unread .notif-unread-dot { visibility: visible; }
+
+    .notif-thumb {
+      width: 112px;
+      height: 63px;
+      border-radius: 6px;
+      object-fit: cover;
+      background: #000;
+      flex-shrink: 0;
+    }
+
+    .notif-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .notif-video-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-primary);
+      margin: 0 0 4px;
+      line-height: 1.3;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .notif-channel-meta {
+      font-size: 12px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .notif-empty {
+      text-align: center;
+      color: var(--text-secondary);
+      padding: 36px 16px;
+      font-size: 14px;
+    }
+
+    .import-section {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .import-desc {
+      margin: 0;
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    .import-dropzone {
+      border: 2px dashed var(--border-color);
+      border-radius: 10px;
+      padding: 20px;
+      text-align: center;
+      background: var(--bg-base);
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .import-dropzone:hover,
+    .import-dropzone.dragover {
+      border-color: var(--accent-color);
+      background: rgba(62, 166, 255, 0.06);
+    }
+    .import-dropzone p {
+      margin: 0 0 6px;
+      font-size: 14px;
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+    .import-dropzone span {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .import-textarea {
+      width: 100%;
+      min-height: 84px;
+      background: var(--bg-base);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--text-primary);
+      font-size: 13px;
+      resize: vertical;
+      outline: none;
+    }
+    .import-textarea:focus { border-color: var(--accent-color); }
+
+    .import-preview {
+      background: var(--bg-base);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      display: none;
+    }
+    .import-preview.visible { display: block; }
+
+    .import-progress-bar {
+      width: 100%;
+      height: 6px;
+      background: var(--border-color);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 8px;
+      display: none;
+    }
+    .import-progress-bar.visible { display: block; }
+    .import-progress-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--accent-color);
+      transition: width 0.2s;
+    }
+
+    .import-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .primary-btn {
+      background: var(--accent-color);
+      color: #0f0f0f;
+      border: none;
+      padding: 8px 18px;
+      border-radius: 18px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .primary-btn:hover { filter: brightness(1.08); }
+    .primary-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
     @media(max-width: 768px) {
       .utilities-bar { justify-content: center; }
       .filter-section { max-width: 100%; margin-bottom: 8px; }
-      .action-btn, .account-info-wrapper { display: none; } 
+      .action-btn.hide-mobile, .account-info-wrapper { display: none; }
+      .notif-thumb { width: 88px; height: 50px; }
     }
 
     noscript {
@@ -677,14 +998,13 @@
     }
   </style>
 </head>
-<body>
+<body data-userid="<%= userid %>">
 
   <noscript>
     <strong style="color:var(--danger-color); display:block; margin-bottom:8px;">JavaScript Disabled</strong>
     Search and horizontal scrolling are unavailable. Channels can still be opened natively via the links.
   </noscript>
 
-  <!-- E2EE Modal -->
   <div class="e2ee-overlay" id="e2eeOverlay" role="dialog" aria-modal="true">
     <div class="e2ee-modal">
       <h2>End-to-End Encrypted</h2>
@@ -698,7 +1018,6 @@
     </div>
   </div>
 
-  <!-- Unsubscribe Confirmation Modal -->
   <div class="confirm-overlay" id="confirmUnsubModal" role="dialog" aria-modal="true">
     <div class="confirm-modal">
       <div class="confirm-content" id="confirmUnsubText">unsubscribe from Channel?</div>
@@ -709,7 +1028,6 @@
     </div>
   </div>
 
-  <!-- JSON Viewer Modal -->
   <div class="json-overlay" id="jsonViewerOverlay" role="dialog" aria-modal="true">
     <div class="json-modal">
       <div class="json-header">
@@ -722,7 +1040,61 @@
     </div>
   </div>
 
-  <!-- Top Header Navigation -->
+  <div class="modal-overlay" id="notifOverlay" role="dialog" aria-modal="true">
+    <div class="panel-modal">
+      <div class="panel-header">
+        <h3>Notifications</h3>
+        <div class="panel-header-actions">
+          <button class="small-btn" id="enableDesktopNotifBtn">Desktop Alerts</button>
+          <button class="small-btn" id="refreshNotifBtn">Refresh</button>
+          <button class="small-btn" id="markAllReadBtn">Mark all read</button>
+          <button class="close-panel-btn" id="closeNotifModal" title="Close">✖</button>
+        </div>
+      </div>
+      <div class="notif-meta-bar">
+        <span id="notifStatusText">Checking feeds...</span>
+        <span id="notifCountText"></span>
+      </div>
+      <div class="panel-body">
+        <div class="notif-list" id="notifList">
+          <div class="notif-empty">Loading notifications...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="importOverlay" role="dialog" aria-modal="true">
+    <div class="panel-modal narrow">
+      <div class="panel-header">
+        <h3>Import from YouTube</h3>
+        <button class="close-panel-btn" id="closeImportModal" title="Close">✖</button>
+      </div>
+      <div class="panel-body">
+        <div class="import-section">
+          <p class="import-desc">
+            Upload your Google Takeout <strong>subscriptions.csv</strong>, a Poke / NewPipe / Invidious <strong>.json</strong> file, or an <strong>.opml / .xml</strong> export. You can also paste YouTube channel URLs or IDs below (one per line).
+          </p>
+          <div class="import-dropzone" id="importDropzone">
+            <p>Click to choose a file or drag &amp; drop here</p>
+            <span>Supports .csv, .json, .xml, .opml</span>
+            <input type="file" id="importFileInput" accept=".csv,.json,.xml,.opml,.txt" hidden>
+          </div>
+          <textarea class="import-textarea" id="importTextInput" placeholder="Or paste channel IDs / URLs (e.g. UCX6OQ3DkcsbYNE6H8uQQuVA or https://www.youtube.com/channel/UC...)"></textarea>
+          <div class="import-preview" id="importPreview">
+            <div id="importPreviewText"></div>
+            <div class="import-progress-bar" id="importProgressBar">
+              <div class="import-progress-fill" id="importProgressFill"></div>
+            </div>
+          </div>
+          <div class="import-actions">
+            <button class="action-btn" id="cancelImportBtn">Cancel</button>
+            <button class="primary-btn" id="startImportBtn" disabled>Import Channels</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <header class="top-navbar">
     <div class="brand-section">
       <a href="/" class="brand-logo" title="Home">
@@ -736,20 +1108,28 @@
         <div class="user-warning"><span>⚠️</span> Don't share ur ID. More account features comin soon!</div>
       </div>
 
+      <button class="notif-bell-btn" id="notifBellBtn" title="Notifications">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
+        </svg>
+        <span class="notif-badge" id="notifBadge">0</span>
+      </button>
+
+      <button class="action-btn accent" id="importYtBtn">Import from YouTube</button>
+
       <button class="e2ee-badge" id="e2eeBadge" title="End-to-end encrypted">
         <svg viewBox="0 0 24 24">
           <path d="M18 8h-1V6A5 5 0 0 0 7 6v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zm-6 9a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm3.1-9H8.9V6a3.1 3.1 0 0 1 6.2 0v2z"/>
         </svg>
         <span>Secure</span>
       </button>
-      
-      <a class="action-btn" id="viewJsonBtn" href="/api/get-channel-subs?ID=<%= encodeURIComponent(userid) %>" target="_blank">View JSON</a>
-      <a class="action-btn" id="downloadJsonBtn" href="/api/get-channel-subs?ID=<%= encodeURIComponent(userid) %>" download="subscriptions.json">Download .JSON</a>
+
+      <a class="action-btn hide-mobile" id="viewJsonBtn" href="/api/get-channel-subs?ID=<%= encodeURIComponent(userid) %>" target="_blank">View JSON</a>
+      <a class="action-btn hide-mobile" id="downloadJsonBtn" href="/api/get-channel-subs?ID=<%= encodeURIComponent(userid) %>" download="subscriptions.json">Download .JSON</a>
     </div>
   </header>
 
-   <div class="utilities-bar">
-    
+  <div class="utilities-bar">
     <div class="filter-section">
       <div class="filter-bar">
         <svg viewBox="0 0 24 24" width="16" height="16">
@@ -782,22 +1162,26 @@
         subs.sort((a,b) => a.name.localeCompare(b.name, 'en', {sensitivity:'base'}));
       %>
 
-       <div class="channel-ribbon-wrapper">
+      <div class="channel-ribbon-wrapper">
         <button class="ribbon-scroll-btn left" id="scrollLeft">‹</button>
         <div class="channel-ribbon" id="channelList">
           <% subs.forEach(c => { %>
-            <div class="channel-card" data-id="<%= c.id %>" data-name="<%= c.name.toLowerCase() %>">
+            <div class="channel-card" data-id="<%= c.id %>" data-name="<%= c.name.toLowerCase() %>" data-real-name="<%= c.name %>">
               <div class="channel-avatar-wrapper">
-                 <a href="/channel?id=<%= encodeURIComponent(c.id) %>" class="channel-avatar-link">
+                <a href="/channel?id=<%= encodeURIComponent(c.id) %>" class="channel-avatar-link">
                   <img src="<%= c.avatar %>" alt="" loading="lazy">
                 </a>
-                <!-- Unsubscribe Button Anchor -->
-                <a class="unsub-overlay js-unsub-btn" 
-                   href="/api/remove-channel-sub?ID=<%= encodeURIComponent(userid) %>&channelID=<%= c.id %>" 
-                   data-name="<%= c.name.replace(/"/g, '&quot;') %>" 
+                <a class="unsub-overlay js-unsub-btn"
+                   href="/api/remove-channel-sub?ID=<%= encodeURIComponent(userid) %>&channelID=<%= c.id %>"
+                   data-name="<%= c.name.replace(/"/g, '&quot;') %>"
                    title="Unsubscribe">
                   Unsub
                 </a>
+                <button class="channel-notif-toggle js-channel-notif-btn"
+                        type="button"
+                        data-id="<%= c.id %>"
+                        title="Toggle notifications">
+                </button>
               </div>
               <a class="channel-title" href="/channel?id=<%= encodeURIComponent(c.id) %>" title="<%= c.name %>"><%= c.name %></a>
             </div>
@@ -806,7 +1190,6 @@
         <button class="ribbon-scroll-btn right" id="scrollRight">›</button>
       </div>
 
-      <!-- Feed Container -->
       <div class="feed-header">
         <div class="feed-title-wrapper">
           <h2 class="feed-title" id="toolbarTitle">Select a channel to view content</h2>
@@ -816,11 +1199,13 @@
             </svg>
           </a>
         </div>
-        <button class="close-feed-btn" id="closeViewer">✖ Close Feed</button>
+        <div class="feed-header-actions">
+          <button class="feed-notif-btn" id="feedNotifToggle" type="button"></button>
+          <button class="close-feed-btn" id="closeViewer">✖ Close Feed</button>
+        </div>
       </div>
-      
+
       <div class="feed-viewport">
-        <!-- Loading State -->
         <div class="loading-state" id="loadingState">
           <div class="spinner"></div>
           <p>loading... please wait...!</p>
@@ -839,20 +1224,632 @@
 
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-  const searchInput  = document.getElementById('searchInput');
-  const clearBtn     = document.getElementById('clearSearch');
-  const sortBtns     = document.querySelectorAll('.sort-chip');
-  const channelList  = document.getElementById('channelList');
-  const channels     = document.querySelectorAll('.channel-card');
-  const iframe       = document.getElementById('mainFrame');
-  const emptyState   = document.getElementById('emptyState');
+  const USER_ID = document.body.dataset.userid || '';
+  const CHECK_INTERVAL_MS = 30 * 60 * 1000;
+  const NOTIF_PREFS_KEY = `poke_notif_prefs_${USER_ID}`;
+  const NOTIF_READ_KEY = `poke_notif_read_${USER_ID}`;
+  const NOTIF_ALERTED_KEY = `poke_notif_alerted_${USER_ID}`;
+
+  const BELL_ON_SVG = '<svg viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>';
+  const BELL_OFF_SVG = '<svg viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-2.79-1.4-5.16-3.78-6.06L12 2.72V4a1.5 1.5 0 0 0-3 0v.68c-.28.07-.56.16-.82.27L3.27 2 2 3.27l4.17 4.17A6.47 6.47 0 0 0 6 11v5l-2 2v1h13.73l2 2L21 19.73 18 16.73V16z"/></svg>';
+
+  const searchInput = document.getElementById('searchInput');
+  const clearBtn = document.getElementById('clearSearch');
+  const sortBtns = document.querySelectorAll('.sort-chip');
+  const channelList = document.getElementById('channelList');
+  const channels = document.querySelectorAll('.channel-card');
+  const iframe = document.getElementById('mainFrame');
+  const emptyState = document.getElementById('emptyState');
   const loadingState = document.getElementById('loadingState');
   const toolbarTitle = document.getElementById('toolbarTitle');
-  const closeViewer  = document.getElementById('closeViewer');
+  const closeViewer = document.getElementById('closeViewer');
   const openChannelBtn = document.getElementById('openChannelBtn');
-  
-  const scrollLeftBtn  = document.getElementById('scrollLeft');
+  const feedNotifToggle = document.getElementById('feedNotifToggle');
+  const scrollLeftBtn = document.getElementById('scrollLeft');
   const scrollRightBtn = document.getElementById('scrollRight');
+
+  let selectedChannelId = null;
+
+  function loadJsonStorage(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function saveJsonStorage(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {}
+  }
+
+  let notifPrefs = loadJsonStorage(NOTIF_PREFS_KEY, {});
+  let readVideoIds = new Set(loadJsonStorage(NOTIF_READ_KEY, []));
+  let alertedVideoIds = new Set(loadJsonStorage(NOTIF_ALERTED_KEY, []));
+  let cachedNotifications = [];
+  let isCheckingFeeds = false;
+
+  function isChannelNotifEnabled(channelId) {
+    return notifPrefs[channelId] !== false;
+  }
+
+  function updateChannelNotifButtonUI(btn, enabled) {
+    btn.classList.toggle('enabled', enabled);
+    btn.innerHTML = enabled ? BELL_ON_SVG : BELL_OFF_SVG;
+    btn.title = enabled ? 'Notifications: ON (click to turn off)' : 'Notifications: OFF (click to turn on)';
+  }
+
+  function updateFeedNotifButtonUI() {
+    if (!selectedChannelId) {
+      feedNotifToggle.style.display = 'none';
+      return;
+    }
+    const enabled = isChannelNotifEnabled(selectedChannelId);
+    feedNotifToggle.style.display = 'inline-flex';
+    feedNotifToggle.classList.toggle('enabled', enabled);
+    feedNotifToggle.innerHTML = `${enabled ? BELL_ON_SVG : BELL_OFF_SVG}<span>${enabled ? 'Notifications On' : 'Notifications Off'}</span>`;
+  }
+
+  function setChannelNotif(channelId, enabled) {
+    notifPrefs[channelId] = enabled;
+    saveJsonStorage(NOTIF_PREFS_KEY, notifPrefs);
+
+    const cardBtn = document.querySelector(`.js-channel-notif-btn[data-id="${CSS.escape(channelId)}"]`);
+    if (cardBtn) updateChannelNotifButtonUI(cardBtn, enabled);
+    if (selectedChannelId === channelId) updateFeedNotifButtonUI();
+
+    if (!enabled) {
+      cachedNotifications = cachedNotifications.filter(n => n.channelId !== channelId);
+      renderNotifications();
+    } else {
+      fetchChannelFeed(channelId).then(entries => {
+        if (entries.length) {
+          const existingMap = new Map(cachedNotifications.map(n => [n.videoId, n]));
+          entries.forEach(e => existingMap.set(e.videoId, e));
+          cachedNotifications = Array.from(existingMap.values())
+            .sort((a, b) => b.publishedMs - a.publishedMs)
+            .slice(0, 60);
+          renderNotifications();
+        }
+      });
+    }
+    updateNotifCountsHeader();
+  }
+
+  document.querySelectorAll('.js-channel-notif-btn').forEach(btn => {
+    const id = btn.dataset.id;
+    updateChannelNotifButtonUI(btn, isChannelNotifEnabled(id));
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setChannelNotif(id, !isChannelNotifEnabled(id));
+    });
+  });
+
+  feedNotifToggle.addEventListener('click', () => {
+    if (!selectedChannelId) return;
+    setChannelNotif(selectedChannelId, !isChannelNotifEnabled(selectedChannelId));
+  });
+
+  function rewriteVideoLink(href, videoId) {
+    const origin = window.location.origin;
+    if (href) {
+      if (/^https?:\/\/(www\.|m\.)?youtube\.com\/watch/i.test(href)) {
+        return href.replace(/^https?:\/\/(www\.|m\.)?youtube\.com/i, origin);
+      }
+      const shortsMatch = href.match(/^https?:\/\/(www\.|m\.)?youtube\.com\/shorts\/([^/?&#]+)/i);
+      if (shortsMatch) {
+        return `${origin}/watch?v=${encodeURIComponent(shortsMatch[2])}`;
+      }
+      if (/^https?:\/\/(www\.|m\.)?youtube\.com\//i.test(href)) {
+        return href.replace(/^https?:\/\/(www\.|m\.)?youtube\.com/i, origin);
+      }
+    }
+    return videoId ? `${origin}/watch?v=${encodeURIComponent(videoId)}` : '#';
+  }
+
+  function getXmlTagText(parent, localName) {
+    const nsNodes = parent.getElementsByTagNameNS('*', localName);
+    if (nsNodes && nsNodes.length > 0) return nsNodes[0].textContent || '';
+    const nodes = parent.getElementsByTagName(localName);
+    if (nodes && nodes.length > 0) return nodes[0].textContent || '';
+    return '';
+  }
+
+  function getXmlThumbnail(entry) {
+    const nsNodes = entry.getElementsByTagNameNS('*', 'thumbnail');
+    if (nsNodes && nsNodes.length > 0) return nsNodes[0].getAttribute('url') || '';
+    const nodes = entry.getElementsByTagName('media:thumbnail');
+    if (nodes && nodes.length > 0) return nodes[0].getAttribute('url') || '';
+    return '';
+  }
+
+  function getSubscribedChannelsInfo() {
+    return Array.from(channels).map(ch => ({
+      id: ch.dataset.id,
+      name: ch.dataset.realName || ch.querySelector('.channel-title')?.textContent || 'Unknown Channel'
+    }));
+  }
+
+  async function fetchChannelFeed(channelId) {
+    try {
+      const res = await fetch(`/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`);
+      if (!res.ok) return [];
+      const xmlText = await res.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(xmlText, 'text/xml');
+      if (doc.querySelector('parsererror')) return [];
+
+      const feedTitle = doc.querySelector('feed > title')?.textContent || '';
+      const entries = Array.from(doc.getElementsByTagName('entry'));
+      const subCard = document.querySelector(`.channel-card[data-id="${CSS.escape(channelId)}"]`);
+      const fallbackName = subCard?.dataset.realName || feedTitle || 'Unknown Channel';
+
+      return entries.slice(0, 5).map(entry => {
+        const rawId = getXmlTagText(entry, 'id');
+        const videoId = getXmlTagText(entry, 'videoId') || rawId.replace(/^yt:video:/, '');
+        const title = entry.querySelector('title')?.textContent || 'Untitled Video';
+        const authorName = entry.querySelector('author > name')?.textContent || fallbackName;
+        const linkEl = entry.querySelector('link[rel="alternate"]') || entry.querySelector('link');
+        const rawHref = linkEl ? linkEl.getAttribute('href') : '';
+        const publishedStr = entry.querySelector('published')?.textContent || entry.querySelector('updated')?.textContent || '';
+        const publishedMs = publishedStr ? Date.parse(publishedStr) : 0;
+        const thumbnail = getXmlThumbnail(entry);
+
+        return {
+          videoId,
+          channelId,
+          channelName: authorName,
+          title,
+          url: rewriteVideoLink(rawHref, videoId),
+          publishedStr,
+          publishedMs: Number.isNaN(publishedMs) ? 0 : publishedMs,
+          thumbnail
+        };
+      }).filter(item => item.videoId);
+    } catch {
+      return [];
+    }
+  }
+
+  function formatRelativeTime(ms) {
+    if (!ms) return '';
+    const diffSec = Math.floor((Date.now() - ms) / 1000);
+    if (diffSec < 60) return 'just now';
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24) return `${diffHr}h ago`;
+    const diffDay = Math.floor(diffHr / 24);
+    if (diffDay < 30) return `${diffDay}d ago`;
+    return new Date(ms).toLocaleDateString();
+  }
+
+  const notifBellBtn = document.getElementById('notifBellBtn');
+  const notifBadge = document.getElementById('notifBadge');
+  const notifOverlay = document.getElementById('notifOverlay');
+  const closeNotifModal = document.getElementById('closeNotifModal');
+  const notifList = document.getElementById('notifList');
+  const notifStatusText = document.getElementById('notifStatusText');
+  const notifCountText = document.getElementById('notifCountText');
+  const refreshNotifBtn = document.getElementById('refreshNotifBtn');
+  const markAllReadBtn = document.getElementById('markAllReadBtn');
+  const enableDesktopNotifBtn = document.getElementById('enableDesktopNotifBtn');
+
+  function updateDesktopAlertButton() {
+    if (!('Notification' in window)) {
+      enableDesktopNotifBtn.style.display = 'none';
+      return;
+    }
+    if (Notification.permission === 'granted') {
+      enableDesktopNotifBtn.classList.add('active');
+      enableDesktopNotifBtn.textContent = 'Desktop Alerts: On';
+    } else if (Notification.permission === 'denied') {
+      enableDesktopNotifBtn.classList.remove('active');
+      enableDesktopNotifBtn.textContent = 'Desktop Alerts: Blocked';
+    } else {
+      enableDesktopNotifBtn.classList.remove('active');
+      enableDesktopNotifBtn.textContent = 'Enable Desktop Alerts';
+    }
+  }
+
+  enableDesktopNotifBtn.addEventListener('click', async () => {
+    if (!('Notification' in window)) return;
+    if (Notification.permission === 'default') {
+      await Notification.requestPermission();
+      updateDesktopAlertButton();
+    }
+  });
+  updateDesktopAlertButton();
+
+  function updateNotifCountsHeader() {
+    const allSubs = getSubscribedChannelsInfo();
+    const enabledCount = allSubs.filter(c => isChannelNotifEnabled(c.id)).length;
+    notifCountText.textContent = `${enabledCount}/${allSubs.length} channels enabled`;
+  }
+
+  function updateUnreadBadge() {
+    const unreadCount = cachedNotifications.filter(n => !readVideoIds.has(n.videoId)).length;
+    if (unreadCount > 0) {
+      notifBadge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+      notifBadge.classList.add('visible');
+    } else {
+      notifBadge.classList.remove('visible');
+    }
+  }
+
+  function renderNotifications() {
+    updateUnreadBadge();
+    updateNotifCountsHeader();
+
+    if (!cachedNotifications.length) {
+      notifList.innerHTML = '<div class="notif-empty">No recent uploads found for channels with notifications enabled.</div>';
+      return;
+    }
+
+    notifList.innerHTML = '';
+    cachedNotifications.forEach(item => {
+      const isUnread = !readVideoIds.has(item.videoId);
+      const a = document.createElement('a');
+      a.className = `notif-item${isUnread ? ' unread' : ''}`;
+      a.href = item.url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+
+      const dot = document.createElement('span');
+      dot.className = 'notif-unread-dot';
+
+      const img = document.createElement('img');
+      img.className = 'notif-thumb';
+      img.src = item.thumbnail || '';
+      img.alt = '';
+      img.loading = 'lazy';
+
+      const info = document.createElement('div');
+      info.className = 'notif-info';
+
+      const title = document.createElement('div');
+      title.className = 'notif-video-title';
+      title.textContent = item.title;
+
+      const meta = document.createElement('div');
+      meta.className = 'notif-channel-meta';
+      meta.textContent = `${item.channelName}${item.publishedMs ? ' • ' + formatRelativeTime(item.publishedMs) : ''}`;
+
+      info.appendChild(title);
+      info.appendChild(meta);
+      a.appendChild(dot);
+      a.appendChild(img);
+      a.appendChild(info);
+
+      a.addEventListener('click', () => {
+        readVideoIds.add(item.videoId);
+        saveJsonStorage(NOTIF_READ_KEY, Array.from(readVideoIds).slice(-500));
+        a.classList.remove('unread');
+        updateUnreadBadge();
+      });
+
+      notifList.appendChild(a);
+    });
+  }
+
+  function triggerDesktopNotifications(items, isInitialLoad) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    if (isInitialLoad && alertedVideoIds.size === 0) {
+      items.forEach(i => alertedVideoIds.add(i.videoId));
+      saveJsonStorage(NOTIF_ALERTED_KEY, Array.from(alertedVideoIds).slice(-500));
+      return;
+    }
+    const fresh = items.filter(i => !alertedVideoIds.has(i.videoId));
+    fresh.slice(0, 3).forEach(item => {
+      const n = new Notification(item.channelName, {
+        body: item.title,
+        icon: item.thumbnail || '/css/poke-icon-logo.svg?v=6'
+      });
+      n.onclick = () => {
+        window.open(item.url, '_blank', 'noopener,noreferrer');
+        n.close();
+      };
+    });
+    fresh.forEach(i => alertedVideoIds.add(i.videoId));
+    saveJsonStorage(NOTIF_ALERTED_KEY, Array.from(alertedVideoIds).slice(-500));
+  }
+
+  async function checkAllNotificationFeeds(isInitialLoad = false) {
+    if (isCheckingFeeds) return;
+    isCheckingFeeds = true;
+    notifStatusText.textContent = 'Checking feeds...';
+
+    const enabledChannels = getSubscribedChannelsInfo().filter(c => isChannelNotifEnabled(c.id));
+    if (!enabledChannels.length) {
+      cachedNotifications = [];
+      notifStatusText.textContent = 'All channel notifications are off';
+      renderNotifications();
+      isCheckingFeeds = false;
+      return;
+    }
+
+    const collected = [];
+    const batchSize = 5;
+    for (let i = 0; i < enabledChannels.length; i += batchSize) {
+      const batch = enabledChannels.slice(i, i + batchSize);
+      const results = await Promise.all(batch.map(ch => fetchChannelFeed(ch.id)));
+      results.forEach(arr => collected.push(...arr));
+    }
+
+    const dedup = new Map();
+    collected.forEach(item => {
+      if (!dedup.has(item.videoId)) dedup.set(item.videoId, item);
+    });
+
+    cachedNotifications = Array.from(dedup.values())
+      .sort((a, b) => b.publishedMs - a.publishedMs)
+      .slice(0, 60);
+
+    triggerDesktopNotifications(cachedNotifications, isInitialLoad);
+    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    notifStatusText.textContent = `Last checked at ${nowTime}!`;
+    renderNotifications();
+    isCheckingFeeds = false;
+  }
+
+  notifBellBtn.addEventListener('click', () => {
+    notifOverlay.classList.add('open');
+    renderNotifications();
+  });
+
+  closeNotifModal.addEventListener('click', () => notifOverlay.classList.remove('open'));
+  notifOverlay.addEventListener('click', (e) => {
+    if (e.target === notifOverlay) notifOverlay.classList.remove('open');
+  });
+
+  refreshNotifBtn.addEventListener('click', () => checkAllNotificationFeeds(false));
+
+  markAllReadBtn.addEventListener('click', () => {
+    cachedNotifications.forEach(n => readVideoIds.add(n.videoId));
+    saveJsonStorage(NOTIF_READ_KEY, Array.from(readVideoIds).slice(-500));
+    renderNotifications();
+  });
+
+  checkAllNotificationFeeds(true);
+  setInterval(() => checkAllNotificationFeeds(false), CHECK_INTERVAL_MS);
+
+  const importYtBtn = document.getElementById('importYtBtn');
+  const importOverlay = document.getElementById('importOverlay');
+  const closeImportModal = document.getElementById('closeImportModal');
+  const cancelImportBtn = document.getElementById('cancelImportBtn');
+  const importDropzone = document.getElementById('importDropzone');
+  const importFileInput = document.getElementById('importFileInput');
+  const importTextInput = document.getElementById('importTextInput');
+  const importPreview = document.getElementById('importPreview');
+  const importPreviewText = document.getElementById('importPreviewText');
+  const importProgressBar = document.getElementById('importProgressBar');
+  const importProgressFill = document.getElementById('importProgressFill');
+  const startImportBtn = document.getElementById('startImportBtn');
+
+  let parsedImportChannels = [];
+
+  function extractChannelId(str) {
+    if (!str) return null;
+    const trimmed = str.trim();
+    const urlMatch = trimmed.match(/channel\/(UC[a-zA-Z0-9_-]{22})/);
+    if (urlMatch) return urlMatch[1];
+    const feedMatch = trimmed.match(/channel_id=(UC[a-zA-Z0-9_-]{22})/);
+    if (feedMatch) return feedMatch[1];
+    const directMatch = trimmed.match(/\b(UC[a-zA-Z0-9_-]{22})\b/);
+    if (directMatch) return directMatch[1];
+    return null;
+  }
+
+  function parseCsvLine(line) {
+    const fields = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (ch === ',' && !inQuotes) {
+        fields.push(current);
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+    fields.push(current);
+    return fields;
+  }
+
+  function parseImportContent(text) {
+    const found = new Map();
+    const trimmed = text.trim();
+    if (!trimmed) return [];
+
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try {
+        const data = JSON.parse(trimmed);
+        if (Array.isArray(data)) {
+          data.forEach(item => {
+            if (typeof item === 'string') {
+              const id = extractChannelId(item);
+              if (id) found.set(id, { id, name: id, avatar: '' });
+            } else if (item && typeof item === 'object') {
+              const id = extractChannelId(item.id || item.channelId || item.url || '');
+              if (id) found.set(id, { id, name: item.name || item.channelName || item.title || id, avatar: item.avatar || '' });
+            }
+          });
+        } else if (data && Array.isArray(data.subscriptions)) {
+          data.subscriptions.forEach(item => {
+            if (typeof item === 'string') {
+              const id = extractChannelId(item);
+              if (id) found.set(id, { id, name: id, avatar: '' });
+            } else if (item && typeof item === 'object') {
+              const id = extractChannelId(item.url || item.id || item.channelId || '');
+              if (id) found.set(id, { id, name: item.name || item.channelName || id, avatar: item.avatar || '' });
+            }
+          });
+        } else if (data && typeof data === 'object') {
+          Object.entries(data).forEach(([key, val]) => {
+            const id = extractChannelId(key);
+            if (id) {
+              found.set(id, {
+                id,
+                name: (val && (val.channelName || val.name)) || id,
+                avatar: (val && val.avatar) || ''
+              });
+            }
+          });
+        }
+        if (found.size > 0) return Array.from(found.values());
+      } catch {}
+    }
+
+    if (trimmed.startsWith('<')) {
+      try {
+        const doc = new DOMParser().parseFromString(trimmed, 'text/xml');
+        doc.querySelectorAll('outline').forEach(outline => {
+          const xmlUrl = outline.getAttribute('xmlUrl') || outline.getAttribute('htmlUrl') || '';
+          const id = extractChannelId(xmlUrl);
+          if (id) {
+            const name = outline.getAttribute('title') || outline.getAttribute('text') || id;
+            found.set(id, { id, name, avatar: '' });
+          }
+        });
+        if (found.size > 0) return Array.from(found.values());
+      } catch {}
+    }
+
+    const lines = trimmed.split(/\r?\n/);
+    lines.forEach((line, idx) => {
+      if (!line.trim()) return;
+      const cols = parseCsvLine(line);
+      if (idx === 0 && /channel\s*id/i.test(cols[0])) return;
+      const id = extractChannelId(cols[0]) || extractChannelId(cols[1]) || extractChannelId(line);
+      if (id) {
+        const name = (cols[2] && cols[2].trim()) || (cols[1] && !/youtube\.com/i.test(cols[1]) ? cols[1].trim() : '') || id;
+        found.set(id, { id, name, avatar: '' });
+      }
+    });
+
+    return Array.from(found.values());
+  }
+
+  function updateImportPreview(channelsArr) {
+    const existingIds = new Set(Array.from(channels).map(c => c.dataset.id));
+    const newOnes = channelsArr.filter(c => !existingIds.has(c.id));
+    parsedImportChannels = newOnes;
+
+    if (!channelsArr.length) {
+      importPreview.classList.remove('visible');
+      startImportBtn.disabled = true;
+      return;
+    }
+
+    const skipped = channelsArr.length - newOnes.length;
+    importPreview.classList.add('visible');
+    importProgressBar.classList.remove('visible');
+    importProgressFill.style.width = '0%';
+    importPreviewText.textContent = newOnes.length
+      ? `Found ${newOnes.length} new channel${newOnes.length === 1 ? '' : 's'} to import${skipped ? ` (${skipped} already subscribed)` : ''}.`
+      : `All ${channelsArr.length} detected channels are already in your subscriptions.`;
+    startImportBtn.disabled = newOnes.length === 0;
+  }
+
+  function resetImportModal() {
+    parsedImportChannels = [];
+    importFileInput.value = '';
+    importTextInput.value = '';
+    importPreview.classList.remove('visible');
+    importProgressBar.classList.remove('visible');
+    importProgressFill.style.width = '0%';
+    startImportBtn.disabled = true;
+    startImportBtn.textContent = 'Import Channels';
+  }
+
+  importYtBtn.addEventListener('click', () => {
+    resetImportModal();
+    importOverlay.classList.add('open');
+  });
+
+  closeImportModal.addEventListener('click', () => importOverlay.classList.remove('open'));
+  cancelImportBtn.addEventListener('click', () => importOverlay.classList.remove('open'));
+  importOverlay.addEventListener('click', (e) => {
+    if (e.target === importOverlay) importOverlay.classList.remove('open');
+  });
+
+  importDropzone.addEventListener('click', () => importFileInput.click());
+  importDropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    importDropzone.classList.add('dragover');
+  });
+  importDropzone.addEventListener('dragleave', () => importDropzone.classList.remove('dragover'));
+  importDropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    importDropzone.classList.remove('dragover');
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleImportFile(e.dataTransfer.files[0]);
+    }
+  });
+
+  importFileInput.addEventListener('change', (e) => {
+    if (e.target.files && e.target.files[0]) {
+      handleImportFile(e.target.files[0]);
+    }
+  });
+
+  function handleImportFile(file) {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const content = String(ev.target.result || '');
+      const parsed = parseImportContent(content);
+      updateImportPreview(parsed);
+    };
+    reader.readAsText(file);
+  }
+
+  importTextInput.addEventListener('input', () => {
+    const parsed = parseImportContent(importTextInput.value);
+    updateImportPreview(parsed);
+  });
+
+  startImportBtn.addEventListener('click', async () => {
+    if (!parsedImportChannels.length) return;
+    startImportBtn.disabled = true;
+    startImportBtn.textContent = 'Importing...';
+    importProgressBar.classList.add('visible');
+
+    let done = 0;
+    let failed = 0;
+    const total = parsedImportChannels.length;
+
+    for (const ch of parsedImportChannels) {
+      try {
+        const params = new URLSearchParams({
+          ID: USER_ID,
+          channelID: ch.id,
+          channelName: ch.name
+        });
+        if (ch.avatar) params.set('avatar', ch.avatar);
+        const res = await fetch(`/api/add-channel-sub?${params.toString()}`);
+        if (!res.ok) failed++;
+      } catch {
+        failed++;
+      }
+      done++;
+      importProgressFill.style.width = `${Math.round((done / total) * 100)}%`;
+      importPreviewText.textContent = `Imported ${done} / ${total}${failed ? ` (${failed} failed)` : ''}...`;
+    }
+
+    startImportBtn.textContent = 'Done!';
+    setTimeout(() => window.location.reload(), 600);
+  });
 
   function updateScrollButtons() {
     if (!channelList) return;
@@ -869,8 +1866,8 @@ document.addEventListener("DOMContentLoaded", () => {
   window.addEventListener('resize', updateScrollButtons);
   setTimeout(updateScrollButtons, 100);
 
-  const overlay   = document.getElementById('e2eeOverlay');
-  const badge     = document.getElementById('e2eeBadge');
+  const overlay = document.getElementById('e2eeOverlay');
+  const badge = document.getElementById('e2eeBadge');
   const closeE2ee = document.getElementById('e2eeClose');
 
   badge.addEventListener('click', () => overlay.classList.add('open'));
@@ -898,7 +1895,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (viewJsonBtn) {
     viewJsonBtn.addEventListener('click', async (e) => {
-      e.preventDefault(); // Stop native navigation, use JS modal instead
+      e.preventDefault();
       jsonOverlay.classList.add('open');
       jsonOutput.textContent = 'Loading...';
       const url = viewJsonBtn.getAttribute('href');
@@ -921,10 +1918,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (downloadJsonBtn) {
     downloadJsonBtn.addEventListener('click', async (e) => {
-      e.preventDefault(); // Stop native navigation, use JS blob download instead
+      e.preventDefault();
       const url = downloadJsonBtn.getAttribute('href');
       const data = await fetchJsonData(url);
-      
+
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -947,11 +1944,11 @@ document.addEventListener("DOMContentLoaded", () => {
   unsubBtns.forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
-      e.stopPropagation(); 
-      
+      e.stopPropagation();
+
       const channelName = btn.getAttribute('data-name');
-      currentUnsubUrl = btn.getAttribute('href'); 
-      
+      currentUnsubUrl = btn.getAttribute('href');
+
       confirmUnsubText.textContent = `Unsubscribe from ${channelName}?`;
       confirmUnsubModal.classList.add('open');
     });
@@ -979,13 +1976,15 @@ document.addEventListener("DOMContentLoaded", () => {
       overlay.classList.remove('open');
       confirmUnsubModal.classList.remove('open');
       if (jsonOverlay) jsonOverlay.classList.remove('open');
+      notifOverlay.classList.remove('open');
+      importOverlay.classList.remove('open');
     }
   });
 
   function filterChannels() {
     const term = searchInput.value.toLowerCase();
     clearBtn.classList.toggle('visible', term.length > 0);
-    
+
     channels.forEach(ch => {
       if (ch.dataset.name.includes(term)) {
         ch.style.display = 'flex';
@@ -1003,7 +2002,7 @@ document.addEventListener("DOMContentLoaded", () => {
     searchInput.focus();
   });
 
-    sortBtns.forEach(btn => {
+  sortBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       sortBtns.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
@@ -1014,7 +2013,7 @@ document.addEventListener("DOMContentLoaded", () => {
           ? a.dataset.name.localeCompare(b.dataset.name)
           : b.dataset.name.localeCompare(a.dataset.name))
         .forEach(node => channelList.appendChild(node));
-      
+
       channelList.scrollLeft = 0;
       updateScrollButtons();
     });
@@ -1029,8 +2028,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   channels.forEach(ch => {
     ch.addEventListener('click', (e) => {
-      if (e.target.closest('.js-unsub-btn')) return;
-      
+      if (e.target.closest('.js-unsub-btn') || e.target.closest('.js-channel-notif-btn')) return;
+
       e.preventDefault();
 
       channels.forEach(c => c.classList.remove('selected'));
@@ -1038,16 +2037,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const id = ch.dataset.id;
       const realName = ch.querySelector('.channel-title').textContent;
+      selectedChannelId = id;
 
       toolbarTitle.textContent = realName;
       openChannelBtn.href = `/channel?id=${encodeURIComponent(id)}`;
       openChannelBtn.style.display = 'inline-flex';
       closeViewer.style.display = 'inline-block';
-      
+      updateFeedNotifButtonUI();
+
       emptyState.style.display = 'none';
-      iframe.classList.remove('active'); 
-      loadingState.style.display = 'flex'; 
-      
+      iframe.classList.remove('active');
+      loadingState.style.display = 'flex';
+
       iframe.src = `/channel?id=${encodeURIComponent(id)}&embedchannelsubsfeed=true`;
     });
   });
@@ -1056,10 +2057,12 @@ document.addEventListener("DOMContentLoaded", () => {
     iframe.src = '';
     iframe.classList.remove('active');
     loadingState.style.display = 'none';
-    emptyState.style.display = 'flex'; 
+    emptyState.style.display = 'flex';
     toolbarTitle.textContent = 'Select a channel to view content';
     openChannelBtn.style.display = 'none';
     closeViewer.style.display = 'none';
+    selectedChannelId = null;
+    updateFeedNotifButtonUI();
     channels.forEach(c => c.classList.remove('selected'));
   });
 
@@ -1068,11 +2071,11 @@ document.addEventListener("DOMContentLoaded", () => {
       loadingState.style.display = 'none';
       iframe.classList.add('active');
     }
-    
+
     try {
       const doc = iframe.contentDocument || iframe.contentWindow.document;
       doc.querySelectorAll("a").forEach(a => a.setAttribute("target", "_blank"));
-    } catch(e) { /* cross-origin, ignore */ }
+    } catch(e) {}
   });
 });
 </script>
