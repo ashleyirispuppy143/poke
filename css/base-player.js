@@ -8299,10 +8299,205 @@ window.SyncLevel = SyncLevel;
     player.addClass('vjs-paused');
   }
 
+  function getUnsupportedBrowserInfo() {
+    var ua = (navigator && navigator.userAgent) ? String(navigator.userAgent) : '';
+    if (!ua) return null;
+
+    var ffMatch = ua.match(/\bFirefox\/(\d+)/i);
+    if (ffMatch) {
+      var ffVer = parseInt(ffMatch[1], 10);
+      if (!isNaN(ffVer) && ffVer < 113) {
+        return {
+          title: 'Poke player is not supported in this browser version',
+          message: 'this is to make sure our playback is smooth :3 so please update your browser :3',
+          buttonText: 'Update Firefox',
+          downloadUrl: 'https://www.mozilla.org/firefox/new/'
+        };
+      }
+      return null;
+    }
+
+    var chromiumMatch = ua.match(/\bChromium\/(\d+)/i);
+    var chromeMatch = ua.match(/\bChrome\/(\d+)/i);
+    var blinkVer = chromiumMatch ? parseInt(chromiumMatch[1], 10) : (chromeMatch ? parseInt(chromeMatch[1], 10) : NaN);
+
+    if (!isNaN(blinkVer) && blinkVer < 110) {
+      if (/\bOPRGX\/|Opera\s*GX|\(Edition\s+GX/i.test(ua)) {
+        return {
+          title: 'Poke player is not supported in this browser version',
+          message: 'this is to make sure our playback is smooth :3 so please update your browser :3',
+          buttonText: 'Update Opera GX',
+          downloadUrl: 'https://www.opera.com/gx'
+        };
+      }
+      if (/\bOPR\/|\bOpera\//i.test(ua)) {
+        return {
+          title: 'Poke player is not supported in this browser version',
+          message: 'this is to make sure our playback is smooth :3 so please update your browser :3',
+          buttonText: 'Update Opera',
+          downloadUrl: 'https://www.opera.com/download'
+        };
+      }
+      if (chromiumMatch) {
+        return {
+          title: 'Poke player is not supported in this browser version',
+          message: 'this is to make sure our playback is smooth :3 so please update your browser :3',
+          buttonText: 'Update Chromium',
+          downloadUrl: 'https://www.chromium.org/getting-involved/download-chromium/'
+        };
+      }
+      return {
+        title: 'Poke player is not supported in this browser version',
+        message: 'this is to make sure our playback is smooth :3 so please update your browser :3',
+        buttonText: 'Update Chrome',
+        downloadUrl: 'https://www.google.com/chrome/'
+      };
+    }
+
+    return null;
+  }
+
+  function showUnsupportedBrowserOverlay(rootEl, browserInfo) {
+    if (!rootEl || !browserInfo || rootEl.querySelector('.vjs-alabaster-error-overlay')) return;
+    var errOverlay = document.createElement('div');
+    errOverlay.className = 'vjs-alabaster-error-overlay';
+    errOverlay.style.cssText = 'position:absolute;inset:0;z-index:45;display:flex;align-items:center;justify-content:center;padding:5% 8%;box-sizing:border-box;background:radial-gradient(circle at 73% 50%, rgba(168, 28, 240, 0.24) 0%, rgba(255, 42, 133, 0.08) 28%, rgba(15, 15, 15, 0.98) 65%), #0f0f0f;color:#fff;user-select:none;pointer-events:auto;font-family:"poketube flex","PokeTube Flex",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;';
+
+    var layoutWrap = document.createElement('div');
+    layoutWrap.style.cssText = 'display:flex;flex-direction:row;align-items:center;justify-content:space-between;width:100%;max-width:720px;gap:32px;flex-wrap:wrap;';
+
+    var leftCol = document.createElement('div');
+    leftCol.style.cssText = 'flex:1 1 260px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;text-align:left;gap:10px;';
+
+    var errHeadline = document.createElement('div');
+    errHeadline.style.cssText = 'font-size:clamp(20px, 3vw, 28px);font-weight:700;line-height:1.2;color:#ffffff;letter-spacing:-0.2px;margin:0;';
+    errHeadline.textContent = browserInfo.title;
+
+    var errSubText = document.createElement('div');
+    errSubText.style.cssText = 'font-size:clamp(13px, 1.6vw, 15px);font-weight:400;line-height:1.45;color:#aaaaaa;max-width:380px;margin:0;';
+    errSubText.textContent = browserInfo.message;
+
+    var btnWrap = document.createElement('div');
+    btnWrap.style.cssText = 'display:flex;flex-direction:row;align-items:center;margin-top:8px;gap:12px;';
+
+    var updateBtn = document.createElement('a');
+    updateBtn.href = browserInfo.downloadUrl;
+    updateBtn.target = '_blank';
+    updateBtn.rel = 'noopener noreferrer';
+    updateBtn.style.cssText = 'padding:8px 18px;border-radius:999px;border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.1);color:#fff;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block;transition:background 0.15s ease;';
+    updateBtn.textContent = browserInfo.buttonText;
+    updateBtn.addEventListener('mouseenter', function() { updateBtn.style.background = 'rgba(255,255,255,0.2)'; });
+    updateBtn.addEventListener('mouseleave', function() { updateBtn.style.background = 'rgba(255,255,255,0.1)'; });
+    updateBtn.addEventListener('click', function(evt) { evt.stopPropagation(); });
+
+    btnWrap.appendChild(updateBtn);
+    leftCol.appendChild(errHeadline);
+    leftCol.appendChild(errSubText);
+    leftCol.appendChild(btnWrap);
+
+    var rightCol = document.createElement('div');
+    rightCol.style.cssText = 'flex:0 0 auto;display:flex;align-items:center;justify-content:center;margin:0 auto;';
+    rightCol.innerHTML = [
+      '<svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:clamp(110px, 18vw, 170px);height:auto;overflow:visible;">',
+      '  <defs>',
+      '    <linearGradient id="alabasterUnsupportedIGrad" x1="0%" y1="0%" x2="100%" y2="100%">',
+      '      <stop offset="0%" stop-color="#ff5e97"/>',
+      '      <stop offset="50%" stop-color="#a31aff"/>',
+      '      <stop offset="100%" stop-color="#ff2a85"/>',
+      '    </linearGradient>',
+      '  </defs>',
+      '  <circle cx="90" cy="90" r="75" fill="rgba(255,255,255,0.06)"/>',
+      '  <circle cx="90" cy="52" r="12" fill="url(#alabasterUnsupportedIGrad)"/>',
+      '  <rect x="78" y="76" width="24" height="62" rx="12" fill="url(#alabasterUnsupportedIGrad)"/>',
+      '</svg>'
+    ].join('');
+
+    layoutWrap.appendChild(leftCol);
+    layoutWrap.appendChild(rightCol);
+    errOverlay.appendChild(layoutWrap);
+    errOverlay.addEventListener('click', function(evt) { evt.stopPropagation(); });
+    rootEl.appendChild(errOverlay);
+  }
+
   function initAlabasterPlayer() {
     var rawVideo = document.querySelector('video.video-js, video');
     var rawAudio = document.querySelector('audio');
     if (!rawVideo || !window.videojs) return;
+
+    var unsupportedBrowser = getUnsupportedBrowserInfo();
+    if (unsupportedBrowser) {
+      var rawDataSetup = rawVideo.getAttribute('data-setup') || '';
+      rawVideo.autoplay = false;
+      rawVideo.removeAttribute('autoplay');
+      rawVideo.controls = false;
+      rawVideo.removeAttribute('controls');
+      if (rawDataSetup) {
+        try {
+          var parsedUnsupportedSetup = JSON.parse(rawDataSetup);
+          if (parsedUnsupportedSetup && typeof parsedUnsupportedSetup === 'object' && parsedUnsupportedSetup.autoplay) {
+            parsedUnsupportedSetup.autoplay = false;
+            rawVideo.setAttribute('data-setup', JSON.stringify(parsedUnsupportedSetup));
+          }
+        } catch (_) {}
+      }
+      if (rawAudio) {
+        rawAudio.autoplay = false;
+        rawAudio.removeAttribute('autoplay');
+        try { rawAudio.pause(); } catch (_) {}
+      }
+      try { rawVideo.pause(); } catch (_) {}
+
+      SyncLevel.error = 'UNSUPPORTED_BROWSER';
+      SyncLevel.status = 'unsupported-browser';
+
+      var unsupportedPlayer = window.videojs(rawVideo);
+      if (unsupportedPlayer) {
+        if (typeof unsupportedPlayer.autoplay === 'function') {
+          try { unsupportedPlayer.autoplay(false); } catch (_) {}
+        }
+        if (unsupportedPlayer.options_) {
+          unsupportedPlayer.options_.autoplay = false;
+        }
+        if (typeof unsupportedPlayer.controls === 'function') {
+          try { unsupportedPlayer.controls(false); } catch (_) {}
+        }
+        if (typeof unsupportedPlayer.pause === 'function') {
+          try { unsupportedPlayer.pause(); } catch (_) {}
+        }
+        unsupportedPlayer.play = function() {
+          return window.Promise ? Promise.resolve() : undefined;
+        };
+        unsupportedPlayer.ready(function() {
+          var rootEl = unsupportedPlayer.el && unsupportedPlayer.el();
+          var vEl = (rootEl && rootEl.querySelector('video')) || rawVideo;
+          if (vEl) {
+            vEl.autoplay = false;
+            vEl.removeAttribute('autoplay');
+            vEl.controls = false;
+            try { HTMLMediaElement.prototype.pause.call(vEl); } catch (_) {}
+            vEl.play = function() {
+              return window.Promise ? Promise.resolve() : undefined;
+            };
+            vEl.addEventListener('play', function(evt) {
+              evt.stopImmediatePropagation();
+              try { HTMLMediaElement.prototype.pause.call(vEl); } catch (_) {}
+            }, true);
+          }
+          if (rawAudio) {
+            try { HTMLMediaElement.prototype.pause.call(rawAudio); } catch (_) {}
+            rawAudio.play = function() {
+              return window.Promise ? Promise.resolve() : undefined;
+            };
+            rawAudio.addEventListener('play', function(evt) {
+              evt.stopImmediatePropagation();
+              try { HTMLMediaElement.prototype.pause.call(rawAudio); } catch (_) {}
+            }, true);
+          }
+          showUnsupportedBrowserOverlay(rootEl, unsupportedBrowser);
+        });
+      }
+      return;
+    }
 
     var autoplayAttr = rawVideo.getAttribute('autoplay');
     var dataSetup = rawVideo.getAttribute('data-setup') || '';
