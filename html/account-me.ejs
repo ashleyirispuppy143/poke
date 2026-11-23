@@ -1576,6 +1576,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const NOTIF_READ_KEY = `poke_notif_read_${USER_ID}`;
   const NOTIF_ALERTED_KEY = `poke_notif_alerted_${USER_ID}`;
   const NOTIF_DISMISSED_KEY = `poke_notif_dismissed_${USER_ID}`;
+  const NOTIF_KNOWN_CHANNELS_KEY = `poke_notif_known_channels_${USER_ID}`;
   const NOTIF_INTERVAL_KEY = `poke_notif_interval_mins_${USER_ID}`;
 
   const BELL_ON_SVG = '<svg viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>';
@@ -1624,12 +1625,34 @@ document.addEventListener("DOMContentLoaded", () => {
   let checkIntervalMinutes = getSavedIntervalMinutes();
   let checkIntervalTimer = null;
 
+  const currentSubIds = new Set(Array.from(channels).map(c => c.dataset.id));
   let notifPrefs = loadJsonStorage(NOTIF_PREFS_KEY, {});
   let readVideoIds = new Set(loadJsonStorage(NOTIF_READ_KEY, []));
   let alertedVideoIds = new Set(loadJsonStorage(NOTIF_ALERTED_KEY, []));
   let dismissedVideoIds = new Set(loadJsonStorage(NOTIF_DISMISSED_KEY, []));
+  let knownChannelIds = new Set(
+    loadJsonStorage(NOTIF_KNOWN_CHANNELS_KEY, []).filter(id => currentSubIds.has(id))
+  );
+  saveJsonStorage(NOTIF_KNOWN_CHANNELS_KEY, Array.from(knownChannelIds));
+
   let cachedNotifications = [];
   let isCheckingFeeds = false;
+
+  function persistNotifState() {
+    saveJsonStorage(NOTIF_READ_KEY, Array.from(readVideoIds).slice(-2000));
+    saveJsonStorage(NOTIF_ALERTED_KEY, Array.from(alertedVideoIds).slice(-2000));
+    saveJsonStorage(NOTIF_KNOWN_CHANNELS_KEY, Array.from(knownChannelIds));
+  }
+
+  function baselineNewChannelEntries(channelId, entries, ok) {
+    if (!ok || knownChannelIds.has(channelId)) return false;
+    entries.forEach(item => {
+      readVideoIds.add(item.videoId);
+      alertedVideoIds.add(item.videoId);
+    });
+    knownChannelIds.add(channelId);
+    return true;
+  }
 
   function isChannelNotifEnabled(channelId) {
     return notifPrefs[channelId] !== false;
@@ -1664,7 +1687,10 @@ document.addEventListener("DOMContentLoaded", () => {
       cachedNotifications = cachedNotifications.filter(n => n.channelId !== channelId);
       renderNotifications();
     } else {
-      fetchChannelFeed(channelId).then(entries => {
+      fetchChannelFeedResult(channelId).then(({ ok, entries }) => {
+        if (baselineNewChannelEntries(channelId, entries, ok)) {
+          persistNotifState();
+        }
         const visibleEntries = entries.filter(e => !dismissedVideoIds.has(e.videoId));
         if (visibleEntries.length) {
           const existingMap = new Map(cachedNotifications.map(n => [n.videoId, n]));
@@ -1734,21 +1760,21 @@ document.addEventListener("DOMContentLoaded", () => {
     }));
   }
 
-  async function fetchChannelFeed(channelId) {
+  async function fetchChannelFeedResult(channelId) {
     try {
       const res = await fetch(`/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`);
-      if (!res.ok) return [];
+      if (!res.ok) return { ok: false, entries: [] };
       const xmlText = await res.text();
       const parser = new DOMParser();
       const doc = parser.parseFromString(xmlText, 'text/xml');
-      if (doc.querySelector('parsererror')) return [];
+      if (doc.querySelector('parsererror')) return { ok: false, entries: [] };
 
       const feedTitle = doc.querySelector('feed > title')?.textContent || '';
       const entries = Array.from(doc.getElementsByTagName('entry'));
       const subCard = document.querySelector(`.channel-card[data-id="${CSS.escape(channelId)}"]`);
       const fallbackName = subCard?.dataset.realName || feedTitle || 'Unknown Channel';
 
-      return entries.slice(0, 5).map(entry => {
+      const parsed = entries.slice(0, 5).map(entry => {
         const rawId = getXmlTagText(entry, 'id');
         const videoId = getXmlTagText(entry, 'videoId') || rawId.replace(/^yt:video:/, '');
         const title = entry.querySelector('title')?.textContent || 'Untitled Video';
@@ -1770,9 +1796,16 @@ document.addEventListener("DOMContentLoaded", () => {
           thumbnail
         };
       }).filter(item => item.videoId);
+
+      return { ok: true, entries: parsed };
     } catch {
-      return [];
+      return { ok: false, entries: [] };
     }
+  }
+
+  async function fetchChannelFeed(channelId) {
+    const result = await fetchChannelFeedResult(channelId);
+    return result.entries;
   }
 
   function formatRelativeTime(ms) {
@@ -1922,7 +1955,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       a.addEventListener('click', () => {
         readVideoIds.add(item.videoId);
-        saveJsonStorage(NOTIF_READ_KEY, Array.from(readVideoIds).slice(-500));
+        saveJsonStorage(NOTIF_READ_KEY, Array.from(readVideoIds).slice(-2000));
         a.classList.remove('unread');
         updateUnreadBadge();
       });
@@ -1949,13 +1982,13 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
     if (isInitialLoad && alertedVideoIds.size === 0) {
       items.forEach(i => alertedVideoIds.add(i.videoId));
-      saveJsonStorage(NOTIF_ALERTED_KEY, Array.from(alertedVideoIds).slice(-500));
+      saveJsonStorage(NOTIF_ALERTED_KEY, Array.from(alertedVideoIds).slice(-2000));
       return;
     }
     const fresh = items.filter(i => !alertedVideoIds.has(i.videoId));
     fresh.slice(0, 3).forEach(item => fireDesktopNotification(item, false));
     fresh.forEach(i => alertedVideoIds.add(i.videoId));
-    saveJsonStorage(NOTIF_ALERTED_KEY, Array.from(alertedVideoIds).slice(-500));
+    saveJsonStorage(NOTIF_ALERTED_KEY, Array.from(alertedVideoIds).slice(-2000));
   }
 
   async function checkAllNotificationFeeds(isInitialLoad = false) {
@@ -1973,11 +2006,23 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const collected = [];
+    let baselinedAny = false;
     const batchSize = 5;
     for (let i = 0; i < enabledChannels.length; i += batchSize) {
       const batch = enabledChannels.slice(i, i + batchSize);
-      const results = await Promise.all(batch.map(ch => fetchChannelFeed(ch.id)));
-      results.forEach(arr => collected.push(...arr));
+      const results = await Promise.all(
+        batch.map(async ch => ({ channelId: ch.id, ...(await fetchChannelFeedResult(ch.id)) }))
+      );
+      results.forEach(({ channelId, ok, entries }) => {
+        if (baselineNewChannelEntries(channelId, entries, ok)) {
+          baselinedAny = true;
+        }
+        collected.push(...entries);
+      });
+    }
+
+    if (baselinedAny) {
+      persistNotifState();
     }
 
     const dedup = new Map();
@@ -2191,7 +2236,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   markAllReadBtn.addEventListener('click', () => {
     cachedNotifications.forEach(n => readVideoIds.add(n.videoId));
-    saveJsonStorage(NOTIF_READ_KEY, Array.from(readVideoIds).slice(-500));
+    saveJsonStorage(NOTIF_READ_KEY, Array.from(readVideoIds).slice(-2000));
     renderNotifications();
   });
 
@@ -2200,8 +2245,8 @@ document.addEventListener("DOMContentLoaded", () => {
       dismissedVideoIds.add(n.videoId);
       readVideoIds.add(n.videoId);
     });
-    saveJsonStorage(NOTIF_DISMISSED_KEY, Array.from(dismissedVideoIds).slice(-1000));
-    saveJsonStorage(NOTIF_READ_KEY, Array.from(readVideoIds).slice(-500));
+    saveJsonStorage(NOTIF_DISMISSED_KEY, Array.from(dismissedVideoIds).slice(-2000));
+    saveJsonStorage(NOTIF_READ_KEY, Array.from(readVideoIds).slice(-2000));
     cachedNotifications = [];
     renderNotifications();
   });
