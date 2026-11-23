@@ -108,45 +108,51 @@ function initSettingsApp() {
           icon: '<svg viewBox="0 0 24 24"><path d="M19 6H5c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 10H5V8h14v8z"/></svg>'
         },
         {
-          key: 'DontUseAlabasterStyleDescriptionOpeningFS',
+          key: 'alabaster_disable_autoplay',
+          title: 'Disable autoplaying video',
+          subtitle: 'Prevent videos from playing automatically on load and show a play button over the player instead!',
+          icon: '<svg viewBox="0 0 24 24"><path d="M8 5.19V5l11 7-2.55 1.63L8 5.19zM20 19.73l-5.11-5.11L8 7.73 4.27 4 3 5.27l5 5V19l5.33-3.4 5.4 5.4L20 19.73z"/></svg>'
+        },
+        {
+          key: 'dont_use_alabaster_style_description_opening_fs',
           title: 'Use Description button instead of title',
           subtitle: 'YouTube doesn\'t have a description button, so for parity reasons this defaults to clicking the title. Enable this to use a dedicated Description button instead.',
           icon: '<svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>',
           parity: true
         },
         {
-          key: 'CloseFullScreenDiscover',
+          key: 'close_full_screen_discover',
           title: 'Remove Discover in fullscreen',
           subtitle: 'Hide the recommended videos drawer when watching in fullscreen mode',
           icon: '<svg viewBox="0 0 24 24"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46A11.804 11.804 0 0 0 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78 3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>'
         },
         {
-          key: 'ShowDislikesOnFullScreenDesc',
+          key: 'show_dislikes_on_full_screen_desc',
           title: 'Show dislike count in fullscreen description',
           subtitle: 'Display the video dislike count instead of the upload date in the fullscreen overlay',
           icon: '<svg viewBox="0 0 24 24"><path d="M15 3H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v2c0 1.1.9 2 2 2h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 23l6.59-6.59c.36-.36.58-.86.58-1.41V5c0-1.1-.9-2-2-2zm4 0v12h4V3h-4z"/></svg>',
           parity: true
         },
         {
-          key: 'DontShowVerifiedBadgeOnPopUpDescription',
+          key: 'dont_show_verified_badge_on_pop_up_description',
           title: 'Hide channel verification badge in popup description',
           subtitle: 'Omit the verified checkmark next to channel names in the fullscreen description popup',
           icon: '<svg viewBox="0 0 24 24"><path d="M23 12l-2.44-2.79.34-3.69-3.61-.82-1.89-3.2L12 2.96 8.6 1.5 6.71 4.69 3.1 5.5l.34 3.7L1 12l2.44 2.79-.34 3.7 3.61.82L8.6 22.5l3.4-1.47 3.4 1.46 1.89-3.19 3.61-.82-.34-3.69L23 12zm-12.91 4.72-3.8-3.81 1.48-1.48 2.32 2.33 5.85-5.87 1.48 1.48-7.33 7.35z"/></svg>',
           parity: true
         },
         {
-          key: 'AlabasterDontUseYoutubeStyleRecommendationsShortcut',
+          key: 'alabaster_dont_use_youtube_style_recommendations_shortcut',
           title: 'Disable "V" shortcut for recommendations',
           subtitle: 'Prevent pressing the V key from opening recommended videos while in fullscreen',
           icon: '<svg viewBox="0 0 24 24"><path d="M20 5H4c-1.1 0-1.99.9-1.99 2L2 17c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z"/></svg>',
           disabledWhen: {
-            key: 'CloseFullScreenDiscover',
+            key: 'close_full_screen_discover',
             value: true,
             reason: 'Unavailable while "Remove Discover in fullscreen" is enabled'
           }
         },
         {
-          key: 'AlabasterDisableAttentionSpanFixer',
+          key: 'alabaster_disable_attention_span_fixer',
           title: 'Disable hold-to-2x playback speed',
           subtitle: 'Prevent holding right-click or the Space key from temporarily speeding up playback to 2x',
           icon: '<svg viewBox="0 0 24 24"><path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/></svg>'
@@ -165,30 +171,30 @@ function initSettingsApp() {
       description: 'Manage caption styling and subtitle persistence across videos',
       items: [
         {
-          key: 'DontUseYoutubeStyleCapitions',
+          key: 'dont_use_youtube_style_captions',
           title: 'Use default browser captions menu',
           subtitle: 'Replace the custom YouTube-style caption overlay with the native player menu',
           icon: '<svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 12h4v2H4v-2zm10 6H4v-2h10v2zm6 0h-4v-2h4v2zm0-4H10v-2h10v2z"/></svg>',
           parity: true
         },
         {
-          key: 'DontSaveSubtitleState',
+          key: 'dont_save_subtitle_state',
           title: 'Don\'t save subtitle state across videos',
           subtitle: 'Reset subtitle visibility and language selection whenever a new video loads',
           icon: '<svg viewBox="0 0 24 24"><path d="M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7 1.62-4.33L19.12 17h-3.24z"/></svg>',
           disabledWhen: {
-            key: 'DontUseYoutubeStyleCapitions',
+            key: 'dont_use_youtube_style_captions',
             value: true,
             reason: 'Requires "Use default browser captions menu" to be off'
           }
         },
         {
-          key: 'AlabasterSubtitleDefaultUseSystemLanguge',
+          key: 'alabaster_subtitle_default_use_system_language',
           title: 'Default to device display language for subtitles',
           subtitle: 'Try to select your device\'s display language first instead of the first available subtitle track, falling back to the first track if unavailable',
           icon: '<svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zm6.93 6h-2.95c-.32-1.25-.78-2.45-1.38-3.56 1.84.63 3.37 1.91 4.33 3.56zM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82c.43-1.43 1.08-2.76 1.91-3.96zM4.26 14C4.1 13.36 4 12.69 4 12s.1-1.36.26-2h3.38c-.08.66-.14 1.32-.14 2 0 .68.06 1.34.14 2H4.26zm.82 2h2.95c.32 1.25.78 2.45 1.38 3.56-1.84-.63-3.37-1.91-4.33-3.56zm2.95-8H5.08c.96-1.66 2.49-2.93 4.33-3.56C8.81 5.55 8.35 6.75 8.03 8zM12 19.96c-.83-1.2-1.48-2.53-1.91-3.96h3.82c-.43 1.43-1.08 2.76-1.91 3.96zM14.34 14H9.66c-.09-.66-.16-1.32-.16-2 0-.68.07-1.35.16-2h4.68c.09.65.16 1.32.16 2 0 .68-.07 1.34-.16 2zm.25 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95c-.96 1.65-2.49 2.93-4.33 3.56zM16.36 14c.08-.66.14-1.32.14-2 0-.68-.06-1.34-.14-2h3.38c.16.64.26 1.31.26 2s-.1 1.36-.26 2h-3.38z"/></svg>',
           disabledWhen: {
-            key: 'DontUseYoutubeStyleCapitions',
+            key: 'dont_use_youtube_style_captions',
             value: true,
             reason: 'Requires "Use default browser captions menu" to be off'
           }
@@ -203,12 +209,12 @@ function initSettingsApp() {
     description: 'Experimental player features that may change or be removed in future updates',
     items: [
       {
-        key: 'AlabasterEnableAutoSubtitle',
+        key: 'alabaster_enable_auto_subtitle',
         title: 'Auto-enable subtitles in device language',
         subtitle: 'Automatically turn on subtitles when a track matches your device language; does nothing if no matching track exists',
         icon: '<svg viewBox="0 0 24 24"><path d="M19 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v1c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1zm7 0h-1.5v-.5h-2v3h2V13H18v1c0 .55-.45 1-1 1h-3c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1z"/></svg>',
         disabledWhen: {
-          key: 'DontUseYoutubeStyleCapitions',
+          key: 'dont_use_youtube_style_captions',
           value: true,
           reason: 'Requires "Use default browser captions menu" to be off'
         }
@@ -664,8 +670,8 @@ function initSettingsApp() {
     togglesGroup.className = 'card-group';
 
     [
-      'AlabasterDontUseYoutubeStyleRecommendationsShortcut',
-      'AlabasterDisableAttentionSpanFixer',
+      'alabaster_dont_use_youtube_style_recommendations_shortcut',
+      'alabaster_disable_attention_span_fixer',
       'AlabasterDisableNumberKeySeeking'
     ].forEach(key => {
       const item = allItems.find(i => i.key === key);
