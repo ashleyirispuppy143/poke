@@ -1207,20 +1207,67 @@
     .import-textarea:focus { border-color: var(--md-sys-color-primary); }
 
     .import-preview {
+      position: relative;
+      overflow: hidden;
       background: var(--md-sys-color-surface-container-low);
       border: 1px solid var(--md-sys-color-outline-variant);
-      border-radius: 14px;
-      padding: 12px 14px;
+      border-radius: 18px;
+      padding: 14px 16px;
       font-size: 13px;
       color: var(--md-sys-color-on-surface-variant);
       display: none;
     }
     .import-preview.visible { display: block; }
 
+    .import-preview-bg {
+      position: absolute;
+      inset: -16px;
+      background-size: cover;
+      background-position: center;
+      filter: blur(18px) brightness(0.42) saturate(1.25);
+      opacity: 0;
+      transition: opacity 0.35s var(--md-sys-motion);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .import-preview-bg.visible { opacity: 1; }
+
+    .import-preview-inner {
+      position: relative;
+      z-index: 1;
+    }
+
+    .import-current-row {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .import-current-row.visible { display: flex; }
+
+    .import-current-avatar {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: var(--md-sys-color-surface-container-highest);
+      border: 2px solid rgba(255, 171, 204, 0.55);
+      flex-shrink: 0;
+    }
+
+    .import-current-name {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--md-sys-color-on-surface);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
     .import-progress-bar {
       width: 100%;
       height: 6px;
-      background: var(--md-sys-color-surface-container-highest);
+      background: rgba(255, 255, 255, 0.16);
       border-radius: 9999px;
       overflow: hidden;
       margin-top: 8px;
@@ -1239,6 +1286,88 @@
       justify-content: flex-end;
       gap: 10px;
       margin-top: 4px;
+      flex-wrap: wrap;
+    }
+
+    .bg-import-pill {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      z-index: 3200;
+      display: none;
+      align-items: center;
+      gap: 12px;
+      min-width: 280px;
+      max-width: 360px;
+      padding: 12px 16px;
+      border-radius: 22px;
+      background: var(--md-sys-color-surface-container-high);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+      overflow: hidden;
+    }
+    .bg-import-pill.visible { display: flex; }
+
+    .bg-import-pill-bg {
+      position: absolute;
+      inset: -14px;
+      background-size: cover;
+      background-position: center;
+      filter: blur(18px) brightness(0.4) saturate(1.25);
+      opacity: 0;
+      transition: opacity 0.35s var(--md-sys-motion);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .bg-import-pill-bg.visible { opacity: 1; }
+
+    .bg-import-pill-content {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+    }
+
+    .bg-import-pill-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: var(--md-sys-color-surface-container-highest);
+      border: 2px solid var(--md-sys-color-primary);
+      flex-shrink: 0;
+    }
+
+    .bg-import-pill-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .bg-import-pill-text {
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--md-sys-color-on-surface);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .bg-import-pill-bar {
+      width: 100%;
+      height: 4px;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.18);
+      margin-top: 6px;
+      overflow: hidden;
+    }
+
+    .bg-import-pill-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--md-sys-color-primary);
+      transition: width 0.2s var(--md-sys-motion);
     }
 
     .primary-btn {
@@ -1265,6 +1394,7 @@
       .filter-section { max-width: 100%; }
       .action-btn.hide-mobile, .account-info-wrapper { display: none; }
       .notif-thumb { width: 88px; height: 50px; }
+      .bg-import-pill { left: 12px; right: 12px; max-width: none; }
     }
 
     noscript {
@@ -1424,17 +1554,39 @@
           </div>
           <textarea class="import-textarea" id="importTextInput" placeholder="Or paste channel IDs / URLs (e.g. UCX6OQ3DkcsbYNE6H8uQQuVA or https://www.youtube.com/channel/UC...)"></textarea>
           <div class="import-preview" id="importPreview">
-            <div id="importPreviewText"></div>
-            <div class="import-progress-bar" id="importProgressBar">
-              <div class="import-progress-fill" id="importProgressFill"></div>
+            <div class="import-preview-bg" id="importPreviewBg"></div>
+            <div class="import-preview-inner">
+              <div class="import-current-row" id="importCurrentRow">
+                <img class="import-current-avatar" id="importCurrentAvatar" src="" alt="">
+                <div class="import-current-name" id="importCurrentName"></div>
+              </div>
+              <div id="importPreviewText"></div>
+              <div class="import-progress-bar" id="importProgressBar">
+                <div class="import-progress-fill" id="importProgressFill"></div>
+              </div>
             </div>
           </div>
           <div class="import-actions">
+            <button class="action-btn" id="runInBgImportBtn" style="display:none;">Run in background</button>
             <button class="action-btn" id="cancelImportBtn">Cancel</button>
             <button class="primary-btn" id="startImportBtn" disabled>Import Channels</button>
           </div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div class="bg-import-pill" id="bgImportPill">
+    <div class="bg-import-pill-bg" id="bgImportPillBg"></div>
+    <div class="bg-import-pill-content">
+      <img class="bg-import-pill-avatar" id="bgImportPillAvatar" src="" alt="" style="display:none;">
+      <div class="bg-import-pill-info">
+        <div class="bg-import-pill-text" id="bgImportPillText">Importing...</div>
+        <div class="bg-import-pill-bar">
+          <div class="bg-import-pill-fill" id="bgImportPillFill"></div>
+        </div>
+      </div>
+      <button type="button" class="small-btn" id="bgImportPillActionBtn">Show</button>
     </div>
   </div>
 
@@ -1448,7 +1600,7 @@
     <div class="actions-section">
       <div class="account-info-wrapper">
         <div class="user-info">Account: <strong class="blurred-id" title="Hover to reveal"><%= userid %></strong></div>
-        <div class="user-warning"><span>⚠️</span> Don't share ur ID. More account features comin soon!</div>
+        <div class="user-warning"><span>⚠️</span> Don't share ur ID.</div>
       </div>
 
       <button class="notif-bell-btn" id="notifBellBtn" title="Notifications">
@@ -1571,12 +1723,13 @@
 
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-  const USER_ID = document.body.dataset.userid || '';
+  const USER_ID = (document.body.dataset.userid || '').trim();
   const NOTIF_PREFS_KEY = `poke_notif_prefs_${USER_ID}`;
   const NOTIF_READ_KEY = `poke_notif_read_${USER_ID}`;
   const NOTIF_ALERTED_KEY = `poke_notif_alerted_${USER_ID}`;
   const NOTIF_DISMISSED_KEY = `poke_notif_dismissed_${USER_ID}`;
   const NOTIF_KNOWN_CHANNELS_KEY = `poke_notif_known_channels_${USER_ID}`;
+  const NOTIF_BASELINE_MS_KEY = `poke_notif_channel_baseline_${USER_ID}`;
   const NOTIF_INTERVAL_KEY = `poke_notif_interval_mins_${USER_ID}`;
 
   const BELL_ON_SVG = '<svg viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>';
@@ -1617,6 +1770,37 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {}
   }
 
+  function mergeAndSaveSet(key, localSet, maxLen = 3000) {
+    const stored = loadJsonStorage(key, []);
+    if (Array.isArray(stored)) {
+      stored.forEach(id => localSet.add(id));
+    }
+    const merged = Array.from(localSet).slice(-maxLen);
+    localSet.clear();
+    merged.forEach(id => localSet.add(id));
+    saveJsonStorage(key, merged);
+  }
+
+  function mergeAndSaveBaselines(localMap) {
+    const stored = loadJsonStorage(NOTIF_BASELINE_MS_KEY, {});
+    if (stored && typeof stored === 'object') {
+      Object.entries(stored).forEach(([chId, ms]) => {
+        if (currentSubIds.has(chId) && typeof ms === 'number' && ms > (localMap[chId] || 0)) {
+          localMap[chId] = ms;
+        }
+      });
+    }
+    const pruned = {};
+    Object.entries(localMap).forEach(([chId, ms]) => {
+      if (currentSubIds.has(chId) && typeof ms === 'number' && ms > 0) {
+        pruned[chId] = ms;
+      }
+    });
+    Object.keys(localMap).forEach(k => delete localMap[k]);
+    Object.assign(localMap, pruned);
+    saveJsonStorage(NOTIF_BASELINE_MS_KEY, localMap);
+  }
+
   function getSavedIntervalMinutes() {
     const val = parseInt(localStorage.getItem(NOTIF_INTERVAL_KEY), 10);
     return Number.isFinite(val) && val >= 1 && val <= 1440 ? val : 30;
@@ -1633,26 +1817,116 @@ document.addEventListener("DOMContentLoaded", () => {
   let knownChannelIds = new Set(
     loadJsonStorage(NOTIF_KNOWN_CHANNELS_KEY, []).filter(id => currentSubIds.has(id))
   );
+  let channelBaselineMs = {};
+  const storedBaselines = loadJsonStorage(NOTIF_BASELINE_MS_KEY, {});
+  if (storedBaselines && typeof storedBaselines === 'object') {
+    Object.entries(storedBaselines).forEach(([chId, ms]) => {
+      if (currentSubIds.has(chId) && typeof ms === 'number' && ms > 0) {
+        channelBaselineMs[chId] = ms;
+      }
+    });
+  }
   saveJsonStorage(NOTIF_KNOWN_CHANNELS_KEY, Array.from(knownChannelIds));
+  saveJsonStorage(NOTIF_BASELINE_MS_KEY, channelBaselineMs);
 
+  const sessionAlertedIds = new Set();
   let cachedNotifications = [];
   let isCheckingFeeds = false;
 
-  function persistNotifState() {
-    saveJsonStorage(NOTIF_READ_KEY, Array.from(readVideoIds).slice(-2000));
-    saveJsonStorage(NOTIF_ALERTED_KEY, Array.from(alertedVideoIds).slice(-2000));
-    saveJsonStorage(NOTIF_KNOWN_CHANNELS_KEY, Array.from(knownChannelIds));
+  function syncStateFromStorage() {
+    const storedRead = loadJsonStorage(NOTIF_READ_KEY, []);
+    if (Array.isArray(storedRead)) storedRead.forEach(id => readVideoIds.add(id));
+
+    const storedAlerted = loadJsonStorage(NOTIF_ALERTED_KEY, []);
+    if (Array.isArray(storedAlerted)) storedAlerted.forEach(id => alertedVideoIds.add(id));
+
+    const storedDismissed = loadJsonStorage(NOTIF_DISMISSED_KEY, []);
+    if (Array.isArray(storedDismissed)) {
+      dismissedVideoIds = new Set(storedDismissed);
+    }
+
+    const storedKnown = loadJsonStorage(NOTIF_KNOWN_CHANNELS_KEY, []);
+    if (Array.isArray(storedKnown)) {
+      storedKnown.forEach(id => {
+        if (currentSubIds.has(id)) knownChannelIds.add(id);
+      });
+    }
+
+    const latestBaselines = loadJsonStorage(NOTIF_BASELINE_MS_KEY, {});
+    if (latestBaselines && typeof latestBaselines === 'object') {
+      Object.entries(latestBaselines).forEach(([chId, ms]) => {
+        if (currentSubIds.has(chId) && typeof ms === 'number' && ms > (channelBaselineMs[chId] || 0)) {
+          channelBaselineMs[chId] = ms;
+        }
+      });
+    }
   }
 
-  function baselineNewChannelEntries(channelId, entries, ok) {
-    if (!ok || knownChannelIds.has(channelId)) return false;
-    entries.forEach(item => {
-      readVideoIds.add(item.videoId);
+  function persistNotifState() {
+    mergeAndSaveSet(NOTIF_READ_KEY, readVideoIds);
+    mergeAndSaveSet(NOTIF_ALERTED_KEY, alertedVideoIds);
+    const knownPruned = Array.from(knownChannelIds).filter(id => currentSubIds.has(id));
+    knownChannelIds = new Set(knownPruned);
+    saveJsonStorage(NOTIF_KNOWN_CHANNELS_KEY, knownPruned);
+    mergeAndSaveBaselines(channelBaselineMs);
+  }
+
+  function baselineChannelEntries(channelId, allEntries, ok) {
+    if (!ok) return false;
+    const isNewChannel = !knownChannelIds.has(channelId);
+    const needsBaseline = !channelBaselineMs[channelId];
+    if (!isNewChannel && !needsBaseline) return false;
+
+    let maxPubMs = 0;
+    allEntries.forEach(item => {
       alertedVideoIds.add(item.videoId);
+      sessionAlertedIds.add(item.videoId);
+      if (isNewChannel) {
+        readVideoIds.add(item.videoId);
+      }
+      if (item.publishedMs > maxPubMs) {
+        maxPubMs = item.publishedMs;
+      }
     });
+
+    channelBaselineMs[channelId] = maxPubMs > 0 ? maxPubMs : Date.now();
     knownChannelIds.add(channelId);
     return true;
   }
+
+  function isOlderThanChannelBaseline(item) {
+    const baseline = channelBaselineMs[item.channelId];
+    return Boolean(baseline && item.publishedMs > 0 && item.publishedMs <= baseline);
+  }
+
+  function isItemUnread(item) {
+    if (readVideoIds.has(item.videoId)) return false;
+    if (isOlderThanChannelBaseline(item)) return false;
+    return true;
+  }
+
+  function shouldDesktopAlertItem(item) {
+    if (sessionAlertedIds.has(item.videoId)) return false;
+    if (alertedVideoIds.has(item.videoId)) return false;
+    if (readVideoIds.has(item.videoId)) return false;
+    if (dismissedVideoIds.has(item.videoId)) return false;
+    if (isOlderThanChannelBaseline(item)) return false;
+    return true;
+  }
+
+  window.addEventListener('storage', (e) => {
+    if (
+      e.key === NOTIF_READ_KEY ||
+      e.key === NOTIF_ALERTED_KEY ||
+      e.key === NOTIF_DISMISSED_KEY ||
+      e.key === NOTIF_KNOWN_CHANNELS_KEY ||
+      e.key === NOTIF_BASELINE_MS_KEY
+    ) {
+      syncStateFromStorage();
+      cachedNotifications = cachedNotifications.filter(n => !dismissedVideoIds.has(n.videoId));
+      renderNotifications();
+    }
+  });
 
   function isChannelNotifEnabled(channelId) {
     return notifPrefs[channelId] !== false;
@@ -1687,8 +1961,9 @@ document.addEventListener("DOMContentLoaded", () => {
       cachedNotifications = cachedNotifications.filter(n => n.channelId !== channelId);
       renderNotifications();
     } else {
-      fetchChannelFeedResult(channelId).then(({ ok, entries }) => {
-        if (baselineNewChannelEntries(channelId, entries, ok)) {
+      fetchChannelFeedResult(channelId).then(({ ok, allEntries, entries }) => {
+        syncStateFromStorage();
+        if (baselineChannelEntries(channelId, allEntries, ok)) {
           persistNotifState();
         }
         const visibleEntries = entries.filter(e => !dismissedVideoIds.has(e.videoId));
@@ -1739,9 +2014,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function getXmlTagText(parent, localName) {
     const nsNodes = parent.getElementsByTagNameNS('*', localName);
-    if (nsNodes && nsNodes.length > 0) return nsNodes[0].textContent || '';
+    if (nsNodes && nsNodes.length > 0) return (nsNodes[0].textContent || '').trim();
     const nodes = parent.getElementsByTagName(localName);
-    if (nodes && nodes.length > 0) return nodes[0].textContent || '';
+    if (nodes && nodes.length > 0) return (nodes[0].textContent || '').trim();
     return '';
   }
 
@@ -1763,25 +2038,25 @@ document.addEventListener("DOMContentLoaded", () => {
   async function fetchChannelFeedResult(channelId) {
     try {
       const res = await fetch(`/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`);
-      if (!res.ok) return { ok: false, entries: [] };
+      if (!res.ok) return { ok: false, allEntries: [], entries: [] };
       const xmlText = await res.text();
       const parser = new DOMParser();
       const doc = parser.parseFromString(xmlText, 'text/xml');
-      if (doc.querySelector('parsererror')) return { ok: false, entries: [] };
+      if (doc.querySelector('parsererror')) return { ok: false, allEntries: [], entries: [] };
 
-      const feedTitle = doc.querySelector('feed > title')?.textContent || '';
-      const entries = Array.from(doc.getElementsByTagName('entry'));
+      const feedTitle = (doc.querySelector('feed > title')?.textContent || '').trim();
+      const rawEntries = Array.from(doc.getElementsByTagName('entry'));
       const subCard = document.querySelector(`.channel-card[data-id="${CSS.escape(channelId)}"]`);
       const fallbackName = subCard?.dataset.realName || feedTitle || 'Unknown Channel';
 
-      const parsed = entries.slice(0, 5).map(entry => {
+      const allParsed = rawEntries.map(entry => {
         const rawId = getXmlTagText(entry, 'id');
-        const videoId = getXmlTagText(entry, 'videoId') || rawId.replace(/^yt:video:/, '');
-        const title = entry.querySelector('title')?.textContent || 'Untitled Video';
-        const authorName = entry.querySelector('author > name')?.textContent || fallbackName;
+        const videoId = (getXmlTagText(entry, 'videoId') || rawId.replace(/^yt:video:/, '')).trim();
+        const title = (entry.querySelector('title')?.textContent || 'Untitled Video').trim();
+        const authorName = (entry.querySelector('author > name')?.textContent || fallbackName).trim();
         const linkEl = entry.querySelector('link[rel="alternate"]') || entry.querySelector('link');
-        const rawHref = linkEl ? linkEl.getAttribute('href') : '';
-        const publishedStr = entry.querySelector('published')?.textContent || entry.querySelector('updated')?.textContent || '';
+        const rawHref = linkEl ? (linkEl.getAttribute('href') || '').trim() : '';
+        const publishedStr = (entry.querySelector('published')?.textContent || entry.querySelector('updated')?.textContent || '').trim();
         const publishedMs = publishedStr ? Date.parse(publishedStr) : 0;
         const thumbnail = getXmlThumbnail(entry);
 
@@ -1797,9 +2072,9 @@ document.addEventListener("DOMContentLoaded", () => {
         };
       }).filter(item => item.videoId);
 
-      return { ok: true, entries: parsed };
+      return { ok: true, allEntries: allParsed, entries: allParsed.slice(0, 5) };
     } catch {
-      return { ok: false, entries: [] };
+      return { ok: false, allEntries: [], entries: [] };
     }
   }
 
@@ -1847,6 +2122,15 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  function markVisibleInboxAsAlerted() {
+    if (!cachedNotifications.length) return;
+    cachedNotifications.forEach(n => {
+      alertedVideoIds.add(n.videoId);
+      sessionAlertedIds.add(n.videoId);
+    });
+    mergeAndSaveSet(NOTIF_ALERTED_KEY, alertedVideoIds);
+  }
+
   function updateDesktopAlertButton() {
     if (!('Notification' in window)) {
       enableDesktopNotifBtn.style.display = 'none';
@@ -1867,8 +2151,11 @@ document.addEventListener("DOMContentLoaded", () => {
   enableDesktopNotifBtn.addEventListener('click', async () => {
     if (!('Notification' in window)) return;
     if (Notification.permission === 'default') {
-      await Notification.requestPermission();
+      const perm = await Notification.requestPermission();
       updateDesktopAlertButton();
+      if (perm === 'granted') {
+        markVisibleInboxAsAlerted();
+      }
     }
   });
   updateDesktopAlertButton();
@@ -1880,7 +2167,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function updateUnreadBadge() {
-    const unreadCount = cachedNotifications.filter(n => !readVideoIds.has(n.videoId)).length;
+    const unreadCount = cachedNotifications.filter(n => isItemUnread(n)).length;
     if (unreadCount > 0) {
       notifBadge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
       notifBadge.classList.add('visible');
@@ -1920,7 +2207,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     notifList.innerHTML = '';
     cachedNotifications.forEach(item => {
-      const isUnread = !readVideoIds.has(item.videoId);
+      const isUnread = isItemUnread(item);
       const a = document.createElement('a');
       a.className = `notif-item${isUnread ? ' unread' : ''}`;
       a.href = item.url;
@@ -1955,7 +2242,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
       a.addEventListener('click', () => {
         readVideoIds.add(item.videoId);
-        saveJsonStorage(NOTIF_READ_KEY, Array.from(readVideoIds).slice(-2000));
+        alertedVideoIds.add(item.videoId);
+        sessionAlertedIds.add(item.videoId);
+        mergeAndSaveSet(NOTIF_READ_KEY, readVideoIds);
+        mergeAndSaveSet(NOTIF_ALERTED_KEY, alertedVideoIds);
         a.classList.remove('unread');
         updateUnreadBadge();
       });
@@ -1965,8 +2255,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function fireDesktopNotification(item, isTest = false) {
-    const titleText = isTest ? `[Test] ${item.channelName}` : item.channelName;
-    const n = new Notification(titleText, {
+    const n = new Notification(item.channelName, {
       body: item.title,
       icon: item.thumbnail || '/css/poke-icon-logo.svg?v=6',
       tag: isTest ? `poke-test-${Date.now()}` : `poke-video-${item.videoId}`
@@ -1978,23 +2267,33 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   }
 
-  function triggerDesktopNotifications(items, isInitialLoad) {
+  function triggerDesktopNotifications(items) {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
-    if (isInitialLoad && alertedVideoIds.size === 0) {
-      items.forEach(i => alertedVideoIds.add(i.videoId));
-      saveJsonStorage(NOTIF_ALERTED_KEY, Array.from(alertedVideoIds).slice(-2000));
-      return;
-    }
-    const fresh = items.filter(i => !alertedVideoIds.has(i.videoId));
+
+    syncStateFromStorage();
+
+    const fresh = items.filter(item => shouldDesktopAlertItem(item));
+    if (!fresh.length) return;
+
+    fresh.forEach(item => {
+      alertedVideoIds.add(item.videoId);
+      sessionAlertedIds.add(item.videoId);
+      if (item.publishedMs > (channelBaselineMs[item.channelId] || 0)) {
+        channelBaselineMs[item.channelId] = item.publishedMs;
+      }
+    });
+    mergeAndSaveSet(NOTIF_ALERTED_KEY, alertedVideoIds);
+    mergeAndSaveBaselines(channelBaselineMs);
+
     fresh.slice(0, 3).forEach(item => fireDesktopNotification(item, false));
-    fresh.forEach(i => alertedVideoIds.add(i.videoId));
-    saveJsonStorage(NOTIF_ALERTED_KEY, Array.from(alertedVideoIds).slice(-2000));
   }
 
   async function checkAllNotificationFeeds(isInitialLoad = false) {
     if (isCheckingFeeds) return;
     isCheckingFeeds = true;
     notifStatusText.textContent = 'Checking feeds...';
+
+    syncStateFromStorage();
 
     const enabledChannels = getSubscribedChannelsInfo().filter(c => isChannelNotifEnabled(c.id));
     if (!enabledChannels.length) {
@@ -2013,8 +2312,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const results = await Promise.all(
         batch.map(async ch => ({ channelId: ch.id, ...(await fetchChannelFeedResult(ch.id)) }))
       );
-      results.forEach(({ channelId, ok, entries }) => {
-        if (baselineNewChannelEntries(channelId, entries, ok)) {
+      syncStateFromStorage();
+      results.forEach(({ channelId, ok, allEntries, entries }) => {
+        if (baselineChannelEntries(channelId, allEntries, ok)) {
           baselinedAny = true;
         }
         collected.push(...entries);
@@ -2036,7 +2336,12 @@ document.addEventListener("DOMContentLoaded", () => {
       .sort((a, b) => b.publishedMs - a.publishedMs)
       .slice(0, 60);
 
-    triggerDesktopNotifications(cachedNotifications, isInitialLoad);
+    if (notifOverlay.classList.contains('open')) {
+      markVisibleInboxAsAlerted();
+    } else {
+      triggerDesktopNotifications(cachedNotifications);
+    }
+
     const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     notifStatusText.textContent = `Last checked at ${nowTime}!`;
     renderNotifications();
@@ -2169,8 +2474,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (Notification.permission === 'default') {
       testNotifStatusBox.className = 'test-status-box visible';
       testNotifStatusBox.textContent = 'Requesting desktop notification permission...!';
-      await Notification.requestPermission();
+      const perm = await Notification.requestPermission();
       updateDesktopAlertButton();
+      if (perm === 'granted') {
+        markVisibleInboxAsAlerted();
+      }
     }
 
     if (Notification.permission !== 'granted') {
@@ -2224,6 +2532,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   notifBellBtn.addEventListener('click', () => {
     notifOverlay.classList.add('open');
+    markVisibleInboxAsAlerted();
     renderNotifications();
   });
 
@@ -2235,8 +2544,13 @@ document.addEventListener("DOMContentLoaded", () => {
   refreshNotifBtn.addEventListener('click', () => checkAllNotificationFeeds(false));
 
   markAllReadBtn.addEventListener('click', () => {
-    cachedNotifications.forEach(n => readVideoIds.add(n.videoId));
-    saveJsonStorage(NOTIF_READ_KEY, Array.from(readVideoIds).slice(-2000));
+    cachedNotifications.forEach(n => {
+      readVideoIds.add(n.videoId);
+      alertedVideoIds.add(n.videoId);
+      sessionAlertedIds.add(n.videoId);
+    });
+    mergeAndSaveSet(NOTIF_READ_KEY, readVideoIds);
+    mergeAndSaveSet(NOTIF_ALERTED_KEY, alertedVideoIds);
     renderNotifications();
   });
 
@@ -2244,9 +2558,12 @@ document.addEventListener("DOMContentLoaded", () => {
     cachedNotifications.forEach(n => {
       dismissedVideoIds.add(n.videoId);
       readVideoIds.add(n.videoId);
+      alertedVideoIds.add(n.videoId);
+      sessionAlertedIds.add(n.videoId);
     });
-    saveJsonStorage(NOTIF_DISMISSED_KEY, Array.from(dismissedVideoIds).slice(-2000));
-    saveJsonStorage(NOTIF_READ_KEY, Array.from(readVideoIds).slice(-2000));
+    saveJsonStorage(NOTIF_DISMISSED_KEY, Array.from(dismissedVideoIds).slice(-3000));
+    mergeAndSaveSet(NOTIF_READ_KEY, readVideoIds);
+    mergeAndSaveSet(NOTIF_ALERTED_KEY, alertedVideoIds);
     cachedNotifications = [];
     renderNotifications();
   });
@@ -2258,16 +2575,61 @@ document.addEventListener("DOMContentLoaded", () => {
   const importOverlay = document.getElementById('importOverlay');
   const closeImportModal = document.getElementById('closeImportModal');
   const cancelImportBtn = document.getElementById('cancelImportBtn');
+  const runInBgImportBtn = document.getElementById('runInBgImportBtn');
   const importDropzone = document.getElementById('importDropzone');
   const importFileInput = document.getElementById('importFileInput');
   const importTextInput = document.getElementById('importTextInput');
   const importPreview = document.getElementById('importPreview');
+  const importPreviewBg = document.getElementById('importPreviewBg');
+  const importCurrentRow = document.getElementById('importCurrentRow');
+  const importCurrentAvatar = document.getElementById('importCurrentAvatar');
+  const importCurrentName = document.getElementById('importCurrentName');
   const importPreviewText = document.getElementById('importPreviewText');
   const importProgressBar = document.getElementById('importProgressBar');
   const importProgressFill = document.getElementById('importProgressFill');
   const startImportBtn = document.getElementById('startImportBtn');
 
+  const bgImportPill = document.getElementById('bgImportPill');
+  const bgImportPillBg = document.getElementById('bgImportPillBg');
+  const bgImportPillAvatar = document.getElementById('bgImportPillAvatar');
+  const bgImportPillText = document.getElementById('bgImportPillText');
+  const bgImportPillFill = document.getElementById('bgImportPillFill');
+  const bgImportPillActionBtn = document.getElementById('bgImportPillActionBtn');
+
   let parsedImportChannels = [];
+  let isImporting = false;
+  let importFinishedInBg = false;
+
+  function setImportVisualAvatar(avatarUrl, channelName) {
+    if (avatarUrl) {
+      const safeCssUrl = `url("${avatarUrl.replace(/"/g, '\\"')}")`;
+      importPreviewBg.style.backgroundImage = safeCssUrl;
+      importPreviewBg.classList.add('visible');
+      importCurrentAvatar.src = avatarUrl;
+      importCurrentAvatar.style.display = 'block';
+
+      bgImportPillBg.style.backgroundImage = safeCssUrl;
+      bgImportPillBg.classList.add('visible');
+      bgImportPillAvatar.src = avatarUrl;
+      bgImportPillAvatar.style.display = 'block';
+    } else {
+      importCurrentAvatar.style.display = 'none';
+      bgImportPillAvatar.style.display = 'none';
+    }
+    if (channelName) {
+      importCurrentName.textContent = channelName;
+      importCurrentRow.classList.add('visible');
+    } else {
+      importCurrentRow.classList.remove('visible');
+    }
+  }
+
+  function minimizeImportToBackground() {
+    importOverlay.classList.remove('open');
+    if (isImporting) {
+      bgImportPill.classList.add('visible');
+    }
+  }
 
   function extractChannelId(str) {
     if (!str) return null;
@@ -2392,6 +2754,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const skipped = channelsArr.length - newOnes.length;
     importPreview.classList.add('visible');
+    importPreviewBg.classList.remove('visible');
+    importCurrentRow.classList.remove('visible');
     importProgressBar.classList.remove('visible');
     importProgressFill.style.width = '0%';
     importPreviewText.textContent = newOnes.length
@@ -2405,39 +2769,192 @@ document.addEventListener("DOMContentLoaded", () => {
     importFileInput.value = '';
     importTextInput.value = '';
     importPreview.classList.remove('visible');
+    importPreviewBg.classList.remove('visible');
+    importPreviewBg.style.backgroundImage = '';
+    importCurrentRow.classList.remove('visible');
     importProgressBar.classList.remove('visible');
     importProgressFill.style.width = '0%';
+    runInBgImportBtn.style.display = 'none';
     startImportBtn.disabled = true;
     startImportBtn.textContent = 'Import Channels';
   }
 
+  function resolveChannelSubViaIframe(ch) {
+    return new Promise((resolve) => {
+      const bgFrame = document.createElement('iframe');
+      bgFrame.style.cssText = 'position:fixed;width:1px;height:1px;left:-9999px;top:-9999px;opacity:0;pointer-events:none;border:0;';
+      bgFrame.setAttribute('aria-hidden', 'true');
+      bgFrame.tabIndex = -1;
+
+      let finished = false;
+      let pollTimer = null;
+      let timeoutTimer = null;
+
+      const cleanup = (result) => {
+        if (finished) return;
+        finished = true;
+        if (pollTimer) clearInterval(pollTimer);
+        if (timeoutTimer) clearTimeout(timeoutTimer);
+        try { bgFrame.src = 'about:blank'; } catch {}
+        bgFrame.remove();
+        resolve(result);
+      };
+
+      const findAvatarInDoc = (doc) => {
+        const imgEl = doc.querySelector('img[src*="image-proxy.poketube.fun"], img[src*="yt3."], .channel-avatar img, .avatar img');
+        return imgEl ? (imgEl.getAttribute('src') || imgEl.src || '') : '';
+      };
+
+      const inspectDoc = () => {
+        try {
+          const doc = bgFrame.contentDocument || bgFrame.contentWindow?.document;
+          if (!doc) return false;
+
+          const subEl = doc.getElementById('sub');
+          const rawHref = subEl ? (subEl.getAttribute('href') || '').trim() : '';
+
+          if (rawHref && rawHref !== '#' && !rawHref.startsWith('javascript:')) {
+            const parsedUrl = new URL(rawHref, window.location.origin);
+
+            if (parsedUrl.pathname.includes('remove-channel-sub')) {
+              const avatar = findAvatarInDoc(doc) || ch.avatar || '';
+              cleanup({ alreadySubbed: true, url: null, avatar, name: ch.name });
+              return true;
+            }
+
+            if (parsedUrl.pathname.includes('set-channel-subs')) {
+              if (USER_ID) parsedUrl.searchParams.set('ID', USER_ID);
+              if (!parsedUrl.searchParams.get('channelID')) parsedUrl.searchParams.set('channelID', ch.id);
+
+              const foundName = (parsedUrl.searchParams.get('channelName') || ch.name || ch.id).trim();
+              parsedUrl.searchParams.set('channelName', foundName);
+
+              let foundAvatar = (parsedUrl.searchParams.get('avatar') || '').trim();
+              if (!foundAvatar) {
+                foundAvatar = findAvatarInDoc(doc) || ch.avatar || '';
+                if (foundAvatar) parsedUrl.searchParams.set('avatar', foundAvatar);
+              }
+
+              cleanup({
+                alreadySubbed: false,
+                url: `${parsedUrl.pathname}?${parsedUrl.searchParams.toString()}`,
+                avatar: foundAvatar,
+                name: foundName
+              });
+              return true;
+            }
+          }
+        } catch {}
+        return false;
+      };
+
+      bgFrame.addEventListener('load', () => {
+        if (inspectDoc()) return;
+        pollTimer = setInterval(() => {
+          inspectDoc();
+        }, 150);
+      });
+
+      bgFrame.addEventListener('error', () => cleanup(null));
+
+      timeoutTimer = setTimeout(() => {
+        try {
+          const doc = bgFrame.contentDocument || bgFrame.contentWindow?.document;
+          if (doc) {
+            const foundAvatar = findAvatarInDoc(doc) || ch.avatar || '';
+            const titleText = (doc.querySelector('h1, .channel-name')?.textContent || doc.title || '')
+              .replace(/\s*[-|]\s*Poke.*$/i, '')
+              .trim();
+            const foundName = (ch.name && ch.name !== ch.id) ? ch.name : (titleText || ch.id);
+            const params = new URLSearchParams({
+              ID: USER_ID,
+              channelName: foundName,
+              avatar: foundAvatar,
+              channelID: ch.id
+            });
+            cleanup({
+              alreadySubbed: false,
+              url: `/api/set-channel-subs?${params.toString()}`,
+              avatar: foundAvatar,
+              name: foundName
+            });
+            return;
+          }
+        } catch {}
+        cleanup(null);
+      }, 10000);
+
+      document.body.appendChild(bgFrame);
+      bgFrame.src = `/channel?id=${encodeURIComponent(ch.id)}`;
+    });
+  }
+
   importYtBtn.addEventListener('click', () => {
-    resetImportModal();
+    if (!isImporting) {
+      resetImportModal();
+    } else {
+      bgImportPill.classList.remove('visible');
+    }
     importOverlay.classList.add('open');
   });
 
-  closeImportModal.addEventListener('click', () => importOverlay.classList.remove('open'));
-  cancelImportBtn.addEventListener('click', () => importOverlay.classList.remove('open'));
-  importOverlay.addEventListener('click', (e) => {
-    if (e.target === importOverlay) importOverlay.classList.remove('open');
+  closeImportModal.addEventListener('click', () => {
+    if (isImporting) {
+      minimizeImportToBackground();
+    } else {
+      importOverlay.classList.remove('open');
+    }
   });
 
-  importDropzone.addEventListener('click', () => importFileInput.click());
+  cancelImportBtn.addEventListener('click', () => {
+    if (isImporting) {
+      minimizeImportToBackground();
+    } else {
+      importOverlay.classList.remove('open');
+    }
+  });
+
+  runInBgImportBtn.addEventListener('click', () => {
+    minimizeImportToBackground();
+  });
+
+  bgImportPillActionBtn.addEventListener('click', () => {
+    if (importFinishedInBg) {
+      window.location.reload();
+      return;
+    }
+    bgImportPill.classList.remove('visible');
+    importOverlay.classList.add('open');
+  });
+
+  importOverlay.addEventListener('click', (e) => {
+    if (e.target === importOverlay) {
+      if (isImporting) {
+        minimizeImportToBackground();
+      } else {
+        importOverlay.classList.remove('open');
+      }
+    }
+  });
+
+  importDropzone.addEventListener('click', () => {
+    if (!isImporting) importFileInput.click();
+  });
   importDropzone.addEventListener('dragover', (e) => {
     e.preventDefault();
-    importDropzone.classList.add('dragover');
+    if (!isImporting) importDropzone.classList.add('dragover');
   });
   importDropzone.addEventListener('dragleave', () => importDropzone.classList.remove('dragover'));
   importDropzone.addEventListener('drop', (e) => {
     e.preventDefault();
     importDropzone.classList.remove('dragover');
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+    if (!isImporting && e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleImportFile(e.dataTransfer.files[0]);
     }
   });
 
   importFileInput.addEventListener('change', (e) => {
-    if (e.target.files && e.target.files[0]) {
+    if (!isImporting && e.target.files && e.target.files[0]) {
       handleImportFile(e.target.files[0]);
     }
   });
@@ -2453,40 +2970,90 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   importTextInput.addEventListener('input', () => {
+    if (isImporting) return;
     const parsed = parseImportContent(importTextInput.value);
     updateImportPreview(parsed);
   });
 
   startImportBtn.addEventListener('click', async () => {
-    if (!parsedImportChannels.length) return;
+    if (!parsedImportChannels.length || isImporting) return;
+
+    isImporting = true;
+    importFinishedInBg = false;
     startImportBtn.disabled = true;
     startImportBtn.textContent = 'Importing...';
+    runInBgImportBtn.style.display = 'inline-flex';
     importProgressBar.classList.add('visible');
+    bgImportPillActionBtn.textContent = 'Show';
 
     let done = 0;
     let failed = 0;
     const total = parsedImportChannels.length;
 
     for (const ch of parsedImportChannels) {
+      const pendingLabel = `Fetching ${ch.name || ch.id} (${done + 1} / ${total})...`;
+      importPreviewText.textContent = pendingLabel;
+      bgImportPillText.textContent = pendingLabel;
+
       try {
-        const params = new URLSearchParams({
-          ID: USER_ID,
-          channelID: ch.id,
-          channelName: ch.name
-        });
-        if (ch.avatar) params.set('avatar', ch.avatar);
-        const res = await fetch(`/api/add-channel-sub?${params.toString()}`);
-        if (!res.ok) failed++;
+        let subInfo = null;
+        if (ch.avatar && ch.name && ch.name !== ch.id) {
+          const params = new URLSearchParams({
+            ID: USER_ID,
+            channelName: ch.name,
+            avatar: ch.avatar,
+            channelID: ch.id
+          });
+          subInfo = {
+            alreadySubbed: false,
+            url: `/api/set-channel-subs?${params.toString()}`,
+            avatar: ch.avatar,
+            name: ch.name
+          };
+        } else {
+          subInfo = await resolveChannelSubViaIframe(ch);
+        }
+
+        if (subInfo) {
+          setImportVisualAvatar(subInfo.avatar, subInfo.name || ch.name || ch.id);
+        }
+
+        if (subInfo && subInfo.alreadySubbed) {
+          // already subscribed
+        } else if (subInfo && subInfo.url) {
+          const res = await fetch(subInfo.url, { credentials: 'same-origin' });
+          if (!res.ok) failed++;
+        } else {
+          failed++;
+        }
       } catch {
         failed++;
       }
+
       done++;
-      importProgressFill.style.width = `${Math.round((done / total) * 100)}%`;
-      importPreviewText.textContent = `Imported ${done} / ${total}${failed ? ` (${failed} failed)` : ''}...`;
+      const pct = `${Math.round((done / total) * 100)}%`;
+      importProgressFill.style.width = pct;
+      bgImportPillFill.style.width = pct;
+      const progressMsg = `Imported ${done} / ${total}${failed ? ` (${failed} failed)` : ''}...`;
+      importPreviewText.textContent = progressMsg;
+      bgImportPillText.textContent = progressMsg;
     }
 
+    isImporting = false;
+    runInBgImportBtn.style.display = 'none';
     startImportBtn.textContent = 'Done!';
-    setTimeout(() => window.location.reload(), 600);
+    const doneMsg = `Imported ${done - failed} / ${total} channels${failed ? ` (${failed} failed)` : ''}!`;
+    importPreviewText.textContent = doneMsg;
+
+    if (importOverlay.classList.contains('open')) {
+      bgImportPill.classList.remove('visible');
+      setTimeout(() => window.location.reload(), 600);
+    } else {
+      importFinishedInBg = true;
+      bgImportPillText.textContent = doneMsg;
+      bgImportPillActionBtn.textContent = 'Reload';
+      bgImportPill.classList.add('visible');
+    }
   });
 
   function updateScrollButtons() {
@@ -2608,7 +3175,13 @@ document.addEventListener("DOMContentLoaded", () => {
       confirmUnsubModal.classList.remove('open');
       if (jsonOverlay) jsonOverlay.classList.remove('open');
       notifOverlay.classList.remove('open');
-      importOverlay.classList.remove('open');
+      if (importOverlay.classList.contains('open')) {
+        if (isImporting) {
+          minimizeImportToBackground();
+        } else {
+          importOverlay.classList.remove('open');
+        }
+      }
     }
   });
 
