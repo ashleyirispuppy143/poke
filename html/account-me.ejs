@@ -1,3 +1,22 @@
+<!--
+
+    This Source Code Form is subject to the terms of the GNU General Public License:
+
+    Copyright (C) 2021-2026 Poke (https://codeberg.org/ashleyirispuppy/poke)
+    
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program. If not, see https://www.gnu.org/licenses/.
+--->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,19 +26,42 @@
   <link href="/css/poke-icon-logo.svg?v=6" rel="icon">
   <meta name="librejs-license" content="GPL-3.0-or-later">
   <style>
+    @font-face {
+      font-family: "PokeTube Flex";
+      src: url("/static/robotoflex.ttf?v=29");
+      font-style: normal;
+      font-stretch: 1% 800%;
+      font-display: swap;
+    }
+
     :root {
-      --bg-base: #0f0f0f;
-      --bg-surface: #212121;
-      --bg-surface-hover: #3d3d3d;
-      --border-color: #303030;
-      --text-primary: #f1f1f1;
-      --text-secondary: #aaaaaa;
-      --accent-color: #3ea6ff;
-      --accent-bg: #263850;
-      --danger-color: #ff4e45;
-      --e2ee-color: #4caf7d;
-      --scrollbar-bg: transparent;
-      --scrollbar-thumb: #717171;
+      --md-sys-color-primary: #ffabcc;
+      --md-sys-color-on-primary: #5b1134;
+      --md-sys-color-primary-container: #78294b;
+      --md-sys-color-on-primary-container: #ffd8e6;
+      --md-sys-color-secondary: #e3bdc8;
+      --md-sys-color-on-secondary: #432932;
+      --md-sys-color-secondary-container: #5a3f48;
+      --md-sys-color-on-secondary-container: #ffd9e3;
+      --md-sys-color-tertiary: #f1bc97;
+      --md-sys-color-surface: #171214;
+      --md-sys-color-surface-dim: #120d0f;
+      --md-sys-color-surface-container-lowest: #110d0f;
+      --md-sys-color-surface-container-low: #1f1a1c;
+      --md-sys-color-surface-container: #241e20;
+      --md-sys-color-surface-container-high: #2f282b;
+      --md-sys-color-surface-container-highest: #3a3336;
+      --md-sys-color-on-surface: #ece0e3;
+      --md-sys-color-on-surface-variant: #d5c2c8;
+      --md-sys-color-outline: #9f8c92;
+      --md-sys-color-outline-variant: #514348;
+      --md-sys-color-error: #ffb4ab;
+      --md-sys-color-error-container: #93000a;
+      --md-sys-color-on-error-container: #ffdad6;
+      --md-sys-color-e2ee: #9ad8b3;
+      --md-sys-color-e2ee-container: #1f4733;
+      --md-sys-motion: cubic-bezier(0.2, 0, 0, 1);
+      --scrollbar-thumb: #625358;
     }
 
     * { box-sizing: border-box; }
@@ -28,42 +70,47 @@
       margin: 0;
       padding: 0;
       height: 100vh;
-      font-family: "Roboto", Arial, sans-serif;
-      background-color: var(--bg-base);
-      color: var(--text-primary);
+      font-family: "PokeTube Flex", "Roboto", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background-color: var(--md-sys-color-surface);
+      color: var(--md-sys-color-on-surface);
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      -webkit-font-smoothing: antialiased;
     }
 
     a { text-decoration: none; color: inherit; }
-    button, input, textarea { font-family: inherit; }
+    button, input, textarea, select { font-family: inherit; }
 
-    ::-webkit-scrollbar { width: 8px; height: 8px; background: var(--scrollbar-bg); }
-    ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: #909090; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--md-sys-color-outline); }
 
     .top-navbar {
-      height: 56px;
+      height: 64px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 16px;
-      background-color: var(--bg-base);
+      padding: 0 20px;
+      background-color: var(--md-sys-color-surface);
       flex-shrink: 0;
+      gap: 12px;
     }
 
     .brand-section {
       display: flex;
       align-items: center;
-      min-width: 150px;
+      min-width: 120px;
     }
 
     .brand-logo {
       display: flex;
       align-items: center;
-      padding: 8px;
+      padding: 8px 10px;
+      border-radius: 16px;
+      transition: background 0.2s var(--md-sys-motion);
     }
+    .brand-logo:hover { background: var(--md-sys-color-surface-container); }
 
     .brand-logo img {
       height: 24px;
@@ -73,7 +120,7 @@
     .actions-section {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
       justify-content: flex-end;
     }
 
@@ -86,13 +133,13 @@
 
     .user-info {
       font-size: 13px;
-      color: var(--text-secondary);
+      color: var(--md-sys-color-on-surface-variant);
     }
 
     .blurred-id {
-      color: var(--text-primary);
+      color: var(--md-sys-color-on-surface);
       filter: blur(5px);
-      transition: filter 0.3s ease;
+      transition: filter 0.25s var(--md-sys-motion);
       cursor: pointer;
       user-select: none;
     }
@@ -103,74 +150,84 @@
 
     .user-warning {
       font-size: 11px;
-      color: var(--text-secondary);
+      color: var(--md-sys-color-on-surface-variant);
       font-weight: 400;
       margin-top: 2px;
     }
 
     .user-warning span {
-      color: var(--danger-color);
+      color: var(--md-sys-color-error);
       font-weight: 500;
     }
 
     .action-btn {
-      background: none;
-      border: 1px solid var(--border-color);
-      color: var(--text-primary);
-      padding: 6px 12px;
-      border-radius: 18px;
+      background: var(--md-sys-color-surface-container-high);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      color: var(--md-sys-color-on-surface);
+      padding: 8px 16px;
+      border-radius: 9999px;
       font-size: 13px;
       font-weight: 500;
+      letter-spacing: 0.1px;
       cursor: pointer;
-      transition: background 0.2s, border-color 0.2s;
+      transition: background 0.2s var(--md-sys-motion), border-color 0.2s var(--md-sys-motion), transform 0.15s var(--md-sys-motion);
       display: inline-flex;
       align-items: center;
       gap: 6px;
       white-space: nowrap;
     }
-    .action-btn:hover { background: var(--bg-surface); }
+    .action-btn:hover {
+      background: var(--md-sys-color-surface-container-highest);
+      border-color: var(--md-sys-color-outline);
+    }
 
     .action-btn.accent {
-      background: var(--accent-bg);
-      border-color: rgba(62, 166, 255, 0.35);
-      color: var(--accent-color);
+      background: var(--md-sys-color-primary-container);
+      border-color: transparent;
+      color: var(--md-sys-color-on-primary-container);
     }
-    .action-btn.accent:hover { background: rgba(62, 166, 255, 0.22); }
+    .action-btn.accent:hover {
+      filter: brightness(1.12);
+    }
 
     .notif-bell-btn {
       position: relative;
-      background: none;
-      border: 1px solid var(--border-color);
-      color: var(--text-primary);
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
+      background: var(--md-sys-color-surface-container-high);
+      border: none;
+      color: var(--md-sys-color-on-surface);
+      width: 40px;
+      height: 40px;
+      border-radius: 9999px;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      transition: background 0.2s;
+      transition: background 0.2s var(--md-sys-motion), color 0.2s var(--md-sys-motion);
       flex-shrink: 0;
     }
-    .notif-bell-btn:hover { background: var(--bg-surface); }
-    .notif-bell-btn svg { width: 18px; height: 18px; fill: currentColor; }
+    .notif-bell-btn:hover {
+      background: var(--md-sys-color-surface-container-highest);
+      color: var(--md-sys-color-primary);
+    }
+    .notif-bell-btn svg { width: 20px; height: 20px; fill: currentColor; }
 
     .notif-badge {
       position: absolute;
-      top: -4px;
-      right: -4px;
+      top: -2px;
+      right: -2px;
       min-width: 18px;
       height: 18px;
       padding: 0 5px;
-      border-radius: 9px;
-      background: var(--danger-color);
-      color: #fff;
+      border-radius: 9999px;
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
       font-size: 11px;
-      font-weight: 600;
+      font-weight: 700;
       display: none;
       align-items: center;
       justify-content: center;
       line-height: 1;
+      box-shadow: 0 0 0 2px var(--md-sys-color-surface);
     }
     .notif-badge.visible { display: flex; }
 
@@ -178,87 +235,91 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      background: rgba(76, 175, 125, 0.1);
-      border: 1px solid rgba(76, 175, 125, 0.2);
-      border-radius: 18px;
-      padding: 6px 12px;
+      background: var(--md-sys-color-e2ee-container);
+      border: none;
+      border-radius: 9999px;
+      padding: 8px 14px;
       cursor: pointer;
       user-select: none;
+      transition: filter 0.2s var(--md-sys-motion);
     }
-    .e2ee-badge:hover { background: rgba(76, 175, 125, 0.2); }
-    .e2ee-badge svg { width: 14px; height: 14px; fill: var(--e2ee-color); }
-    .e2ee-badge span { font-size: 13px; font-weight: 500; color: var(--e2ee-color); }
+    .e2ee-badge:hover { filter: brightness(1.15); }
+    .e2ee-badge svg { width: 15px; height: 15px; fill: var(--md-sys-color-e2ee); }
+    .e2ee-badge span { font-size: 13px; font-weight: 500; color: var(--md-sys-color-e2ee); }
 
     .utilities-bar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 24px;
-      background-color: var(--bg-base);
-      border-bottom: 1px solid var(--border-color);
+      padding: 8px 20px 12px;
+      background-color: var(--md-sys-color-surface);
       flex-wrap: wrap;
-      gap: 16px;
+      gap: 12px;
       flex-shrink: 0;
     }
 
     .filter-section {
       flex: 1;
       display: flex;
-      max-width: 400px;
+      max-width: 440px;
     }
 
     .filter-bar {
       display: flex;
       align-items: center;
       width: 100%;
-      height: 36px;
-      background-color: var(--bg-surface);
-      border: 1px solid var(--border-color);
-      border-radius: 18px;
+      height: 44px;
+      background-color: var(--md-sys-color-surface-container-high);
+      border: 1px solid transparent;
+      border-radius: 9999px;
       overflow: hidden;
-      padding: 0 12px;
-      transition: border-color 0.2s;
+      padding: 0 16px;
+      transition: border-color 0.2s var(--md-sys-motion), background 0.2s var(--md-sys-motion);
     }
     .filter-bar:focus-within {
-      border-color: var(--accent-color);
+      border-color: var(--md-sys-color-primary);
+      background-color: var(--md-sys-color-surface-container-highest);
     }
 
     .filter-bar svg {
-      fill: var(--text-secondary);
-      margin-right: 8px;
+      fill: var(--md-sys-color-on-surface-variant);
+      margin-right: 10px;
+      flex-shrink: 0;
     }
 
     .filter-bar input {
       flex: 1;
       background: transparent;
       border: none;
-      color: var(--text-primary);
+      color: var(--md-sys-color-on-surface);
       font-size: 14px;
       outline: none;
     }
+    .filter-bar input::placeholder { color: var(--md-sys-color-on-surface-variant); }
 
     .clear-search-btn {
       background: none;
       border: none;
-      color: var(--text-secondary);
+      color: var(--md-sys-color-on-surface-variant);
       cursor: pointer;
       display: none;
       font-size: 14px;
-      padding: 0 4px;
+      padding: 4px;
+      border-radius: 50%;
     }
     .clear-search-btn.visible { display: block; }
-    .clear-search-btn:hover { color: var(--text-primary); }
+    .clear-search-btn:hover { color: var(--md-sys-color-on-surface); }
 
     .organize-section {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
       margin-left: auto;
     }
 
     .sidebar-section-title {
-      font-size: 14px;
-      color: var(--text-secondary);
+      font-size: 13px;
+      color: var(--md-sys-color-on-surface-variant);
       font-weight: 500;
     }
 
@@ -268,20 +329,24 @@
     }
 
     .sort-chip {
-      background-color: var(--bg-surface);
-      border: 1px solid var(--border-color);
-      color: var(--text-primary);
-      padding: 6px 12px;
-      border-radius: 16px;
+      background-color: var(--md-sys-color-surface-container);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      color: var(--md-sys-color-on-surface-variant);
+      padding: 7px 14px;
+      border-radius: 10px;
       font-size: 13px;
+      font-weight: 500;
       cursor: pointer;
-      transition: 0.2s;
+      transition: all 0.2s var(--md-sys-motion);
     }
-    .sort-chip:hover { background-color: var(--bg-surface-hover); }
+    .sort-chip:hover {
+      background-color: var(--md-sys-color-surface-container-high);
+      color: var(--md-sys-color-on-surface);
+    }
     .sort-chip.active {
-      background-color: var(--text-primary);
-      color: var(--bg-base);
-      border-color: var(--text-primary);
+      background-color: var(--md-sys-color-secondary-container);
+      color: var(--md-sys-color-on-secondary-container);
+      border-color: transparent;
     }
 
     .app-body {
@@ -289,13 +354,16 @@
       flex: 1;
       overflow: hidden;
       min-height: 0;
+      padding: 0 16px 16px;
     }
 
     .content-area {
       flex: 1;
       display: flex;
       flex-direction: column;
-      background-color: var(--bg-base);
+      background-color: var(--md-sys-color-surface-container-low);
+      border-radius: 28px;
+      border: 1px solid var(--md-sys-color-outline-variant);
       position: relative;
       overflow: hidden;
       min-height: 0;
@@ -305,19 +373,19 @@
       position: relative;
       display: flex;
       align-items: center;
-      padding: 12px 0;
-      background-color: var(--bg-base);
-      border-bottom: 1px solid var(--border-color);
+      padding: 14px 0;
+      background-color: var(--md-sys-color-surface-container);
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
       flex-shrink: 0;
     }
 
     .ribbon-scroll-btn {
-      background: var(--bg-base);
+      background: var(--md-sys-color-surface-container-highest);
       border: none;
-      color: var(--text-primary);
-      font-size: 24px;
-      width: 40px;
-      height: 40px;
+      color: var(--md-sys-color-on-surface);
+      font-size: 22px;
+      width: 38px;
+      height: 38px;
       border-radius: 50%;
       cursor: pointer;
       display: none;
@@ -325,18 +393,22 @@
       justify-content: center;
       position: absolute;
       z-index: 10;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+      transition: background 0.2s var(--md-sys-motion), color 0.2s var(--md-sys-motion);
     }
-    .ribbon-scroll-btn:hover { background: var(--bg-surface); }
-    .ribbon-scroll-btn.left { left: 8px; }
-    .ribbon-scroll-btn.right { right: 8px; }
+    .ribbon-scroll-btn:hover {
+      background: var(--md-sys-color-primary-container);
+      color: var(--md-sys-color-on-primary-container);
+    }
+    .ribbon-scroll-btn.left { left: 10px; }
+    .ribbon-scroll-btn.right { right: 10px; }
 
     .channel-ribbon {
       display: flex;
-      gap: 16px;
+      gap: 14px;
       overflow-x: auto;
       scroll-behavior: smooth;
-      padding: 4px 50px;
+      padding: 4px 52px;
       width: 100%;
       -ms-overflow-style: none;
       scrollbar-width: none;
@@ -347,9 +419,18 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      width: 76px;
+      width: 78px;
+      padding: 6px 4px;
+      border-radius: 18px;
       cursor: pointer;
       flex-shrink: 0;
+      transition: background 0.2s var(--md-sys-motion);
+    }
+    .channel-card:hover {
+      background: rgba(255, 171, 204, 0.08);
+    }
+    .channel-card.selected {
+      background: rgba(255, 171, 204, 0.14);
     }
 
     .channel-avatar-wrapper {
@@ -358,13 +439,13 @@
       height: 56px;
       border-radius: 50%;
       margin-bottom: 6px;
-      transition: transform 0.1s;
+      transition: transform 0.2s var(--md-sys-motion), box-shadow 0.2s var(--md-sys-motion);
     }
 
-    .channel-card:hover .channel-avatar-wrapper { transform: scale(1.05); }
+    .channel-card:hover .channel-avatar-wrapper { transform: scale(1.04); }
 
     .channel-card.selected .channel-avatar-wrapper {
-      box-shadow: 0 0 0 2px var(--text-primary);
+      box-shadow: 0 0 0 2.5px var(--md-sys-color-primary);
     }
 
     .channel-avatar-link {
@@ -379,54 +460,34 @@
       height: 100%;
       border-radius: 50%;
       object-fit: cover;
-      background-color: var(--bg-surface);
+      background-color: var(--md-sys-color-surface-container-highest);
     }
-
-    .unsub-overlay {
-      position: absolute;
-      inset: 0;
-      background-color: rgba(0, 0, 0, 0.7);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--danger-color);
-      font-size: 11px;
-      font-weight: bold;
-      opacity: 0;
-      transition: opacity 0.2s;
-      border: none;
-      cursor: pointer;
-      z-index: 5;
-    }
-    .channel-avatar-wrapper:hover .unsub-overlay { opacity: 1; }
 
     .channel-notif-toggle {
       position: absolute;
-      top: -4px;
-      right: -6px;
-      width: 22px;
-      height: 22px;
+      top: -3px;
+      right: -5px;
+      width: 24px;
+      height: 24px;
       border-radius: 50%;
-      border: 1px solid var(--border-color);
-      background: var(--bg-surface);
-      color: var(--text-secondary);
+      border: 2px solid var(--md-sys-color-surface-container);
+      background: var(--md-sys-color-surface-container-highest);
+      color: var(--md-sys-color-on-surface-variant);
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
       z-index: 8;
       padding: 0;
-      transition: background 0.15s, color 0.15s, border-color 0.15s;
+      transition: background 0.2s var(--md-sys-motion), color 0.2s var(--md-sys-motion), transform 0.15s var(--md-sys-motion);
     }
     .channel-notif-toggle:hover {
-      background: var(--bg-surface-hover);
-      color: var(--text-primary);
+      transform: scale(1.08);
+      color: var(--md-sys-color-on-surface);
     }
     .channel-notif-toggle.enabled {
-      background: var(--accent-bg);
-      border-color: var(--accent-color);
-      color: var(--accent-color);
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
     }
     .channel-notif-toggle svg {
       width: 12px;
@@ -436,7 +497,7 @@
 
     .channel-title {
       font-size: 12px;
-      color: var(--text-secondary);
+      color: var(--md-sys-color-on-surface-variant);
       text-align: center;
       width: 100%;
       white-space: nowrap;
@@ -445,7 +506,7 @@
       display: block;
     }
     .channel-card.selected .channel-title {
-      color: var(--text-primary);
+      color: var(--md-sys-color-primary);
       font-weight: 500;
     }
 
@@ -453,27 +514,29 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 12px 24px;
-      background: var(--bg-base);
-      border-bottom: 1px solid var(--border-color);
+      padding: 12px 20px;
+      background: var(--md-sys-color-surface-container-low);
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
       flex-shrink: 0;
       gap: 12px;
+      flex-wrap: wrap;
     }
 
     .feed-title-wrapper {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
       min-width: 0;
     }
 
     .feed-title {
-      font-size: 1.1rem;
-      font-weight: 600;
+      font-size: 1.05rem;
+      font-weight: 500;
       margin: 0;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      color: var(--md-sys-color-on-surface);
     }
 
     .feed-header-actions {
@@ -481,61 +544,77 @@
       align-items: center;
       gap: 8px;
       flex-shrink: 0;
+      flex-wrap: wrap;
     }
 
     .open-channel-link {
       display: none;
       align-items: center;
       justify-content: center;
-      color: var(--text-secondary);
-      transition: color 0.2s;
-      padding: 4px;
+      color: var(--md-sys-color-on-surface-variant);
+      transition: color 0.2s var(--md-sys-motion), background 0.2s var(--md-sys-motion);
+      padding: 6px;
       border-radius: 50%;
     }
     .open-channel-link:hover {
-      color: var(--text-primary);
-      background-color: var(--bg-surface);
+      color: var(--md-sys-color-primary);
+      background-color: var(--md-sys-color-surface-container-high);
     }
 
-    .feed-notif-btn {
-      background: none;
-      border: 1px solid var(--border-color);
-      color: var(--text-secondary);
-      padding: 4px 10px;
-      border-radius: 14px;
-      font-size: 12px;
+    .feed-notif-btn,
+    .feed-unsub-btn,
+    .close-feed-btn {
+      border: 1px solid var(--md-sys-color-outline-variant);
+      padding: 7px 14px;
+      border-radius: 9999px;
+      font-size: 12.5px;
       cursor: pointer;
       display: none;
       align-items: center;
-      gap: 5px;
+      gap: 6px;
       font-weight: 500;
+      transition: background 0.2s var(--md-sys-motion), color 0.2s var(--md-sys-motion), border-color 0.2s var(--md-sys-motion), filter 0.2s var(--md-sys-motion);
     }
-    .feed-notif-btn:hover { background: var(--bg-surface); color: var(--text-primary); }
+
+    .feed-notif-btn {
+      background: var(--md-sys-color-surface-container-high);
+      color: var(--md-sys-color-on-surface-variant);
+      border-color: transparent;
+    }
+    .feed-notif-btn:hover {
+      background: var(--md-sys-color-surface-container-highest);
+      color: var(--md-sys-color-on-surface);
+    }
     .feed-notif-btn.enabled {
-      background: var(--accent-bg);
-      border-color: rgba(62, 166, 255, 0.4);
-      color: var(--accent-color);
+      background: var(--md-sys-color-primary-container);
+      color: var(--md-sys-color-on-primary-container);
     }
-    .feed-notif-btn svg { width: 14px; height: 14px; fill: currentColor; }
+    .feed-notif-btn svg,
+    .feed-unsub-btn svg { width: 15px; height: 15px; fill: currentColor; }
+
+    .feed-unsub-btn {
+      background: rgba(147, 0, 10, 0.45);
+      border-color: rgba(255, 180, 171, 0.28);
+      color: var(--md-sys-color-on-error-container);
+    }
+    .feed-unsub-btn:hover {
+      background: var(--md-sys-color-error-container);
+      border-color: transparent;
+    }
 
     .close-feed-btn {
-      background: none;
-      border: 1px solid var(--border-color);
-      color: var(--text-primary);
-      padding: 4px 10px;
-      border-radius: 14px;
-      font-size: 13px;
-      cursor: pointer;
-      display: none;
-      font-weight: 500;
+      background: transparent;
+      color: var(--md-sys-color-on-surface);
     }
-    .close-feed-btn:hover { background: var(--bg-surface); }
+    .close-feed-btn:hover {
+      background: var(--md-sys-color-surface-container-high);
+    }
 
     .feed-viewport {
       flex: 1;
       display: flex;
       flex-direction: column;
-      background-color: #000;
+      background-color: var(--md-sys-color-surface-dim);
       position: relative;
       overflow: hidden;
       min-height: 0;
@@ -558,15 +637,26 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      color: var(--text-secondary);
+      color: var(--md-sys-color-on-surface-variant);
       text-align: center;
       font-size: 15px;
+      padding: 24px;
       z-index: 10;
     }
 
-    .empty-state svg {
+    .empty-state-icon {
+      width: 80px;
+      height: 80px;
+      border-radius: 28px;
+      background: var(--md-sys-color-surface-container-high);
+      display: flex;
+      align-items: center;
+      justify-content: center;
       margin-bottom: 16px;
-      fill: var(--border-color);
+    }
+
+    .empty-state svg {
+      fill: var(--md-sys-color-primary);
     }
 
     .loading-state {
@@ -576,20 +666,20 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      color: var(--text-secondary);
+      color: var(--md-sys-color-on-surface-variant);
       text-align: center;
-      font-size: 15px;
+      font-size: 14px;
       z-index: 15;
-      background-color: #000;
+      background-color: var(--md-sys-color-surface-dim);
     }
 
     .spinner {
-      width: 48px;
-      height: 48px;
-      border: 4px solid var(--border-color);
-      border-top-color: var(--accent-color);
+      width: 44px;
+      height: 44px;
+      border: 4px solid var(--md-sys-color-surface-container-highest);
+      border-top-color: var(--md-sys-color-primary);
       border-radius: 50%;
-      animation: spin 1s linear infinite;
+      animation: spin 0.9s linear infinite;
       margin-bottom: 16px;
     }
 
@@ -604,13 +694,14 @@
       display: none;
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.7);
+      background: rgba(10, 7, 8, 0.72);
+      backdrop-filter: blur(4px);
       z-index: 3000;
       align-items: center;
       justify-content: center;
-      animation: fadeIn 0.15s ease;
+      animation: fadeIn 0.16s ease;
     }
-    .e2ee-overlay { z-index: 2000; background: rgba(0, 0, 0, 0.65); }
+    .e2ee-overlay { z-index: 2000; }
     .json-overlay { z-index: 4000; }
     .modal-overlay { z-index: 3500; }
 
@@ -622,25 +713,32 @@
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
     @keyframes popIn {
-      from { transform: scale(0.95); opacity: 0; }
-      to   { transform: scale(1); opacity: 1; }
+      from { transform: scale(0.95) translateY(8px); opacity: 0; }
+      to   { transform: scale(1) translateY(0); opacity: 1; }
     }
 
     .confirm-modal {
-      background: #212121;
-      border-radius: 12px;
+      background: var(--md-sys-color-surface-container-high);
+      border-radius: 28px;
       padding: 24px;
-      max-width: 350px;
+      max-width: 360px;
       width: 90%;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.4);
-      font-family: "Roboto", Arial, sans-serif;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+      animation: popIn 0.2s var(--md-sys-motion);
+    }
+
+    .confirm-title {
+      font-size: 1.25rem;
+      font-weight: 500;
+      color: var(--md-sys-color-on-surface);
+      margin: 0 0 12px;
     }
 
     .confirm-content {
-      font-size: 15px;
-      color: #f1f1f1;
-      margin-bottom: 32px;
-      line-height: 1.4;
+      font-size: 14px;
+      color: var(--md-sys-color-on-surface-variant);
+      margin-bottom: 24px;
+      line-height: 1.5;
     }
 
     .confirm-actions {
@@ -650,64 +748,69 @@
     }
 
     .confirm-actions button {
-      background: none;
       border: none;
       font-size: 14px;
       font-weight: 500;
       cursor: pointer;
-      padding: 10px 16px;
-      border-radius: 18px;
-      transition: background 0.2s;
+      padding: 10px 18px;
+      border-radius: 9999px;
+      transition: background 0.2s var(--md-sys-motion), filter 0.2s var(--md-sys-motion);
     }
 
-    .btn-cancel { color: #f1f1f1; }
-    .btn-cancel:hover { background: rgba(255, 255, 255, 0.1); }
+    .btn-cancel {
+      background: transparent;
+      color: var(--md-sys-color-primary);
+    }
+    .btn-cancel:hover { background: rgba(255, 171, 204, 0.1); }
 
-    .btn-confirm { color: var(--accent-color); }
-    .btn-confirm:hover { background: rgba(62, 166, 255, 0.15); }
+    .btn-confirm {
+      background: var(--md-sys-color-error-container);
+      color: var(--md-sys-color-on-error-container);
+    }
+    .btn-confirm:hover { filter: brightness(1.15); }
 
     .e2ee-modal {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      padding: 32px;
-      max-width: 400px;
+      background: var(--md-sys-color-surface-container-high);
+      border-radius: 28px;
+      padding: 28px;
+      max-width: 420px;
       width: 90%;
-      box-shadow: 0 24px 38px 3px rgba(0,0,0,0.14), 0 9px 46px 8px rgba(0,0,0,0.12), 0 11px 15px -7px rgba(0,0,0,0.2);
-      animation: popIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+      animation: popIn 0.2s var(--md-sys-motion);
     }
 
-    .e2ee-modal h2 { margin: 0 0 16px; font-size: 1.25rem; font-weight: 600; }
-    .e2ee-modal p { margin: 0 0 16px; font-size: 14px; color: var(--text-secondary); line-height: 1.5; }
+    .e2ee-modal h2 { margin: 0 0 14px; font-size: 1.3rem; font-weight: 500; }
+    .e2ee-modal p { margin: 0 0 14px; font-size: 14px; color: var(--md-sys-color-on-surface-variant); line-height: 1.5; }
 
-    .e2ee-list { margin: 0 0 24px; padding-left: 20px; color: var(--text-secondary); font-size: 14px; line-height: 1.6; }
-    .e2ee-list li { margin-bottom: 8px; }
+    .e2ee-list { margin: 0 0 24px; padding-left: 20px; color: var(--md-sys-color-on-surface-variant); font-size: 14px; line-height: 1.65; }
+    .e2ee-list li { margin-bottom: 6px; }
 
     .modal-close-btn {
       width: 100%;
-      padding: 10px;
-      background: var(--e2ee-color);
+      padding: 12px;
+      background: var(--md-sys-color-primary);
       border: none;
-      border-radius: 18px;
-      color: #fff;
+      border-radius: 9999px;
+      color: var(--md-sys-color-on-primary);
       font-size: 14px;
-      font-weight: 500;
+      font-weight: 600;
       cursor: pointer;
+      transition: filter 0.2s var(--md-sys-motion);
     }
-    .modal-close-btn:hover { filter: brightness(1.1); }
+    .modal-close-btn:hover { filter: brightness(1.08); }
 
     .json-modal,
     .panel-modal {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
+      background: var(--md-sys-color-surface-container);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 28px;
       display: flex;
       flex-direction: column;
-      max-width: 800px;
+      max-width: 780px;
       width: 92%;
-      max-height: 82vh;
-      box-shadow: 0 24px 38px 3px rgba(0,0,0,0.3);
-      animation: popIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      max-height: 84vh;
+      box-shadow: 0 20px 48px rgba(0, 0, 0, 0.55);
+      animation: popIn 0.2s var(--md-sys-motion);
       overflow: hidden;
     }
 
@@ -718,51 +821,63 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 16px 20px;
-      border-bottom: 1px solid var(--border-color);
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
       flex-shrink: 0;
       gap: 12px;
+      flex-wrap: wrap;
     }
 
     .json-header h3,
     .panel-header h3 {
       margin: 0;
-      font-size: 1.05rem;
-      color: var(--text-primary);
+      font-size: 1.15rem;
+      font-weight: 500;
+      color: var(--md-sys-color-on-surface);
     }
 
     .panel-header-actions {
       display: flex;
       align-items: center;
       gap: 8px;
+      flex-wrap: wrap;
     }
 
     .close-json-btn,
     .close-panel-btn {
-      background: none;
+      background: var(--md-sys-color-surface-container-high);
       border: none;
-      color: var(--text-secondary);
-      font-size: 1.1rem;
+      color: var(--md-sys-color-on-surface-variant);
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      font-size: 1rem;
       cursor: pointer;
-      padding: 4px 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s var(--md-sys-motion), color 0.15s var(--md-sys-motion);
     }
     .close-json-btn:hover,
-    .close-panel-btn:hover { color: var(--text-primary); }
+    .close-panel-btn:hover {
+      background: var(--md-sys-color-surface-container-highest);
+      color: var(--md-sys-color-on-surface);
+    }
 
     .json-content,
     .panel-body {
-      padding: 16px 20px;
+      padding: 18px 22px;
       overflow-y: auto;
       flex: 1;
     }
 
     .json-content pre {
       margin: 0;
-      background: var(--bg-base);
+      background: var(--md-sys-color-surface-container-lowest);
       padding: 16px;
-      border-radius: 8px;
-      border: 1px solid var(--border-color);
-      color: var(--accent-color);
+      border-radius: 16px;
+      border: 1px solid var(--md-sys-color-outline-variant);
+      color: var(--md-sys-color-primary);
       font-family: "Consolas", "Monaco", monospace;
       font-size: 13px;
       white-space: pre-wrap;
@@ -770,67 +885,106 @@
     }
 
     .small-btn {
-      background: var(--bg-base);
-      border: 1px solid var(--border-color);
-      color: var(--text-primary);
-      padding: 5px 10px;
-      border-radius: 14px;
+      background: var(--md-sys-color-surface-container-high);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      color: var(--md-sys-color-on-surface);
+      padding: 6px 12px;
+      border-radius: 9999px;
       font-size: 12px;
       font-weight: 500;
       cursor: pointer;
-      transition: background 0.15s;
+      transition: background 0.15s var(--md-sys-motion), border-color 0.15s var(--md-sys-motion);
     }
-    .small-btn:hover { background: var(--bg-surface-hover); }
+    .small-btn:hover { background: var(--md-sys-color-surface-container-highest); }
     .small-btn.active {
-      background: var(--accent-bg);
-      border-color: var(--accent-color);
-      color: var(--accent-color);
+      background: var(--md-sys-color-primary-container);
+      border-color: transparent;
+      color: var(--md-sys-color-on-primary-container);
+    }
+    .small-btn.danger:hover {
+      background: var(--md-sys-color-error-container);
+      border-color: transparent;
+      color: var(--md-sys-color-on-error-container);
+    }
+
+    .m3-segmented {
+      display: flex;
+      padding: 12px 22px 0;
+      gap: 0;
+      flex-shrink: 0;
+    }
+
+    .m3-seg-btn {
+      flex: 1;
+      background: var(--md-sys-color-surface-container-low);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      color: var(--md-sys-color-on-surface-variant);
+      padding: 9px 16px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s var(--md-sys-motion), color 0.2s var(--md-sys-motion);
+    }
+    .m3-seg-btn:first-child {
+      border-radius: 9999px 0 0 9999px;
+      border-right: none;
+    }
+    .m3-seg-btn:last-child {
+      border-radius: 0 9999px 9999px 0;
+    }
+    .m3-seg-btn.active {
+      background: var(--md-sys-color-secondary-container);
+      color: var(--md-sys-color-on-secondary-container);
+      border-color: var(--md-sys-color-secondary-container);
     }
 
     .notif-meta-bar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 20px;
-      background: #181818;
-      border-bottom: 1px solid var(--border-color);
+      padding: 10px 22px;
+      background: var(--md-sys-color-surface-container-low);
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
+      margin-top: 12px;
       font-size: 12px;
-      color: var(--text-secondary);
+      color: var(--md-sys-color-on-surface-variant);
       flex-wrap: wrap;
       gap: 8px;
     }
 
+    .notif-tab-pane { display: none; }
+    .notif-tab-pane.active { display: block; }
+
     .notif-list {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 10px;
     }
 
     .notif-item {
       display: flex;
       align-items: flex-start;
       gap: 12px;
-      padding: 10px;
-      border-radius: 8px;
-      background: var(--bg-base);
-      border: 1px solid var(--border-color);
-      transition: background 0.15s, border-color 0.15s;
+      padding: 12px;
+      border-radius: 18px;
+      background: var(--md-sys-color-surface-container-low);
+      border: 1px solid transparent;
+      transition: background 0.15s var(--md-sys-motion), border-color 0.15s var(--md-sys-motion);
       position: relative;
     }
     .notif-item:hover {
-      background: #1a1a1a;
-      border-color: #444;
+      background: var(--md-sys-color-surface-container-high);
     }
     .notif-item.unread {
-      border-color: rgba(62, 166, 255, 0.45);
-      background: rgba(38, 56, 80, 0.28);
+      border-color: rgba(255, 171, 204, 0.35);
+      background: rgba(120, 41, 75, 0.28);
     }
 
     .notif-unread-dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background: var(--accent-color);
+      background: var(--md-sys-color-primary);
       flex-shrink: 0;
       margin-top: 6px;
       visibility: hidden;
@@ -838,9 +992,9 @@
     .notif-item.unread .notif-unread-dot { visibility: visible; }
 
     .notif-thumb {
-      width: 112px;
-      height: 63px;
-      border-radius: 6px;
+      width: 116px;
+      height: 65px;
+      border-radius: 12px;
       object-fit: cover;
       background: #000;
       flex-shrink: 0;
@@ -854,9 +1008,9 @@
     .notif-video-title {
       font-size: 14px;
       font-weight: 500;
-      color: var(--text-primary);
+      color: var(--md-sys-color-on-surface);
       margin: 0 0 4px;
-      line-height: 1.3;
+      line-height: 1.35;
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
@@ -865,7 +1019,7 @@
 
     .notif-channel-meta {
       font-size: 12px;
-      color: var(--text-secondary);
+      color: var(--md-sys-color-on-surface-variant);
       display: flex;
       align-items: center;
       gap: 6px;
@@ -874,9 +1028,130 @@
 
     .notif-empty {
       text-align: center;
-      color: var(--text-secondary);
+      color: var(--md-sys-color-on-surface-variant);
       padding: 36px 16px;
       font-size: 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .settings-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .m3-card {
+      background: var(--md-sys-color-surface-container-low);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 20px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .m3-card-title {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--md-sys-color-on-surface);
+    }
+
+    .m3-card-desc {
+      margin: -8px 0 0;
+      font-size: 13px;
+      color: var(--md-sys-color-on-surface-variant);
+      line-height: 1.45;
+    }
+
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .m3-chip {
+      background: var(--md-sys-color-surface-container-high);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      color: var(--md-sys-color-on-surface-variant);
+      padding: 6px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s var(--md-sys-motion);
+    }
+    .m3-chip:hover {
+      background: var(--md-sys-color-surface-container-highest);
+      color: var(--md-sys-color-on-surface);
+    }
+    .m3-chip.active {
+      background: var(--md-sys-color-primary-container);
+      color: var(--md-sys-color-on-primary-container);
+      border-color: transparent;
+    }
+
+    .field-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+      min-width: 160px;
+    }
+
+    .field-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--md-sys-color-on-surface-variant);
+    }
+
+    .m3-input,
+    .m3-select {
+      height: 40px;
+      background: var(--md-sys-color-surface-container-high);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 12px;
+      padding: 0 12px;
+      color: var(--md-sys-color-on-surface);
+      font-size: 13.5px;
+      outline: none;
+      transition: border-color 0.2s var(--md-sys-motion);
+    }
+    .m3-input:focus,
+    .m3-select:focus {
+      border-color: var(--md-sys-color-primary);
+    }
+    .m3-input.short {
+      width: 110px;
+    }
+
+    .test-status-box {
+      background: var(--md-sys-color-surface-container-high);
+      border-radius: 14px;
+      padding: 12px 14px;
+      font-size: 13px;
+      color: var(--md-sys-color-on-surface-variant);
+      line-height: 1.45;
+      display: none;
+    }
+    .test-status-box.visible { display: block; }
+    .test-status-box.success {
+      background: rgba(31, 71, 51, 0.6);
+      color: var(--md-sys-color-e2ee);
+    }
+    .test-status-box.error {
+      background: rgba(147, 0, 10, 0.55);
+      color: var(--md-sys-color-on-error-container);
     }
 
     .import-section {
@@ -888,56 +1163,56 @@
     .import-desc {
       margin: 0;
       font-size: 13px;
-      color: var(--text-secondary);
+      color: var(--md-sys-color-on-surface-variant);
       line-height: 1.5;
     }
 
     .import-dropzone {
-      border: 2px dashed var(--border-color);
-      border-radius: 10px;
-      padding: 20px;
+      border: 2px dashed var(--md-sys-color-outline-variant);
+      border-radius: 20px;
+      padding: 22px;
       text-align: center;
-      background: var(--bg-base);
+      background: var(--md-sys-color-surface-container-low);
       cursor: pointer;
-      transition: border-color 0.2s, background 0.2s;
+      transition: border-color 0.2s var(--md-sys-motion), background 0.2s var(--md-sys-motion);
     }
     .import-dropzone:hover,
     .import-dropzone.dragover {
-      border-color: var(--accent-color);
-      background: rgba(62, 166, 255, 0.06);
+      border-color: var(--md-sys-color-primary);
+      background: rgba(255, 171, 204, 0.08);
     }
     .import-dropzone p {
       margin: 0 0 6px;
       font-size: 14px;
-      color: var(--text-primary);
+      color: var(--md-sys-color-on-surface);
       font-weight: 500;
     }
     .import-dropzone span {
       font-size: 12px;
-      color: var(--text-secondary);
+      color: var(--md-sys-color-on-surface-variant);
     }
 
     .import-textarea {
       width: 100%;
-      min-height: 84px;
-      background: var(--bg-base);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 10px 12px;
-      color: var(--text-primary);
+      min-height: 88px;
+      background: var(--md-sys-color-surface-container-low);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 16px;
+      padding: 12px 14px;
+      color: var(--md-sys-color-on-surface);
       font-size: 13px;
       resize: vertical;
       outline: none;
     }
-    .import-textarea:focus { border-color: var(--accent-color); }
+    .import-textarea:focus { border-color: var(--md-sys-color-primary); }
 
     .import-preview {
-      background: var(--bg-base);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 10px 12px;
+      background: var(--md-sys-color-surface-container-low);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 14px;
+      padding: 12px 14px;
       font-size: 13px;
-      color: var(--text-secondary);
+      color: var(--md-sys-color-on-surface-variant);
       display: none;
     }
     .import-preview.visible { display: block; }
@@ -945,8 +1220,8 @@
     .import-progress-bar {
       width: 100%;
       height: 6px;
-      background: var(--border-color);
-      border-radius: 3px;
+      background: var(--md-sys-color-surface-container-highest);
+      border-radius: 9999px;
       overflow: hidden;
       margin-top: 8px;
       display: none;
@@ -955,8 +1230,8 @@
     .import-progress-fill {
       height: 100%;
       width: 0%;
-      background: var(--accent-color);
-      transition: width 0.2s;
+      background: var(--md-sys-color-primary);
+      transition: width 0.2s var(--md-sys-motion);
     }
 
     .import-actions {
@@ -967,24 +1242,27 @@
     }
 
     .primary-btn {
-      background: var(--accent-color);
-      color: #0f0f0f;
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
       border: none;
-      padding: 8px 18px;
-      border-radius: 18px;
+      padding: 9px 20px;
+      border-radius: 9999px;
       font-size: 13px;
       font-weight: 600;
       cursor: pointer;
+      transition: filter 0.2s var(--md-sys-motion);
     }
-    .primary-btn:hover { filter: brightness(1.08); }
+    .primary-btn:hover { filter: brightness(1.07); }
     .primary-btn:disabled {
-      opacity: 0.45;
+      opacity: 0.42;
       cursor: not-allowed;
     }
 
     @media(max-width: 768px) {
-      .utilities-bar { justify-content: center; }
-      .filter-section { max-width: 100%; margin-bottom: 8px; }
+      .app-body { padding: 0 8px 8px; }
+      .content-area { border-radius: 20px; }
+      .utilities-bar { justify-content: center; padding: 6px 12px 10px; }
+      .filter-section { max-width: 100%; }
       .action-btn.hide-mobile, .account-info-wrapper { display: none; }
       .notif-thumb { width: 88px; height: 50px; }
     }
@@ -992,16 +1270,16 @@
     noscript {
       position: fixed;
       bottom: 24px; right: 24px; z-index: 9999;
-      width: 320px; background-color: var(--bg-surface);
-      border: 1px solid var(--danger-color); border-radius: 8px; padding: 16px;
-      color: var(--text-primary); font-size: 14px; line-height: 1.5;
+      width: 320px; background-color: var(--md-sys-color-surface-container-high);
+      border: 1px solid var(--md-sys-color-error); border-radius: 16px; padding: 16px;
+      color: var(--md-sys-color-on-surface); font-size: 14px; line-height: 1.5;
     }
   </style>
 </head>
 <body data-userid="<%= userid %>">
 
   <noscript>
-    <strong style="color:var(--danger-color); display:block; margin-bottom:8px;">JavaScript Disabled</strong>
+    <strong style="color:var(--md-sys-color-error); display:block; margin-bottom:8px;">JavaScript Disabled</strong>
     Search and horizontal scrolling are unavailable. Channels can still be opened natively via the links.
   </noscript>
 
@@ -1020,7 +1298,8 @@
 
   <div class="confirm-overlay" id="confirmUnsubModal" role="dialog" aria-modal="true">
     <div class="confirm-modal">
-      <div class="confirm-content" id="confirmUnsubText">unsubscribe from Channel?</div>
+      <h3 class="confirm-title">Unsubscribe?</h3>
+      <div class="confirm-content" id="confirmUnsubText">Unsubscribe from Channel?</div>
       <div class="confirm-actions">
         <button class="btn-cancel" id="confirmUnsubCancel">Nah</button>
         <button class="btn-confirm" id="confirmUnsubConfirm">Unsubscribe</button>
@@ -1048,16 +1327,80 @@
           <button class="small-btn" id="enableDesktopNotifBtn">Desktop Alerts</button>
           <button class="small-btn" id="refreshNotifBtn">Refresh</button>
           <button class="small-btn" id="markAllReadBtn">Mark all read</button>
+          <button class="small-btn danger" id="clearInboxBtn">Clear inbox</button>
           <button class="close-panel-btn" id="closeNotifModal" title="Close">✖</button>
         </div>
       </div>
+
+      <div class="m3-segmented">
+        <button class="m3-seg-btn active" type="button" data-notif-tab="feed">Recent Uploads</button>
+        <button class="m3-seg-btn" type="button" data-notif-tab="settings">Settings!</button>
+      </div>
+
       <div class="notif-meta-bar">
         <span id="notifStatusText">Checking feeds...</span>
         <span id="notifCountText"></span>
       </div>
+
       <div class="panel-body">
-        <div class="notif-list" id="notifList">
-          <div class="notif-empty">Loading notifications...</div>
+        <div class="notif-tab-pane active" id="notifTabFeed">
+          <div class="notif-list" id="notifList">
+            <div class="notif-empty">Loading notifications...</div>
+          </div>
+        </div>
+
+        <div class="notif-tab-pane" id="notifTabSettings">
+          <div class="settings-grid">
+            <div class="m3-card">
+              <h4 class="m3-card-title">Auto-Check Interval</h4>
+              <p class="m3-card-desc">Pick how often Poke looks at your channels feeds to see if anyone dropped a new video!</p>
+              <div class="chip-row" id="intervalPresetChips">
+                <button type="button" class="m3-chip" data-mins="5">5 min</button>
+                <button type="button" class="m3-chip" data-mins="15">15 min</button>
+                <button type="button" class="m3-chip" data-mins="30">30 min</button>
+                <button type="button" class="m3-chip" data-mins="60">1 hour</button>
+                <button type="button" class="m3-chip" data-mins="120">2 hours</button>
+              </div>
+              <div class="field-row">
+                <input type="number" class="m3-input short" id="customIntervalInput" min="1" max="1440" value="30">
+                <span class="field-label">minutes</span>
+                <button type="button" class="primary-btn" id="saveIntervalBtn">Apply Interval</button>
+              </div>
+              <div class="test-status-box" id="intervalStatusBox"></div>
+            </div>
+
+            <div class="m3-card">
+              <h4 class="m3-card-title">Test Notification Delivery</h4>
+              <p class="m3-card-desc">Grabs a real video from a channel's feed and pops a desktop notification after a delay so u can check that alerts actually show up (handy if u wanna switch tabs or minimize first!)</p>
+
+              <div class="field-row">
+                <div class="field-group">
+                  <label class="field-label" for="testChannelSelect">RSS Source Channel</label>
+                  <select class="m3-select" id="testChannelSelect">
+                    <option value="__latest__">Latest from enabled channels</option>
+                  </select>
+                </div>
+                <div class="field-group" style="max-width: 170px;">
+                  <label class="field-label" for="testDelayInput">Custom Delay (seconds)</label>
+                  <input type="number" class="m3-input" id="testDelayInput" min="0" max="120" value="5">
+                </div>
+              </div>
+
+              <div class="chip-row" id="delayPresetChips">
+                <button type="button" class="m3-chip" data-delay="0">Instant (0s)</button>
+                <button type="button" class="m3-chip active" data-delay="5">5s</button>
+                <button type="button" class="m3-chip" data-delay="10">10s</button>
+                <button type="button" class="m3-chip" data-delay="30">30s</button>
+              </div>
+
+              <div class="field-row">
+                <button type="button" class="primary-btn" id="sendTestNotifBtn">Test Notification Delivery</button>
+                <button type="button" class="small-btn" id="cancelTestNotifBtn" style="display:none;">Cancel Timer</button>
+              </div>
+
+              <div class="test-status-box" id="testNotifStatusBox"></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1132,8 +1475,8 @@
   <div class="utilities-bar">
     <div class="filter-section">
       <div class="filter-bar">
-        <svg viewBox="0 0 24 24" width="16" height="16">
-          <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/>
+        <svg viewBox="0 0 24 24" width="18" height="18">
+          <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
         </svg>
         <input type="text" id="searchInput" placeholder="Search ur channels..." autocomplete="off">
         <button id="clearSearch" class="clear-search-btn" title="Clear filter">✖</button>
@@ -1166,16 +1509,14 @@
         <button class="ribbon-scroll-btn left" id="scrollLeft">‹</button>
         <div class="channel-ribbon" id="channelList">
           <% subs.forEach(c => { %>
-            <div class="channel-card" data-id="<%= c.id %>" data-name="<%= c.name.toLowerCase() %>" data-real-name="<%= c.name %>">
+            <div class="channel-card"
+                 data-id="<%= c.id %>"
+                 data-name="<%= c.name.toLowerCase() %>"
+                 data-real-name="<%= c.name %>"
+                 data-unsub-url="/api/remove-channel-sub?ID=<%= encodeURIComponent(userid) %>&channelID=<%= encodeURIComponent(c.id) %>">
               <div class="channel-avatar-wrapper">
                 <a href="/channel?id=<%= encodeURIComponent(c.id) %>" class="channel-avatar-link">
                   <img src="<%= c.avatar %>" alt="" loading="lazy">
-                </a>
-                <a class="unsub-overlay js-unsub-btn"
-                   href="/api/remove-channel-sub?ID=<%= encodeURIComponent(userid) %>&channelID=<%= c.id %>"
-                   data-name="<%= c.name.replace(/"/g, '&quot;') %>"
-                   title="Unsubscribe">
-                  Unsub
                 </a>
                 <button class="channel-notif-toggle js-channel-notif-btn"
                         type="button"
@@ -1201,7 +1542,11 @@
         </div>
         <div class="feed-header-actions">
           <button class="feed-notif-btn" id="feedNotifToggle" type="button"></button>
-          <button class="close-feed-btn" id="closeViewer">✖ Close Feed</button>
+          <button class="feed-unsub-btn" id="feedUnsubBtn" type="button">
+            <svg viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            <span>Unsubscribe</span>
+          </button>
+          <button class="close-feed-btn" id="closeViewer" type="button">✖ Close Feed</button>
         </div>
       </div>
 
@@ -1212,9 +1557,11 @@
         </div>
 
         <div class="empty-state" id="emptyState">
-          <svg viewBox="0 0 24 24" width="64" height="64">
-            <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8 12.5v-9l6 4.5-6 4.5z"/>
-          </svg>
+          <div class="empty-state-icon">
+            <svg viewBox="0 0 24 24" width="40" height="40">
+              <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8 12.5v-9l6 4.5-6 4.5z"/>
+            </svg>
+          </div>
           <p>Your subscription feed will appear here!! How cool is that :o</p>
         </div>
         <iframe id="mainFrame" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>
@@ -1225,10 +1572,11 @@
 <script>
 document.addEventListener("DOMContentLoaded", () => {
   const USER_ID = document.body.dataset.userid || '';
-  const CHECK_INTERVAL_MS = 30 * 60 * 1000;
   const NOTIF_PREFS_KEY = `poke_notif_prefs_${USER_ID}`;
   const NOTIF_READ_KEY = `poke_notif_read_${USER_ID}`;
   const NOTIF_ALERTED_KEY = `poke_notif_alerted_${USER_ID}`;
+  const NOTIF_DISMISSED_KEY = `poke_notif_dismissed_${USER_ID}`;
+  const NOTIF_INTERVAL_KEY = `poke_notif_interval_mins_${USER_ID}`;
 
   const BELL_ON_SVG = '<svg viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>';
   const BELL_OFF_SVG = '<svg viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-2.79-1.4-5.16-3.78-6.06L12 2.72V4a1.5 1.5 0 0 0-3 0v.68c-.28.07-.56.16-.82.27L3.27 2 2 3.27l4.17 4.17A6.47 6.47 0 0 0 6 11v5l-2 2v1h13.73l2 2L21 19.73 18 16.73V16z"/></svg>';
@@ -1245,10 +1593,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const closeViewer = document.getElementById('closeViewer');
   const openChannelBtn = document.getElementById('openChannelBtn');
   const feedNotifToggle = document.getElementById('feedNotifToggle');
+  const feedUnsubBtn = document.getElementById('feedUnsubBtn');
   const scrollLeftBtn = document.getElementById('scrollLeft');
   const scrollRightBtn = document.getElementById('scrollRight');
 
   let selectedChannelId = null;
+  let selectedChannelName = '';
+  let selectedChannelUnsubUrl = '';
 
   function loadJsonStorage(key, fallback) {
     try {
@@ -1265,9 +1616,18 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {}
   }
 
+  function getSavedIntervalMinutes() {
+    const val = parseInt(localStorage.getItem(NOTIF_INTERVAL_KEY), 10);
+    return Number.isFinite(val) && val >= 1 && val <= 1440 ? val : 30;
+  }
+
+  let checkIntervalMinutes = getSavedIntervalMinutes();
+  let checkIntervalTimer = null;
+
   let notifPrefs = loadJsonStorage(NOTIF_PREFS_KEY, {});
   let readVideoIds = new Set(loadJsonStorage(NOTIF_READ_KEY, []));
   let alertedVideoIds = new Set(loadJsonStorage(NOTIF_ALERTED_KEY, []));
+  let dismissedVideoIds = new Set(loadJsonStorage(NOTIF_DISMISSED_KEY, []));
   let cachedNotifications = [];
   let isCheckingFeeds = false;
 
@@ -1305,9 +1665,10 @@ document.addEventListener("DOMContentLoaded", () => {
       renderNotifications();
     } else {
       fetchChannelFeed(channelId).then(entries => {
-        if (entries.length) {
+        const visibleEntries = entries.filter(e => !dismissedVideoIds.has(e.videoId));
+        if (visibleEntries.length) {
           const existingMap = new Map(cachedNotifications.map(n => [n.videoId, n]));
-          entries.forEach(e => existingMap.set(e.videoId, e));
+          visibleEntries.forEach(e => existingMap.set(e.videoId, e));
           cachedNotifications = Array.from(existingMap.values())
             .sort((a, b) => b.publishedMs - a.publishedMs)
             .slice(0, 60);
@@ -1436,7 +1797,22 @@ document.addEventListener("DOMContentLoaded", () => {
   const notifCountText = document.getElementById('notifCountText');
   const refreshNotifBtn = document.getElementById('refreshNotifBtn');
   const markAllReadBtn = document.getElementById('markAllReadBtn');
+  const clearInboxBtn = document.getElementById('clearInboxBtn');
   const enableDesktopNotifBtn = document.getElementById('enableDesktopNotifBtn');
+
+  const notifSegBtns = document.querySelectorAll('[data-notif-tab]');
+  const notifTabFeed = document.getElementById('notifTabFeed');
+  const notifTabSettings = document.getElementById('notifTabSettings');
+
+  notifSegBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      notifSegBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const tab = btn.dataset.notifTab;
+      notifTabFeed.classList.toggle('active', tab === 'feed');
+      notifTabSettings.classList.toggle('active', tab === 'settings');
+    });
+  });
 
   function updateDesktopAlertButton() {
     if (!('Notification' in window)) {
@@ -1467,7 +1843,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function updateNotifCountsHeader() {
     const allSubs = getSubscribedChannelsInfo();
     const enabledCount = allSubs.filter(c => isChannelNotifEnabled(c.id)).length;
-    notifCountText.textContent = `${enabledCount}/${allSubs.length} channels enabled`;
+    notifCountText.textContent = `${enabledCount}/${allSubs.length} channels • every ${checkIntervalMinutes}m`;
   }
 
   function updateUnreadBadge() {
@@ -1485,7 +1861,27 @@ document.addEventListener("DOMContentLoaded", () => {
     updateNotifCountsHeader();
 
     if (!cachedNotifications.length) {
-      notifList.innerHTML = '<div class="notif-empty">No recent uploads found for channels with notifications enabled.</div>';
+      notifList.innerHTML = '';
+      const emptyBox = document.createElement('div');
+      emptyBox.className = 'notif-empty';
+      const msg = document.createElement('span');
+      msg.textContent = "Nothing new in here right now!! Either everyone's quiet or you're all caught up :>";
+      emptyBox.appendChild(msg);
+
+      if (dismissedVideoIds.size > 0) {
+        const restoreBtn = document.createElement('button');
+        restoreBtn.type = 'button';
+        restoreBtn.className = 'small-btn';
+        restoreBtn.textContent = 'Bring back cleared uploads';
+        restoreBtn.addEventListener('click', () => {
+          dismissedVideoIds.clear();
+          saveJsonStorage(NOTIF_DISMISSED_KEY, []);
+          checkAllNotificationFeeds(false);
+        });
+        emptyBox.appendChild(restoreBtn);
+      }
+
+      notifList.appendChild(emptyBox);
       return;
     }
 
@@ -1535,6 +1931,20 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  function fireDesktopNotification(item, isTest = false) {
+    const titleText = isTest ? `[Test] ${item.channelName}` : item.channelName;
+    const n = new Notification(titleText, {
+      body: item.title,
+      icon: item.thumbnail || '/css/poke-icon-logo.svg?v=6',
+      tag: isTest ? `poke-test-${Date.now()}` : `poke-video-${item.videoId}`
+    });
+    n.onclick = () => {
+      window.focus();
+      window.open(item.url, '_blank', 'noopener,noreferrer');
+      n.close();
+    };
+  }
+
   function triggerDesktopNotifications(items, isInitialLoad) {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
     if (isInitialLoad && alertedVideoIds.size === 0) {
@@ -1543,16 +1953,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     const fresh = items.filter(i => !alertedVideoIds.has(i.videoId));
-    fresh.slice(0, 3).forEach(item => {
-      const n = new Notification(item.channelName, {
-        body: item.title,
-        icon: item.thumbnail || '/css/poke-icon-logo.svg?v=6'
-      });
-      n.onclick = () => {
-        window.open(item.url, '_blank', 'noopener,noreferrer');
-        n.close();
-      };
-    });
+    fresh.slice(0, 3).forEach(item => fireDesktopNotification(item, false));
     fresh.forEach(i => alertedVideoIds.add(i.videoId));
     saveJsonStorage(NOTIF_ALERTED_KEY, Array.from(alertedVideoIds).slice(-500));
   }
@@ -1581,7 +1982,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const dedup = new Map();
     collected.forEach(item => {
-      if (!dedup.has(item.videoId)) dedup.set(item.videoId, item);
+      if (!dismissedVideoIds.has(item.videoId) && !dedup.has(item.videoId)) {
+        dedup.set(item.videoId, item);
+      }
     });
 
     cachedNotifications = Array.from(dedup.values())
@@ -1594,6 +1997,185 @@ document.addEventListener("DOMContentLoaded", () => {
     renderNotifications();
     isCheckingFeeds = false;
   }
+
+  function startAutoCheckSchedule() {
+    if (checkIntervalTimer) clearInterval(checkIntervalTimer);
+    checkIntervalTimer = setInterval(() => checkAllNotificationFeeds(false), checkIntervalMinutes * 60 * 1000);
+    updateNotifCountsHeader();
+  }
+
+  const intervalPresetChips = document.querySelectorAll('#intervalPresetChips .m3-chip');
+  const customIntervalInput = document.getElementById('customIntervalInput');
+  const saveIntervalBtn = document.getElementById('saveIntervalBtn');
+  const intervalStatusBox = document.getElementById('intervalStatusBox');
+
+  function syncIntervalUI() {
+    customIntervalInput.value = String(checkIntervalMinutes);
+    intervalPresetChips.forEach(chip => {
+      chip.classList.toggle('active', parseInt(chip.dataset.mins, 10) === checkIntervalMinutes);
+    });
+  }
+
+  function applyNewInterval(mins) {
+    const parsed = parseInt(mins, 10);
+    if (!Number.isFinite(parsed) || parsed < 1 || parsed > 1440) {
+      intervalStatusBox.className = 'test-status-box visible error';
+      intervalStatusBox.textContent = 'Enter a valid interval between 1 and 1440 minutes.';
+      return;
+    }
+    checkIntervalMinutes = parsed;
+    try { localStorage.setItem(NOTIF_INTERVAL_KEY, String(parsed)); } catch {}
+    syncIntervalUI();
+    startAutoCheckSchedule();
+    intervalStatusBox.className = 'test-status-box visible success';
+    intervalStatusBox.textContent = `Auto-check interval updated to every...... ${parsed} minute${parsed === 1 ? '' : 's'}!`;
+  }
+
+  intervalPresetChips.forEach(chip => {
+    chip.addEventListener('click', () => applyNewInterval(chip.dataset.mins));
+  });
+
+  saveIntervalBtn.addEventListener('click', () => applyNewInterval(customIntervalInput.value));
+  customIntervalInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') applyNewInterval(customIntervalInput.value);
+  });
+  syncIntervalUI();
+
+  const testChannelSelect = document.getElementById('testChannelSelect');
+  const testDelayInput = document.getElementById('testDelayInput');
+  const delayPresetChips = document.querySelectorAll('#delayPresetChips .m3-chip');
+  const sendTestNotifBtn = document.getElementById('sendTestNotifBtn');
+  const cancelTestNotifBtn = document.getElementById('cancelTestNotifBtn');
+  const testNotifStatusBox = document.getElementById('testNotifStatusBox');
+
+  getSubscribedChannelsInfo().forEach(ch => {
+    const opt = document.createElement('option');
+    opt.value = ch.id;
+    opt.textContent = ch.name;
+    testChannelSelect.appendChild(opt);
+  });
+
+  function syncDelayChips() {
+    const current = parseInt(testDelayInput.value, 10);
+    delayPresetChips.forEach(chip => {
+      chip.classList.toggle('active', parseInt(chip.dataset.delay, 10) === current);
+    });
+  }
+
+  delayPresetChips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      testDelayInput.value = chip.dataset.delay;
+      syncDelayChips();
+    });
+  });
+  testDelayInput.addEventListener('input', syncDelayChips);
+
+  let activeTestCountdown = null;
+  let activeTestTimeout = null;
+
+  function clearPendingTestNotification() {
+    if (activeTestCountdown) {
+      clearInterval(activeTestCountdown);
+      activeTestCountdown = null;
+    }
+    if (activeTestTimeout) {
+      clearTimeout(activeTestTimeout);
+      activeTestTimeout = null;
+    }
+    cancelTestNotifBtn.style.display = 'none';
+    sendTestNotifBtn.disabled = false;
+  }
+
+  cancelTestNotifBtn.addEventListener('click', () => {
+    clearPendingTestNotification();
+    testNotifStatusBox.className = 'test-status-box visible';
+    testNotifStatusBox.textContent = 'Scheduled test notification canceled... :< sad';
+  });
+
+  async function resolveTestRssItem(selectedVal) {
+    if (selectedVal !== '__latest__') {
+      const entries = await fetchChannelFeed(selectedVal);
+      if (entries.length) return entries[0];
+      return null;
+    }
+    if (cachedNotifications.length) {
+      const liveEntries = await fetchChannelFeed(cachedNotifications[0].channelId);
+      return liveEntries[0] || cachedNotifications[0];
+    }
+    const allSubs = getSubscribedChannelsInfo();
+    const candidates = allSubs.filter(c => isChannelNotifEnabled(c.id));
+    const pool = candidates.length ? candidates : allSubs;
+    for (const ch of pool.slice(0, 5)) {
+      const entries = await fetchChannelFeed(ch.id);
+      if (entries.length) return entries[0];
+    }
+    return null;
+  }
+
+  sendTestNotifBtn.addEventListener('click', async () => {
+    clearPendingTestNotification();
+
+    if (!('Notification' in window)) {
+      testNotifStatusBox.className = 'test-status-box visible error';
+      testNotifStatusBox.textContent = 'Desktop notifications are not supported by this browser...somehow...';
+      return;
+    }
+
+    if (Notification.permission === 'default') {
+      testNotifStatusBox.className = 'test-status-box visible';
+      testNotifStatusBox.textContent = 'Requesting desktop notification permission...!';
+      await Notification.requestPermission();
+      updateDesktopAlertButton();
+    }
+
+    if (Notification.permission !== 'granted') {
+      testNotifStatusBox.className = 'test-status-box visible error';
+      testNotifStatusBox.textContent = 'Desktop notifications are blocked... why... pls allow notifications for this site in your browser settings and try againe!';
+      return;
+    }
+
+    const delaySec = Math.max(0, Math.min(120, parseInt(testDelayInput.value, 10) || 0));
+    testDelayInput.value = String(delaySec);
+    syncDelayChips();
+
+    sendTestNotifBtn.disabled = true;
+    testNotifStatusBox.className = 'test-status-box visible';
+    testNotifStatusBox.textContent = 'Fetching live RSS feed entry...';
+
+    const rssItem = await resolveTestRssItem(testChannelSelect.value);
+    if (!rssItem) {
+      sendTestNotifBtn.disabled = false;
+      testNotifStatusBox.className = 'test-status-box visible error';
+      testNotifStatusBox.textContent = 'Could not fetch any RSS video from the selected channel... Make sure you are subscribed to at least one channel with an active feed!';
+      return;
+    }
+
+    const deliverNow = () => {
+      clearPendingTestNotification();
+      fireDesktopNotification(rssItem, true);
+      testNotifStatusBox.className = 'test-status-box visible success';
+      testNotifStatusBox.textContent = `Donesie! delivered desktop notification for "${rssItem.title}" (${rssItem.channelName})!`;
+    };
+
+    if (delaySec === 0) {
+      deliverNow();
+      return;
+    }
+
+    let remaining = delaySec;
+    cancelTestNotifBtn.style.display = 'inline-flex';
+    testNotifStatusBox.className = 'test-status-box visible';
+    testNotifStatusBox.textContent = `Sending notification for "${rssItem.title}" (${rssItem.channelName}) in ${remaining}s...`;
+
+    activeTestCountdown = setInterval(() => {
+      remaining -= 1;
+      if (remaining > 0) {
+        testNotifStatusBox.textContent = `Sending notification for "${rssItem.title}" (${rssItem.channelName}) in ${remaining}s...`;
+      }
+    }, 1000);
+
+    activeTestTimeout = setTimeout(deliverNow, delaySec * 1000);
+  });
 
   notifBellBtn.addEventListener('click', () => {
     notifOverlay.classList.add('open');
@@ -1613,8 +2195,19 @@ document.addEventListener("DOMContentLoaded", () => {
     renderNotifications();
   });
 
+  clearInboxBtn.addEventListener('click', () => {
+    cachedNotifications.forEach(n => {
+      dismissedVideoIds.add(n.videoId);
+      readVideoIds.add(n.videoId);
+    });
+    saveJsonStorage(NOTIF_DISMISSED_KEY, Array.from(dismissedVideoIds).slice(-1000));
+    saveJsonStorage(NOTIF_READ_KEY, Array.from(readVideoIds).slice(-500));
+    cachedNotifications = [];
+    renderNotifications();
+  });
+
   checkAllNotificationFeeds(true);
-  setInterval(() => checkAllNotificationFeeds(false), CHECK_INTERVAL_MS);
+  startAutoCheckSchedule();
 
   const importYtBtn = document.getElementById('importYtBtn');
   const importOverlay = document.getElementById('importOverlay');
@@ -1758,7 +2351,7 @@ document.addEventListener("DOMContentLoaded", () => {
     importProgressFill.style.width = '0%';
     importPreviewText.textContent = newOnes.length
       ? `Found ${newOnes.length} new channel${newOnes.length === 1 ? '' : 's'} to import${skipped ? ` (${skipped} already subscribed)` : ''}.`
-      : `All ${channelsArr.length} detected channels are already in your subscriptions.`;
+      : `All ${channelsArr.length} detected channels are already in your subscriptions!`;
     startImportBtn.disabled = newOnes.length === 0;
   }
 
@@ -1940,18 +2533,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const confirmUnsubConfirm = document.getElementById('confirmUnsubConfirm');
   let currentUnsubUrl = "";
 
-  const unsubBtns = document.querySelectorAll('.js-unsub-btn');
-  unsubBtns.forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      const channelName = btn.getAttribute('data-name');
-      currentUnsubUrl = btn.getAttribute('href');
-
-      confirmUnsubText.textContent = `Unsubscribe from ${channelName}?`;
-      confirmUnsubModal.classList.add('open');
-    });
+  feedUnsubBtn.addEventListener('click', () => {
+    if (!selectedChannelUnsubUrl) return;
+    currentUnsubUrl = selectedChannelUnsubUrl;
+    confirmUnsubText.textContent = `Unsubscribe from ${selectedChannelName}?`;
+    confirmUnsubModal.classList.add('open');
   });
 
   confirmUnsubCancel.addEventListener('click', () => {
@@ -2028,7 +2614,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   channels.forEach(ch => {
     ch.addEventListener('click', (e) => {
-      if (e.target.closest('.js-unsub-btn') || e.target.closest('.js-channel-notif-btn')) return;
+      if (e.target.closest('.js-channel-notif-btn')) return;
 
       e.preventDefault();
 
@@ -2036,13 +2622,16 @@ document.addEventListener("DOMContentLoaded", () => {
       ch.classList.add('selected');
 
       const id = ch.dataset.id;
-      const realName = ch.querySelector('.channel-title').textContent;
+      const realName = ch.dataset.realName || ch.querySelector('.channel-title').textContent;
       selectedChannelId = id;
+      selectedChannelName = realName;
+      selectedChannelUnsubUrl = ch.dataset.unsubUrl || `/api/remove-channel-sub?ID=${encodeURIComponent(USER_ID)}&channelID=${encodeURIComponent(id)}`;
 
       toolbarTitle.textContent = realName;
       openChannelBtn.href = `/channel?id=${encodeURIComponent(id)}`;
       openChannelBtn.style.display = 'inline-flex';
-      closeViewer.style.display = 'inline-block';
+      feedUnsubBtn.style.display = 'inline-flex';
+      closeViewer.style.display = 'inline-flex';
       updateFeedNotifButtonUI();
 
       emptyState.style.display = 'none';
@@ -2060,8 +2649,11 @@ document.addEventListener("DOMContentLoaded", () => {
     emptyState.style.display = 'flex';
     toolbarTitle.textContent = 'Select a channel to view content';
     openChannelBtn.style.display = 'none';
+    feedUnsubBtn.style.display = 'none';
     closeViewer.style.display = 'none';
     selectedChannelId = null;
+    selectedChannelName = '';
+    selectedChannelUnsubUrl = '';
     updateFeedNotifButtonUI();
     channels.forEach(c => c.classList.remove('selected'));
   });
