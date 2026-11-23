@@ -1843,7 +1843,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function updateNotifCountsHeader() {
     const allSubs = getSubscribedChannelsInfo();
     const enabledCount = allSubs.filter(c => isChannelNotifEnabled(c.id)).length;
-    notifCountText.textContent = `${enabledCount}/${allSubs.length} channels • every ${checkIntervalMinutes}m`;
+    notifCountText.textContent = `${enabledCount}/${allSubs.length} channels (auto checks every ${checkIntervalMinutes}m)`;
   }
 
   function updateUnreadBadge() {
