@@ -69,7 +69,9 @@ window.SyncLevel = SyncLevel;
     { id: 'enable_auto_subtitle', key: 'alabaster_enable_auto_subtitle', legacy: 'AlabasterEnableAutoSubtitle' },
     { id: 'sub_enabled', key: 'alabaster_subtitles_enabled', legacy: null },
     { id: 'sub_lang', key: 'alabaster_subtitles_lang', legacy: null },
-    { id: 'sub_label', key: 'alabaster_subtitles_label', legacy: null }
+    { id: 'sub_label', key: 'alabaster_subtitles_label', legacy: null },
+    { id: 'browser_check_bypass_forever', key: 'alabaster_bypass_browser_check', legacy: null },
+    { id: 'browser_check_hit_count', key: 'alabaster_browser_check_count', legacy: null }
   ];
 
   function findStorageKeyEntry(idOrKey) {
@@ -8299,6 +8301,9 @@ window.SyncLevel = SyncLevel;
     player.addClass('vjs-paused');
   }
 
+  var UNSUPPORTED_BROWSER_TITLE = 'Poke player is not supported in this browser version';
+  var UNSUPPORTED_BROWSER_MESSAGE = 'this is to make sure our playback is smooth :3 so please update your browser :3';
+
   function getUnsupportedBrowserInfo() {
     var ua = (navigator && navigator.userAgent) ? String(navigator.userAgent) : '';
     if (!ua) return null;
@@ -8308,8 +8313,8 @@ window.SyncLevel = SyncLevel;
       var ffVer = parseInt(ffMatch[1], 10);
       if (!isNaN(ffVer) && ffVer < 113) {
         return {
-          title: 'Poke player is not supported in this browser version',
-          message: 'this is to make sure our playback is smooth :3 so please update your browser :3',
+          title: UNSUPPORTED_BROWSER_TITLE,
+          message: UNSUPPORTED_BROWSER_MESSAGE,
           buttonText: 'Update Firefox',
           downloadUrl: 'https://www.mozilla.org/firefox/new/'
         };
@@ -8324,31 +8329,31 @@ window.SyncLevel = SyncLevel;
     if (!isNaN(blinkVer) && blinkVer < 110) {
       if (/\bOPRGX\/|Opera\s*GX|\(Edition\s+GX/i.test(ua)) {
         return {
-          title: 'Poke player is not supported in this browser version',
-          message: 'this is to make sure our playback is smooth :3 so please update your browser :3',
+          title: UNSUPPORTED_BROWSER_TITLE,
+          message: UNSUPPORTED_BROWSER_MESSAGE,
           buttonText: 'Update Opera GX',
           downloadUrl: 'https://www.opera.com/gx'
         };
       }
       if (/\bOPR\/|\bOpera\//i.test(ua)) {
         return {
-          title: 'Poke player is not supported in this browser version',
-          message: 'this is to make sure our playback is smooth :3 so please update your browser :3',
+          title: UNSUPPORTED_BROWSER_TITLE,
+          message: UNSUPPORTED_BROWSER_MESSAGE,
           buttonText: 'Update Opera',
           downloadUrl: 'https://www.opera.com/download'
         };
       }
       if (chromiumMatch) {
         return {
-          title: 'Poke player is not supported in this browser version',
-          message: 'this is to make sure our playback is smooth :3 so please update your browser :3',
+          title: UNSUPPORTED_BROWSER_TITLE,
+          message: UNSUPPORTED_BROWSER_MESSAGE,
           buttonText: 'Update Chromium',
           downloadUrl: 'https://www.chromium.org/getting-involved/download-chromium/'
         };
       }
       return {
-        title: 'Poke player is not supported in this browser version',
-        message: 'this is to make sure our playback is smooth :3 so please update your browser :3',
+        title: UNSUPPORTED_BROWSER_TITLE,
+        message: UNSUPPORTED_BROWSER_MESSAGE,
         buttonText: 'Update Chrome',
         downloadUrl: 'https://www.google.com/chrome/'
       };
@@ -8357,7 +8362,7 @@ window.SyncLevel = SyncLevel;
     return null;
   }
 
-  function showUnsupportedBrowserOverlay(rootEl, browserInfo) {
+  function showUnsupportedBrowserOverlay(rootEl, browserInfo, hitCount, onBypass) {
     if (!rootEl || !browserInfo || rootEl.querySelector('.vjs-alabaster-error-overlay')) return;
     var errOverlay = document.createElement('div');
     errOverlay.className = 'vjs-alabaster-error-overlay';
@@ -8378,7 +8383,7 @@ window.SyncLevel = SyncLevel;
     errSubText.textContent = browserInfo.message;
 
     var btnWrap = document.createElement('div');
-    btnWrap.style.cssText = 'display:flex;flex-direction:row;align-items:center;margin-top:8px;gap:12px;';
+    btnWrap.style.cssText = 'display:flex;flex-direction:row;align-items:center;flex-wrap:wrap;margin-top:8px;gap:12px;';
 
     var updateBtn = document.createElement('a');
     updateBtn.href = browserInfo.downloadUrl;
@@ -8390,7 +8395,26 @@ window.SyncLevel = SyncLevel;
     updateBtn.addEventListener('mouseleave', function() { updateBtn.style.background = 'rgba(255,255,255,0.1)'; });
     updateBtn.addEventListener('click', function(evt) { evt.stopPropagation(); });
 
+    var isPermanentBypass = hitCount >= 3;
+    var bypassBtn = document.createElement('button');
+    bypassBtn.type = 'button';
+    bypassBtn.style.cssText = 'padding:8px 18px;border-radius:999px;border:1px solid rgba(255,255,255,0.18);background:transparent;color:#fff;font-size:13px;font-weight:600;cursor:pointer;transition:background 0.15s ease;';
+    bypassBtn.textContent = isPermanentBypass ? 'i really know what im doing, stop giving me this warning' : 'i know what im doing..';
+    bypassBtn.addEventListener('mouseenter', function() { bypassBtn.style.background = 'rgba(255,255,255,0.1)'; });
+    bypassBtn.addEventListener('mouseleave', function() { bypassBtn.style.background = 'transparent'; });
+    bypassBtn.addEventListener('click', function(evt) {
+      evt.preventDefault();
+      evt.stopPropagation();
+      if (errOverlay.parentNode) {
+        errOverlay.parentNode.removeChild(errOverlay);
+      }
+      if (typeof onBypass === 'function') {
+        onBypass(isPermanentBypass);
+      }
+    });
+
     btnWrap.appendChild(updateBtn);
+    btnWrap.appendChild(bypassBtn);
     leftCol.appendChild(errHeadline);
     leftCol.appendChild(errSubText);
     leftCol.appendChild(btnWrap);
@@ -8415,7 +8439,9 @@ window.SyncLevel = SyncLevel;
     layoutWrap.appendChild(leftCol);
     layoutWrap.appendChild(rightCol);
     errOverlay.appendChild(layoutWrap);
-    errOverlay.addEventListener('click', function(evt) { evt.stopPropagation(); });
+    ['click', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'touchstart', 'touchend', 'dblclick', 'contextmenu'].forEach(function(evName) {
+      errOverlay.addEventListener(evName, function(evt) { evt.stopPropagation(); }, false);
+    });
     rootEl.appendChild(errOverlay);
   }
 
@@ -8425,15 +8451,29 @@ window.SyncLevel = SyncLevel;
     if (!rawVideo || !window.videojs) return;
 
     var unsupportedBrowser = getUnsupportedBrowserInfo();
-    if (unsupportedBrowser) {
-      var rawDataSetup = rawVideo.getAttribute('data-setup') || '';
+    if (!unsupportedBrowser) {
+      setStorageValue('browser_check_hit_count', '0');
+    } else if (!window._alabasterBrowserBypassOnce && !isStorageFlagEnabled('browser_check_bypass_forever')) {
+      if (!window._alabasterBrowserHitCounted) {
+        window._alabasterBrowserHitCounted = true;
+        var prevHits = parseInt(getStorageValue('browser_check_hit_count'), 10) || 0;
+        setStorageValue('browser_check_hit_count', String(prevHits + 1));
+      }
+      var currentHits = parseInt(getStorageValue('browser_check_hit_count'), 10) || 1;
+
+      var origAutoplayAttr = rawVideo.getAttribute('autoplay');
+      var origDataSetup = rawVideo.getAttribute('data-setup');
+      var savedVMuted = Boolean(rawVideo.muted);
+      var savedAMuted = rawAudio ? Boolean(rawAudio.muted) : false;
+
       rawVideo.autoplay = false;
       rawVideo.removeAttribute('autoplay');
       rawVideo.controls = false;
       rawVideo.removeAttribute('controls');
-      if (rawDataSetup) {
+      rawVideo.muted = true;
+      if (origDataSetup) {
         try {
-          var parsedUnsupportedSetup = JSON.parse(rawDataSetup);
+          var parsedUnsupportedSetup = JSON.parse(origDataSetup);
           if (parsedUnsupportedSetup && typeof parsedUnsupportedSetup === 'object' && parsedUnsupportedSetup.autoplay) {
             parsedUnsupportedSetup.autoplay = false;
             rawVideo.setAttribute('data-setup', JSON.stringify(parsedUnsupportedSetup));
@@ -8443,15 +8483,28 @@ window.SyncLevel = SyncLevel;
       if (rawAudio) {
         rawAudio.autoplay = false;
         rawAudio.removeAttribute('autoplay');
-        try { rawAudio.pause(); } catch (_) {}
+        rawAudio.muted = true;
+        try { HTMLMediaElement.prototype.pause.call(rawAudio); } catch (_) {}
       }
-      try { rawVideo.pause(); } catch (_) {}
+      try { HTMLMediaElement.prototype.pause.call(rawVideo); } catch (_) {}
 
       SyncLevel.error = 'UNSUPPORTED_BROWSER';
       SyncLevel.status = 'unsupported-browser';
 
+      var unsupportedLocked = true;
+      var blockedPlayFn = function() {
+        try { HTMLMediaElement.prototype.pause.call(this); } catch (_) {}
+        return window.Promise ? Promise.resolve() : undefined;
+      };
+
+      rawVideo.play = blockedPlayFn;
+      if (rawAudio) {
+        rawAudio.play = blockedPlayFn;
+      }
+
       var unsupportedPlayer = window.videojs(rawVideo);
       if (unsupportedPlayer) {
+        var origUnsupportedPlayerPlay = unsupportedPlayer.play;
         if (typeof unsupportedPlayer.autoplay === 'function') {
           try { unsupportedPlayer.autoplay(false); } catch (_) {}
         }
@@ -8467,33 +8520,108 @@ window.SyncLevel = SyncLevel;
         unsupportedPlayer.play = function() {
           return window.Promise ? Promise.resolve() : undefined;
         };
+
         unsupportedPlayer.ready(function() {
           var rootEl = unsupportedPlayer.el && unsupportedPlayer.el();
           var vEl = (rootEl && rootEl.querySelector('video')) || rawVideo;
+
+          var enforceMediaLock = function(evt) {
+            if (!unsupportedLocked) return;
+            if (evt) {
+              if (typeof evt.preventDefault === 'function') evt.preventDefault();
+              if (typeof evt.stopPropagation === 'function') evt.stopPropagation();
+              if (typeof evt.stopImmediatePropagation === 'function') evt.stopImmediatePropagation();
+            }
+            if (vEl) {
+              vEl.muted = true;
+              try { HTMLMediaElement.prototype.pause.call(vEl); } catch (_) {}
+              try { if (vEl.currentTime > 0) vEl.currentTime = 0; } catch (_) {}
+            }
+            if (rawAudio) {
+              rawAudio.muted = true;
+              try { HTMLMediaElement.prototype.pause.call(rawAudio); } catch (_) {}
+              try { if (rawAudio.currentTime > 0) rawAudio.currentTime = 0; } catch (_) {}
+            }
+          };
+
+          var blockKeysWhileLocked = function(evt) {
+            if (!unsupportedLocked) return;
+            var k = (evt && evt.key) ? String(evt.key).toLowerCase() : '';
+            var c = (evt && evt.code) ? String(evt.code) : '';
+            if (k === ' ' || k === 'k' || k === 'j' || k === 'l' || k === 'mediaplaypause' || k === 'mediaplay' || c === 'Space' || c === 'KeyK' || c === 'ArrowLeft' || c === 'ArrowRight') {
+              evt.preventDefault();
+              evt.stopPropagation();
+              evt.stopImmediatePropagation();
+              enforceMediaLock();
+            }
+          };
+
+          var lockEvents = ['play', 'playing', 'timeupdate', 'seeking', 'ratechange'];
+          for (var i = 0; i < lockEvents.length; i++) {
+            if (vEl) vEl.addEventListener(lockEvents[i], enforceMediaLock, true);
+            if (rawAudio) rawAudio.addEventListener(lockEvents[i], enforceMediaLock, true);
+          }
+          window.addEventListener('keydown', blockKeysWhileLocked, true);
+          window.addEventListener('keyup', blockKeysWhileLocked, true);
+          window.addEventListener('keypress', blockKeysWhileLocked, true);
+
           if (vEl) {
             vEl.autoplay = false;
             vEl.removeAttribute('autoplay');
             vEl.controls = false;
-            try { HTMLMediaElement.prototype.pause.call(vEl); } catch (_) {}
-            vEl.play = function() {
-              return window.Promise ? Promise.resolve() : undefined;
-            };
-            vEl.addEventListener('play', function(evt) {
-              evt.stopImmediatePropagation();
-              try { HTMLMediaElement.prototype.pause.call(vEl); } catch (_) {}
-            }, true);
+            vEl.play = blockedPlayFn;
           }
           if (rawAudio) {
-            try { HTMLMediaElement.prototype.pause.call(rawAudio); } catch (_) {}
-            rawAudio.play = function() {
-              return window.Promise ? Promise.resolve() : undefined;
-            };
-            rawAudio.addEventListener('play', function(evt) {
-              evt.stopImmediatePropagation();
-              try { HTMLMediaElement.prototype.pause.call(rawAudio); } catch (_) {}
-            }, true);
+            rawAudio.play = blockedPlayFn;
           }
-          showUnsupportedBrowserOverlay(rootEl, unsupportedBrowser);
+          enforceMediaLock();
+
+          var lockGuardInterval = setInterval(enforceMediaLock, 40);
+
+          showUnsupportedBrowserOverlay(rootEl, unsupportedBrowser, currentHits, function(permanent) {
+            unsupportedLocked = false;
+            clearInterval(lockGuardInterval);
+            for (var j = 0; j < lockEvents.length; j++) {
+              if (vEl) vEl.removeEventListener(lockEvents[j], enforceMediaLock, true);
+              if (rawAudio) rawAudio.removeEventListener(lockEvents[j], enforceMediaLock, true);
+            }
+            window.removeEventListener('keydown', blockKeysWhileLocked, true);
+            window.removeEventListener('keyup', blockKeysWhileLocked, true);
+            window.removeEventListener('keypress', blockKeysWhileLocked, true);
+
+            if (permanent) {
+              setStorageValue('browser_check_bypass_forever', '1');
+              setStorageValue('browser_check_hit_count', '0');
+            }
+            window._alabasterBrowserBypassOnce = true;
+
+            if (vEl) {
+              try { delete vEl.play; } catch (_) {}
+              vEl.muted = savedVMuted;
+              if (origAutoplayAttr !== null) {
+                vEl.setAttribute('autoplay', origAutoplayAttr);
+              }
+              if (origDataSetup !== null) {
+                vEl.setAttribute('data-setup', origDataSetup);
+              }
+            }
+            if (rawAudio) {
+              try { delete rawAudio.play; } catch (_) {}
+              rawAudio.muted = savedAMuted;
+            }
+            if (origUnsupportedPlayerPlay) {
+              unsupportedPlayer.play = origUnsupportedPlayerPlay;
+            } else {
+              try { delete unsupportedPlayer.play; } catch (_) {}
+            }
+            if (typeof unsupportedPlayer.controls === 'function') {
+              try { unsupportedPlayer.controls(true); } catch (_) {}
+            }
+
+            SyncLevel.error = null;
+            SyncLevel.status = 'initializing';
+            initAlabasterPlayer();
+          });
         });
       }
       return;
