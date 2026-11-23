@@ -211,6 +211,8 @@ window.SyncLevel = SyncLevel;
     _hidePlayOverlay: null,
     _onPlayOverlayClick: null,
     _playOverlayPending: false,
+    _awaitingManualStart: false,
+    _unlockManualStart: null,
     _showLoopedIndicator: null,
     _hideLoopedIndicator: null,
     _setSyncedPlaybackRate: null,
@@ -268,6 +270,40 @@ window.SyncLevel = SyncLevel;
     if (typeof window.Alabaster._hidePlayOverlay === 'function') {
       window.Alabaster._hidePlayOverlay();
     }
+  }
+
+  function unlockManualStart() {
+    window.Alabaster._awaitingManualStart = false;
+    if (typeof window.Alabaster._unlockManualStart === 'function') {
+      window.Alabaster._unlockManualStart();
+    }
+  }
+
+  function isPlayPauseShortcutKey(evt) {
+    if (!evt || !evt.isTrusted) return false;
+    if (evt.ctrlKey || evt.altKey || evt.metaKey) return false;
+    var activeEl = document.activeElement;
+    var activeTag = activeEl && activeEl.tagName ? activeEl.tagName.toLowerCase() : '';
+    var targetTag = evt.target && evt.target.tagName ? evt.target.tagName.toLowerCase() : '';
+    if (activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select' || (activeEl && activeEl.isContentEditable) ||
+        targetTag === 'input' || targetTag === 'textarea' || targetTag === 'select' || (evt.target && evt.target.isContentEditable)) {
+      return false;
+    }
+    var raw = evt.key || '';
+    if (!raw) return false;
+    var normalized = raw.length === 1
+      ? (evt.shiftKey ? raw : raw.toLowerCase())
+      : raw.toLowerCase();
+    var playKey = 'k';
+    var playAltKey = ' ';
+    try {
+      var saved = JSON.parse(localStorage.getItem('AlabasterCustomKeybinds') || '{}');
+      if (saved && typeof saved === 'object') {
+        if (typeof saved.playPause === 'string' && saved.playPause.length > 0) playKey = saved.playPause;
+        if (typeof saved.playPauseAlt === 'string' && saved.playPauseAlt.length > 0) playAltKey = saved.playPauseAlt;
+      }
+    } catch (_) {}
+    return normalized === playKey || normalized === playAltKey || evt.code === 'Space' || raw === ' ';
   }
 
   var compat = {
@@ -2996,6 +3032,7 @@ window.SyncLevel = SyncLevel;
         autoplayOverlay.addEventListener('click', function(evt) {
           evt.preventDefault();
           evt.stopPropagation();
+          unlockManualStart();
           hidePlayOverlay();
           if (typeof window.Alabaster._onPlayOverlayClick === 'function') {
             window.Alabaster._onPlayOverlayClick();
@@ -7917,6 +7954,7 @@ window.SyncLevel = SyncLevel;
                 window.Alabaster._forceUserPause = true;
                 nodesNow.v.pause();
               } else {
+                unlockManualStart();
                 nodesNow.v.play();
               }
             }
@@ -7995,6 +8033,7 @@ window.SyncLevel = SyncLevel;
                 window.Alabaster._forceUserPause = true;
                 nodes.v.pause();
               } else {
+                unlockManualStart();
                 nodes.v.play();
               }
             }
@@ -8276,25 +8315,71 @@ window.SyncLevel = SyncLevel;
     );
     var wantsAutoplay = !explicitNoAutoplay;
 
+    window.Alabaster._awaitingManualStart = !wantsAutoplay;
+
     var isMuxedMedium = qua.toLowerCase() === 'medium';
     var hasSeparateAudio = Boolean(getValidAudioSrc(rawAudio));
 
     if ((!isMuxedMedium && hasSeparateAudio) || !wantsAutoplay) {
       rawVideo.autoplay = false;
       rawVideo.removeAttribute('autoplay');
+      if (dataSetup) {
+        try {
+          var parsedSetup = JSON.parse(dataSetup);
+          if (parsedSetup && typeof parsedSetup === 'object' && parsedSetup.autoplay) {
+            parsedSetup.autoplay = false;
+            rawVideo.setAttribute('data-setup', JSON.stringify(parsedSetup));
+          }
+        } catch (_) {}
+      }
       if (rawAudio) {
         rawAudio.autoplay = false;
         rawAudio.removeAttribute('autoplay');
       }
       try { rawVideo.pause(); } catch (_) {}
       try { if (rawAudio) rawAudio.pause(); } catch (_) {}
+      if (!wantsAutoplay) {
+        try {
+          if (rawVideo.currentTime > 0 && rawVideo.currentTime < 2) rawVideo.currentTime = 0;
+        } catch (_) {}
+        try {
+          if (rawAudio && rawAudio.currentTime > 0 && rawAudio.currentTime < 2) rawAudio.currentTime = 0;
+        } catch (_) {}
+      }
     }
 
     var player = window.videojs(rawVideo);
     if (!player) return;
 
+    if ((!isMuxedMedium && hasSeparateAudio) || !wantsAutoplay) {
+      if (typeof player.autoplay === 'function') {
+        try { player.autoplay(false); } catch (_) {}
+      }
+      if (player.options_) {
+        player.options_.autoplay = false;
+      }
+    }
+
+    var origPlayerPlay = typeof player.play === 'function' ? player.play.bind(player) : null;
+    if (origPlayerPlay && !player._alabasterPlayWrapped) {
+      player._alabasterPlayWrapped = true;
+      player.play = function() {
+        if (window.Alabaster._awaitingManualStart) {
+          showPlayOverlay();
+          markPlayerPausedUI(player);
+          return window.Promise ? Promise.resolve() : undefined;
+        }
+        return origPlayerPlay.apply(player, arguments);
+      };
+    }
+
+    if (!wantsAutoplay) {
+      showPlayOverlay();
+    }
+
     if (isMuxedMedium || !hasSeparateAudio) {
       SetAlabasterUI(player, function() {
+        unlockManualStart();
         SyncLevel.error = null;
         if (window.Alabaster._hideErrorUI) window.Alabaster._hideErrorUI();
         player.load();
@@ -8312,23 +8397,46 @@ window.SyncLevel = SyncLevel;
       player.ready(function() {
         var rootEl = player.el && player.el();
         var videoEl = (rootEl && rootEl.querySelector('video')) || rawVideo;
+        if (!videoEl || videoEl._alabasterMuxAttached) return;
+        videoEl._alabasterMuxAttached = true;
+
         setupVolumePersistence(player, videoEl, null);
         videoEl.preload = 'auto';
         if (videoEl.networkState === 0) {
           try { videoEl.load(); } catch (_) {}
         }
 
+        var nativeMuxPlay = HTMLMediaElement.prototype.play.bind(videoEl);
         var nativeMuxPause = HTMLMediaElement.prototype.pause.bind(videoEl);
+        var origMuxSetAttr = Element.prototype.setAttribute.bind(videoEl);
+
+        videoEl.setAttribute = function(name, value) {
+          if (String(name).toLowerCase() === 'autoplay' && window.Alabaster._awaitingManualStart) {
+            return;
+          }
+          return origMuxSetAttr(name, value);
+        };
+
+        videoEl.play = function() {
+          if (window.Alabaster._awaitingManualStart) {
+            showPlayOverlay();
+            markPlayerPausedUI(player);
+            return window.Promise ? Promise.resolve() : undefined;
+          }
+          return nativeMuxPlay();
+        };
 
         window.Alabaster._onPlayOverlayClick = function() {
+          unlockManualStart();
           hidePlayOverlay();
           try {
-            var pClick = videoEl.play();
+            var pClick = nativeMuxPlay();
             if (pClick && typeof pClick.then === 'function') {
               pClick.then(function() {
                 markPlayerStartedUI(player);
               }).catch(function(err) {
                 if (err && err.name === 'NotAllowedError') {
+                  window.Alabaster._awaitingManualStart = true;
                   try { nativeMuxPause(); } catch (_) {}
                   markPlayerPausedUI(player);
                   showPlayOverlay();
@@ -8338,12 +8446,56 @@ window.SyncLevel = SyncLevel;
           } catch (_) {}
         };
 
-        videoEl.addEventListener('play', function() {
+        var onMuxKeyUnlock = function(evt) {
+          if (window.Alabaster._gifMakerOpen) return;
+          if (!window.Alabaster._awaitingManualStart) return;
+          if (isPlayPauseShortcutKey(evt)) {
+            unlockManualStart();
+          }
+        };
+        document.addEventListener('keydown', onMuxKeyUnlock, true);
+
+        if (rootEl) {
+          ['pointerdown', 'touchstart', 'mousedown', 'click'].forEach(function(evName) {
+            rootEl.addEventListener(evName, function(evt) {
+              if (!evt || !evt.isTrusted || !window.Alabaster._awaitingManualStart) return;
+              var target = evt.target;
+              if (target && target.closest && target.closest('.vjs-play-control, .vjs-big-play-button')) {
+                unlockManualStart();
+              }
+            }, true);
+          });
+        }
+
+        videoEl.addEventListener('play', function(evt) {
+          if (window.Alabaster._awaitingManualStart) {
+            evt.stopImmediatePropagation();
+            videoEl.autoplay = false;
+            videoEl.removeAttribute('autoplay');
+            try { nativeMuxPause(); } catch (_) {}
+            try {
+              if (videoEl.currentTime > 0 && videoEl.currentTime < 2) videoEl.currentTime = 0;
+            } catch (_) {}
+            player.removeClass('vjs-has-started');
+            markPlayerPausedUI(player);
+            showPlayOverlay();
+            return;
+          }
           hidePlayOverlay();
-        }, false);
-        videoEl.addEventListener('playing', function() {
+        }, true);
+        videoEl.addEventListener('playing', function(evt) {
+          if (window.Alabaster._awaitingManualStart) {
+            evt.stopImmediatePropagation();
+            videoEl.autoplay = false;
+            videoEl.removeAttribute('autoplay');
+            try { nativeMuxPause(); } catch (_) {}
+            player.removeClass('vjs-has-started');
+            markPlayerPausedUI(player);
+            showPlayOverlay();
+            return;
+          }
           hidePlayOverlay();
-        }, false);
+        }, true);
         videoEl.addEventListener('timeupdate', function() {
           sampleVideoFrameStats(videoEl, !videoEl.paused && !videoEl.seeking && !document.hidden);
         }, false);
@@ -8355,15 +8507,25 @@ window.SyncLevel = SyncLevel;
         }, false);
         videoEl.addEventListener('click', function() {
           if (window.Alabaster._gifMakerOpen) return;
-          if (videoEl.paused) videoEl.play();
-          else videoEl.pause();
+          if (videoEl.paused) {
+            unlockManualStart();
+            videoEl.play();
+          } else {
+            videoEl.pause();
+          }
+        });
+
+        player.on('dispose', function() {
+          document.removeEventListener('keydown', onMuxKeyUnlock, true);
+          window.Alabaster._onPlayOverlayClick = null;
+          window.Alabaster._awaitingManualStart = false;
         });
 
         if (wantsAutoplay) {
           var pendingMuxedBgAutoplay = false;
           var tryMuxedAutoplay = function() {
             try {
-              var p = videoEl.play();
+              var p = nativeMuxPlay();
               if (p && typeof p.then === 'function') {
                 p.then(function() {
                   pendingMuxedBgAutoplay = false;
@@ -8375,7 +8537,9 @@ window.SyncLevel = SyncLevel;
                       pendingMuxedBgAutoplay = true;
                       return;
                     }
+                    window.Alabaster._awaitingManualStart = true;
                     try { nativeMuxPause(); } catch (_) {}
+                    player.removeClass('vjs-has-started');
                     markPlayerPausedUI(player);
                     player.trigger('pause');
                     showPlayOverlay();
@@ -8383,6 +8547,7 @@ window.SyncLevel = SyncLevel;
                 });
               }
             } catch (_) {
+              window.Alabaster._awaitingManualStart = true;
               markPlayerPausedUI(player);
               showPlayOverlay();
             }
@@ -8395,12 +8560,18 @@ window.SyncLevel = SyncLevel;
           }, false);
           tryMuxedAutoplay();
         } else {
+          window.Alabaster._awaitingManualStart = true;
           videoEl.autoplay = false;
           videoEl.removeAttribute('autoplay');
           if (typeof player.autoplay === 'function') {
             try { player.autoplay(false); } catch (_) {}
           }
+          if (player.options_) player.options_.autoplay = false;
           try { nativeMuxPause(); } catch (_) {}
+          try {
+            if (videoEl.currentTime > 0 && videoEl.currentTime < 2) videoEl.currentTime = 0;
+          } catch (_) {}
+          player.removeClass('vjs-has-started');
           markPlayerPausedUI(player);
           showPlayOverlay();
         }
@@ -8424,6 +8595,9 @@ window.SyncLevel = SyncLevel;
       audioEl.removeAttribute('autoplay');
       if (typeof player.autoplay === 'function') {
         try { player.autoplay(false); } catch (_) {}
+      }
+      if (player.options_) {
+        player.options_.autoplay = false;
       }
       videoEl.preload = 'auto';
       audioEl.preload = 'auto';
@@ -9075,10 +9249,14 @@ window.SyncLevel = SyncLevel;
       });
 
       videoEl.setAttribute = function(name, value) {
-        if (String(name).toLowerCase() === 'loop') {
+        var lowerName = String(name).toLowerCase();
+        if (lowerName === 'loop') {
           state.loopEnabled = true;
           if (nativeSetVLoop) nativeSetVLoop(false);
           if (nativeSetALoop) nativeSetALoop(false);
+          return;
+        }
+        if (lowerName === 'autoplay' && window.Alabaster._awaitingManualStart) {
           return;
         }
         return origSetAttr(name, value);
@@ -9198,6 +9376,7 @@ window.SyncLevel = SyncLevel;
 
       SetAlabasterUI(player, function() {
         var resumePos = state.savedMasterTime || 0;
+        unlockManualStart();
         clearAudioRetryState();
         state.errorCount = 0;
         state.audioRetryCount = 0;
@@ -9226,6 +9405,7 @@ window.SyncLevel = SyncLevel;
         state.hasUserGesture = true;
         state.initialAutoplayAttempt = false;
         state.pendingBackgroundAutoplay = false;
+        unlockManualStart();
         hidePlayOverlay();
         try {
           var ctx = window.audioCtx || window.audioContext || window._alabasterAudioCtx || (window.Alabaster && window.Alabaster.audioCtx);
@@ -9751,6 +9931,7 @@ window.SyncLevel = SyncLevel;
         }
         shield.deactivate();
         if (!state.hasStartedPlayback) {
+          window.Alabaster._awaitingManualStart = true;
           player.removeClass('vjs-has-started');
           showPlayOverlay();
         }
@@ -9914,6 +10095,7 @@ window.SyncLevel = SyncLevel;
                 evt.preventDefault();
                 evt.stopPropagation();
                 state.initialAutoplayAttempt = false;
+                unlockManualStart();
                 videoEl.play();
               }
               break;
@@ -9923,6 +10105,7 @@ window.SyncLevel = SyncLevel;
                 markExplicitUserPause(evt);
               } else {
                 state.initialAutoplayAttempt = false;
+                unlockManualStart();
               }
               break;
             }
@@ -9938,9 +10121,12 @@ window.SyncLevel = SyncLevel;
         if (activeTag === 'input' || activeTag === 'textarea' || (document.activeElement && document.activeElement.isContentEditable)) {
           return;
         }
-        if (evt.code === 'Space' || evt.key === ' ' || evt.key === 'k' || evt.key === 'K') {
+        if (isPlayPauseShortcutKey(evt)) {
           if (state.wantPlaying) {
             markExplicitUserPause(evt);
+          } else {
+            state.initialAutoplayAttempt = false;
+            unlockManualStart();
           }
         }
       }, true);
@@ -11021,6 +11207,11 @@ window.SyncLevel = SyncLevel;
 
       videoEl.play = function() {
         if (state.internalDepth > 0) return nativeVideoPlay();
+        if (window.Alabaster._awaitingManualStart) {
+          showPlayOverlay();
+          markPlayerPausedUI(player);
+          return window.Promise ? Promise.resolve() : undefined;
+        }
         if (window.Alabaster.testErrorActive) window.Alabaster.DisableTestUI();
         clearAudioFadeTimer();
         hidePlayOverlay();
@@ -11142,6 +11333,7 @@ window.SyncLevel = SyncLevel;
             videoEl.pause();
           } else {
             state.initialAutoplayAttempt = false;
+            unlockManualStart();
             videoEl.play();
           }
           return;
@@ -11166,6 +11358,7 @@ window.SyncLevel = SyncLevel;
           videoEl.pause();
         } else {
           state.initialAutoplayAttempt = false;
+          unlockManualStart();
           videoEl.play();
         }
       }, true);
@@ -11223,9 +11416,17 @@ window.SyncLevel = SyncLevel;
       }, true);
 
       listen(videoEl, 'play', function(evt) {
-        if (!state.wantPlaying) {
+        if (!state.wantPlaying || window.Alabaster._awaitingManualStart) {
           evt.stopImmediatePropagation();
+          videoEl.autoplay = false;
+          origRemoveAttr('autoplay');
           pauseVideoOnly();
+          pauseAudioOnly(false);
+          if (window.Alabaster._awaitingManualStart && !state.hasStartedPlayback) {
+            player.removeClass('vjs-has-started');
+            markPlayerPausedUI(player);
+            showPlayOverlay();
+          }
           return;
         }
         if (isVideoBypassed() || isEffectivelyHidden()) {
@@ -11240,7 +11441,7 @@ window.SyncLevel = SyncLevel;
       }, true);
 
       listen(audioEl, 'play', function(evt) {
-        if (!state.wantPlaying) {
+        if (!state.wantPlaying || window.Alabaster._awaitingManualStart) {
           evt.stopImmediatePropagation();
           pauseAudioOnly(false);
           return;
@@ -11626,7 +11827,7 @@ window.SyncLevel = SyncLevel;
         state.alignedForAnchor = null;
         state.alignAttemptCount = 0;
 
-        if (state.pendingBackgroundAutoplay) {
+        if (state.pendingBackgroundAutoplay && !window.Alabaster._awaitingManualStart) {
           state.pendingBackgroundAutoplay = false;
           state.wantPlaying = true;
           state.startupShieldUntil = compat.now() + config.startupProtectionMs;
@@ -11818,6 +12019,14 @@ window.SyncLevel = SyncLevel;
           if (state.buffering) setBufferSpinner(false);
           if (!vPaused) pauseVideoOnly();
           if (!aPaused && !state.audioFadingOut) pauseAudioOnly(false);
+          if (window.Alabaster._awaitingManualStart && !state.hasStartedPlayback) {
+            if (!window.Alabaster._playOverlayPending) {
+              showPlayOverlay();
+            }
+            if (player.hasClass && player.hasClass('vjs-has-started')) {
+              player.removeClass('vjs-has-started');
+            }
+          }
           if (player.hasClass && (player.hasClass('vjs-playing') || player.hasClass('vjs-waiting') || player.hasClass('vjs-seeking'))) {
             markPlayerPausedUI(player);
           }
@@ -12199,6 +12408,7 @@ window.SyncLevel = SyncLevel;
           play: function() {
             state.hasUserGesture = true;
             state.initialAutoplayAttempt = false;
+            unlockManualStart();
             videoEl.play();
           },
           pause: function() {
@@ -12258,6 +12468,7 @@ window.SyncLevel = SyncLevel;
         window.Alabaster.active = false;
         window.Alabaster._setSyncedPlaybackRate = null;
         window.Alabaster._onPlayOverlayClick = null;
+        window.Alabaster._awaitingManualStart = false;
       });
     });
   }
