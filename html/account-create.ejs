@@ -1,3 +1,22 @@
+<!--
+
+    This Source Code Form is subject to the terms of the GNU General Public License:
+
+    Copyright (C) 2021-2026 Poke (https://codeberg.org/ashleyirispuppy/poke)
+    
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program. If not, see https://www.gnu.org/licenses/.
+--->
 <% 
 var alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_'.split('')
   , length = 64
@@ -6,13 +25,6 @@ var alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_
   , i = 0
   , prev;
 
-/**
- * Return a string representing the specified number.
- *
- * @param {Number} num The number to convert.
- * @returns {String} The string representation of the number.
- * @api public
- */
 function encode(num) {
   var encoded = '';
 
@@ -24,13 +36,6 @@ function encode(num) {
   return encoded;
 }
 
-/**
- * Return the integer value specified by the given string.
- *
- * @param {String} str The string to convert.
- * @returns {Number} The integer value represented by the string.
- * @api public
- */
 function decode(str) {
   var decoded = 0;
 
@@ -41,19 +46,12 @@ function decode(str) {
   return decoded;
 }
 
-/**
- * Yeast: A tiny growing id generator.
- *
- * @returns {String} A unique id.
- * @api public
- */
 function yeast() {
   var now = encode(+new Date());
 
   if (now !== prev) return seed = 0, prev = now;
   return now +'.'+ encode(seed++);
-}                          %>
-  
+} %>
 <!doctype html>
 <html lang="en">
 <head>
@@ -65,7 +63,6 @@ function yeast() {
   <meta name="theme-color" content="#ffabcc" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://poketube.fun; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; base-uri 'self'; form-action 'self'">
   <style>
-    /* Custom Fonts */
     @font-face {
       src: url("/css/OpenDyslexic3-Regular.ttf");
       font-family: "OpenDyslexic3";
@@ -76,54 +73,82 @@ function yeast() {
 
     @font-face {
       font-family: "PokeTube Flex";
-      src: url("/static/robotoflex.ttf");
+      src: url("/static/robotoflex.ttf?v=29");
       font-style: normal;
       font-stretch: 1% 800%;
       font-display: swap;
     }
 
-    :root { 
-      --bg: #0b0b0b; 
-      --surface: #141414; 
-      --surface-border: #2a2a2a;
-      --fg: #f3f3f3; 
-      --muted: #a1a1a1; 
-      --accent: #ffabcc; 
-      --accent-hover: #ff8cb6;
-      --danger: #ff6b6b;
+    :root {
+      --md-sys-color-primary: #ffabcc;
+      --md-sys-color-on-primary: #5b1134;
+      --md-sys-color-primary-container: #78294b;
+      --md-sys-color-on-primary-container: #ffd8e6;
+      --md-sys-color-secondary: #e3bdc8;
+      --md-sys-color-on-secondary: #432932;
+      --md-sys-color-secondary-container: #5a3f48;
+      --md-sys-color-on-secondary-container: #ffd9e3;
+      --md-sys-color-tertiary: #f1bc97;
+      --md-sys-color-tertiary-container: #5c3d28;
+      --md-sys-color-on-tertiary-container: #ffdcc4;
+      --md-sys-color-surface: #171214;
+      --md-sys-color-surface-dim: #120d0f;
+      --md-sys-color-surface-container-lowest: #110d0f;
+      --md-sys-color-surface-container-low: #1f1a1c;
+      --md-sys-color-surface-container: #241e20;
+      --md-sys-color-surface-container-high: #2f282b;
+      --md-sys-color-surface-container-highest: #3a3336;
+      --md-sys-color-on-surface: #ece0e3;
+      --md-sys-color-on-surface-variant: #d5c2c8;
+      --md-sys-color-outline: #9f8c92;
+      --md-sys-color-outline-variant: #514348;
+      --md-sys-color-error: #ffb4ab;
+      --md-sys-color-error-container: #93000a;
+      --md-sys-color-on-error-container: #ffdad6;
+      --md-sys-motion: cubic-bezier(0.2, 0, 0, 1);
     }
 
     * {
       box-sizing: border-box;
     }
 
-    html, body { 
-      margin: 0; padding: 0; height: 100%; 
-      background: var(--bg); color: var(--fg); 
-      font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif; 
-      overflow: hidden; /* Prevent global scrolling */
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: var(--md-sys-color-surface);
+      color: var(--md-sys-color-on-surface);
+      font-family: "PokeTube Flex", "Roboto", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      line-height: 1.45;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
     }
 
-    /* Titles */
+    button, input {
+      font-family: inherit;
+    }
+
     h1, h2 {
       font-family: "PokeTube Flex", sans-serif;
       font-stretch: ultra-expanded;
       font-weight: 1000;
-      margin: 0px;
+      margin: 0;
     }
 
-    /* Split UI Layout */
+    ::-webkit-scrollbar { width: 8px; height: 8px; background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #625358; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--md-sys-color-outline); }
+
     .split-layout {
       display: flex;
       height: 100vh;
       width: 100vw;
     }
 
-    /* Left Side Branding */
     .branding-pane {
-      flex: 1.2;
-      /* Brighter pink gradient */
-      background: linear-gradient(135deg, #a83258 0%, #ffabbc 80%);
+      flex: 1.15;
+      background: linear-gradient(135deg, #8c274a 0%, #ffabcc 85%);
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -131,11 +156,10 @@ function yeast() {
       padding: 40px;
       text-align: center;
       position: relative;
-      border-right: 1px solid rgba(255, 171, 188, 0.2);
+      border-right: 1px solid rgba(255, 171, 204, 0.2);
       overflow: hidden;
     }
 
-    /* Background Text Container */
     .hype-container {
       position: absolute;
       top: 50%;
@@ -149,7 +173,7 @@ function yeast() {
       z-index: 0;
       pointer-events: none;
       width: 150%;
-      height: 90%; /* Leaves breathing room at top and bottom */
+      height: 90%;
     }
 
     .hype-text {
@@ -159,40 +183,34 @@ function yeast() {
       color: #fff;
       white-space: nowrap;
       letter-spacing: 3px;
-      text-shadow: 0 4px 15px rgba(0,0,0,0.2);
+      text-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
     }
-    
+
     .hype-text:nth-child(odd) { opacity: 0.12; margin-left: -5%; }
     .hype-text:nth-child(even) { opacity: 0.08; margin-left: 5%; }
-    
+
     .branding-wrapper {
       position: relative;
       display: flex;
       flex-direction: column;
       align-items: center;
-      width: max-content; /* Hugs the text to anchor mascot properly */
+      width: max-content;
       z-index: 1;
     }
-    
-    
+
     .mascot {
       position: absolute;
-      top: -168px;  
-      right: 17px;  
+      top: -168px;
+      right: 17px;
       max-height: 364px;
       object-fit: contain;
       z-index: 2;
       pointer-events: none;
     }
 
-
     .branding-content {
       position: relative;
       z-index: 1;
-      background: transparent;
-      padding: 0; 
-      border: none;
-      box-shadow: none;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -201,113 +219,371 @@ function yeast() {
     .branding-content img.logo {
       max-width: 170px;
       margin-bottom: 12px;
-      filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3));
+      filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
     }
 
     .branding-content h1 {
-      font-size: clamp(40px, 7vw, 95px); /* Balanced Size */
+      font-size: clamp(40px, 7vw, 95px);
       line-height: 1.05;
       letter-spacing: -0.02em;
       color: #fff;
       margin-bottom: 0;
-      text-shadow: 0 8px 25px rgba(0,0,0,0.4);
+      text-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
     }
 
-    /* Right Side Form */
     .form-pane {
       flex: 1;
       display: flex;
       justify-content: center;
       align-items: center;
-      background: var(--bg);
-      padding: 20px;
+      background: var(--md-sys-color-surface);
+      padding: 24px;
       overflow-y: auto;
     }
 
-    .card { 
-      width: 100%; 
-      max-width: 400px; 
-      background: transparent;
-      border: none;
-      box-shadow: none;
-      padding: 0;
+    .card {
+      width: 100%;
+      max-width: 440px;
+      background: var(--md-sys-color-surface-container-low);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 28px;
+      padding: 28px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
+      margin: auto 0;
     }
 
-    .card h2 { font-size: 26px; margin-bottom: 6px; color: var(--fg); }
-    p { margin: 6px 0 0; color: var(--muted); }
-    
-    .row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
-    .spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #333; border-top-color: var(--accent); animation: spin 0.8s linear infinite; }
+    .card h2 {
+      font-size: 26px;
+      margin-bottom: 4px;
+      color: var(--md-sys-color-on-surface);
+    }
+
+    p {
+      margin: 6px 0 0;
+      color: var(--md-sys-color-on-surface-variant);
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 2.5px solid var(--md-sys-color-surface-container-highest);
+      border-top-color: var(--md-sys-color-primary);
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    .small { font-size: 12px; color: var(--muted); line-height: 1.4; }
+    .small {
+      font-size: 12px;
+      color: var(--md-sys-color-on-surface-variant);
+      line-height: 1.45;
+    }
+
     .hidden { display: none !important; }
-    a { color: var(--accent); text-decoration: none; font-weight: 500; }
-    a:hover { color: var(--accent-hover); text-decoration: underline; }
 
-    /* Forms Inputs */
-    .form-group { margin-top: 16px; }
-    .form-group label { display: block; font-size: 13px; margin-bottom: 6px; color: var(--fg); font-weight: 500; }
-    input[type="text"] { width: 100%; padding: 12px; border: 1px solid #333; border-radius: 8px; background: #0a0a0a; color: var(--fg); font-family: inherit; font-size: 14px; transition: border-color 0.2s; }
-    input[type="text"]:focus { outline: none; border-color: var(--accent); }
-    input[type="text"]::placeholder { color: #555; }
+    a {
+      color: var(--md-sys-color-primary);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
 
-    /* Buttons */
-    button.btn { width: 100%; padding: 12px; margin-top: 20px; border: none; border-radius: 8px; background: var(--accent); color: #000; font-weight: bold; cursor: pointer; font-family: inherit; font-size: 14px; transition: background 0.2s; }
-    button.btn:hover { background: var(--accent-hover); }
+    .form-group {
+      margin-top: 16px;
+    }
 
-    button.btn-text { background: transparent; color: var(--muted); border: none; font-size: 13px; cursor: pointer; padding: 6px; width: auto; margin: 12px auto 0; display: block; text-decoration: underline; transition: color 0.2s; }
-    button.btn-text:hover { color: var(--fg); }
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 8px;
+      color: var(--md-sys-color-on-surface-variant);
+      font-weight: 500;
+      line-height: 1.45;
+    }
 
-    /* Captcha UI */
-    .captcha-container { background: #0a0a0a; border: 1px solid #333; border-radius: 8px; margin-bottom: 8px; display: flex; flex-direction: column; position: relative; }
-    #captchaCanvas { width: 100%; height: 70px; display: block; border-top-left-radius: 8px; border-top-right-radius: 8px; }
-    .captcha-toolbar { display: flex; justify-content: flex-end; gap: 6px; padding: 6px 10px; background: #111; border-top: 1px solid #222; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; }
-    .btn-tool { background: none; border: none; color: var(--accent); font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 4px 6px; border-radius: 4px; transition: background 0.2s; font-weight: 500; }
-    .btn-tool:hover { background: rgba(255, 171, 204, 0.15); }
+    .form-group label strong {
+      color: var(--md-sys-color-on-surface);
+    }
 
-    /* A11y Popup Menu */
+    input[type="text"] {
+      width: 100%;
+      padding: 13px 16px;
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 14px;
+      background: var(--md-sys-color-surface-container-high);
+      color: var(--md-sys-color-on-surface);
+      font-size: 14px;
+      transition: border-color 0.2s var(--md-sys-motion), background 0.2s var(--md-sys-motion), box-shadow 0.2s var(--md-sys-motion);
+    }
+    input[type="text"]:focus {
+      outline: none;
+      border-color: var(--md-sys-color-primary);
+      background: var(--md-sys-color-surface-container-highest);
+      box-shadow: 0 0 0 2px rgba(255, 171, 204, 0.2);
+    }
+    input[type="text"]::placeholder {
+      color: var(--md-sys-color-outline);
+    }
+
+    button.btn {
+      width: 100%;
+      padding: 13px 20px;
+      margin-top: 18px;
+      border: none;
+      border-radius: 9999px;
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 14px;
+      letter-spacing: 0.2px;
+      transition: filter 0.2s var(--md-sys-motion), transform 0.15s var(--md-sys-motion);
+    }
+    button.btn:hover {
+      filter: brightness(1.07);
+    }
+    button.btn:active {
+      transform: scale(0.99);
+    }
+
+    button.btn-tonal {
+      width: 100%;
+      padding: 11px 18px;
+      margin-top: 10px;
+      border: none;
+      border-radius: 9999px;
+      background: var(--md-sys-color-secondary-container);
+      color: var(--md-sys-color-on-secondary-container);
+      font-weight: 600;
+      font-size: 13.5px;
+      cursor: pointer;
+      transition: filter 0.2s var(--md-sys-motion);
+    }
+    button.btn-tonal:hover {
+      filter: brightness(1.12);
+    }
+
+    .captcha-container {
+      background: var(--md-sys-color-surface-container);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 18px;
+      margin-bottom: 10px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: visible;
+    }
+
+    #captchaCanvas {
+      width: 100%;
+      height: 86px;
+      display: block;
+      border-top-left-radius: 17px;
+      border-top-right-radius: 17px;
+    }
+
+    .captcha-toolbar {
+      display: flex;
+      justify-content: flex-end;
+      gap: 6px;
+      padding: 8px 10px;
+      background: var(--md-sys-color-surface-container-high);
+      border-top: 1px solid var(--md-sys-color-outline-variant);
+      border-bottom-left-radius: 17px;
+      border-bottom-right-radius: 17px;
+      flex-wrap: wrap;
+    }
+
+    .btn-tool {
+      background: var(--md-sys-color-surface-container);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      color: var(--md-sys-color-primary);
+      font-size: 12px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 11px;
+      border-radius: 9999px;
+      transition: background 0.2s var(--md-sys-motion), border-color 0.2s var(--md-sys-motion);
+      font-weight: 500;
+    }
+    .btn-tool:hover {
+      background: var(--md-sys-color-primary-container);
+      color: var(--md-sys-color-on-primary-container);
+      border-color: transparent;
+    }
+
     .a11y-menu {
       position: absolute;
-      bottom: 100%;
+      bottom: calc(100% + 8px);
       right: 0;
-      margin-bottom: 6px;
-      background: #1a1a1a;
-      border: 1px solid #333;
-      border-radius: 8px;
-      padding: 12px;
-      width: 220px;
-      box-shadow: 0 8px 20px rgba(0,0,0,0.8);
-      z-index: 10;
+      background: var(--md-sys-color-surface-container-highest);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 18px;
+      padding: 14px 16px;
+      width: 230px;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55);
+      z-index: 20;
       display: flex;
       flex-direction: column;
       gap: 12px;
     }
     .a11y-menu.hidden { display: none; }
-    .a11y-menu label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--fg); margin: 0 !important; }
-    .a11y-menu input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+    .a11y-menu label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--md-sys-color-on-surface);
+      margin: 0 !important;
+    }
+    .a11y-menu input[type="range"] {
+      width: 100%;
+      accent-color: var(--md-sys-color-primary);
+      cursor: pointer;
+    }
 
-    /* Alerts Disclaimers */
-    .error-msg { color: var(--danger); font-size: 13px; margin-top: 12px; display: none; padding: 10px; background: rgba(255, 107, 107, 0.08); border-radius: 8px; border: 1px solid rgba(255, 107, 107, 0.2); line-height: 1.4; }
-    .disclaimer { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--surface-border); text-align: left; color: #777; font-size: 11px; line-height: 1.5; }
+    .error-msg {
+      color: var(--md-sys-color-on-error-container);
+      font-size: 13px;
+      margin-top: 12px;
+      display: none;
+      padding: 11px 14px;
+      background: rgba(147, 0, 10, 0.55);
+      border-radius: 14px;
+      border: 1px solid rgba(255, 180, 171, 0.3);
+      line-height: 1.45;
+    }
 
-    /* Modal */
-    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; padding: 20px; }
-    .modal-overlay.active { opacity: 1; pointer-events: all; }
-    .modal-content { background: var(--surface); border: 1px solid var(--surface-border); border-radius: 16px; width: 100%; max-width: 400px; padding: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.8); transform: translateY(10px); transition: transform 0.2s ease; }
-    .modal-overlay.active .modal-content { transform: translateY(0); }
-    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-    .close-modal { background: none; border: none; color: var(--muted); font-size: 24px; cursor: pointer; padding: 0; width: 32px; height: 32px; border-radius: 50%; }
-    .close-modal:hover { color: var(--fg); background: #222; }
+    .fediverse-banner {
+      margin-top: 18px;
+      padding: 12px 14px;
+      border-radius: 18px;
+      background: var(--md-sys-color-surface-container-high);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: border-color 0.2s var(--md-sys-motion), background 0.2s var(--md-sys-motion);
+    }
+    .fediverse-banner:hover {
+      border-color: var(--md-sys-color-primary);
+      background: var(--md-sys-color-surface-container-highest);
+    }
 
-    /* Responsive */
+    .fediverse-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 12px;
+      background: var(--md-sys-color-primary-container);
+      color: var(--md-sys-color-on-primary-container);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .fediverse-text {
+      font-size: 12.5px;
+      color: var(--md-sys-color-on-surface-variant);
+      line-height: 1.4;
+    }
+
+    .fediverse-text a {
+      color: var(--md-sys-color-primary);
+      font-weight: 600;
+    }
+
+    .disclaimer {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid var(--md-sys-color-outline-variant);
+      text-align: left;
+      color: var(--md-sys-color-outline);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 7, 8, 0.74);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s var(--md-sys-motion);
+      padding: 20px;
+    }
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .modal-content {
+      background: var(--md-sys-color-surface-container-high);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 28px;
+      width: 100%;
+      max-width: 400px;
+      padding: 26px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65);
+      transform: translateY(10px) scale(0.97);
+      transition: transform 0.2s var(--md-sys-motion);
+    }
+    .modal-overlay.active .modal-content {
+      transform: translateY(0) scale(1);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .close-modal {
+      background: var(--md-sys-color-surface-container-highest);
+      border: none;
+      color: var(--md-sys-color-on-surface-variant);
+      font-size: 20px;
+      cursor: pointer;
+      padding: 0;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s var(--md-sys-motion), color 0.15s var(--md-sys-motion);
+    }
+    .close-modal:hover {
+      color: var(--md-sys-color-on-surface);
+      background: var(--md-sys-color-secondary-container);
+    }
+
     @media (max-width: 800px) {
       html, body { overflow-y: auto; }
       .split-layout { flex-direction: column; height: auto; min-height: 100vh; }
-      .branding-pane { padding: 40px 20px 20px; border-right: none; border-bottom: 1px solid #2b111e; }
+      .branding-pane { padding: 40px 20px 24px; border-right: none; border-bottom: 1px solid rgba(255, 171, 204, 0.2); }
       .branding-wrapper { margin-top: 80px; }
       .mascot { max-height: 160px; top: -30px; right: -40px; }
-      .form-pane { padding: 30px 20px; align-items: flex-start; }
+      .form-pane { padding: 24px 16px; align-items: flex-start; }
+      .card { padding: 22px; border-radius: 24px; }
     }
   </style>
 </head>
@@ -325,7 +601,6 @@ function yeast() {
   </noscript>
 
   <div class="split-layout" id="app">
-    
     <div class="branding-pane">
       <div class="hype-container">
         <div class="hype-text">LIBERATE THE WEB</div>
@@ -338,7 +613,7 @@ function yeast() {
         <div class="hype-text">LIBERATE THE WEB</div>
       </div>
       <div class="branding-wrapper">
-        <img src="/static/poke-mascot-new.webp?v=3" alt= "Nudge Mascot" class="mascot" />
+        <img src="/static/poke-mascot-new.webp?v=3" alt="Nudge Mascot" class="mascot" />
         <div class="branding-content">
           <img src="/css/logo-poke.svg?v=5" alt="Poke Logo" class="logo" />
           <h1>Welcome<br>to Poke</h1>
@@ -347,21 +622,17 @@ function yeast() {
     </div>
 
     <div class="form-pane">
-      <div class="card">
-        
         <div id="loading-state">
           <h2>Preparing account…</h2>
-          <div class="row"><div class="spinner" aria-hidden="true"></div><p>Checking authorization securely.</p></div>
-        </div>
+          <div class="row"><div class="spinner" aria-hidden="true"></div><p style="margin:0;">Checking authorization securely.</p></div>
 
         <div class="hidden" id="setup-state">
           <h2>Sign up</h2>
           <p>Do the steps below to jump in to the world of poke!</p>
-          
+
           <div class="form-group">
             <label for="captchaInput">Enter the text shown below:</label>
             <div class="captcha-container">
-              
               <div class="a11y-menu hidden" id="a11yMenu">
                 <label>Speech Speed
                   <input type="range" id="ttsSpeed" min="0.3" max="1.5" step="0.1" value="0.8" aria-label="Adjust TTS Speed">
@@ -371,7 +642,7 @@ function yeast() {
                 </label>
               </div>
 
-              <canvas id="captchaCanvas" width="300" height="70" role="img" aria-label="Captcha image containing distorted letters and numbers."></canvas>
+              <canvas id="captchaCanvas" width="360" height="92" role="img" aria-label="Captcha image containing distorted letters and numbers."></canvas>
               <div class="captcha-toolbar">
                 <button type="button" class="btn-tool" onclick="toggleA11yMenu()" aria-label="Accessibility Settings">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
@@ -387,29 +658,40 @@ function yeast() {
                 </button>
               </div>
             </div>
-            
+
             <input type="text" id="captchaInput" autocomplete="off" placeholder="Type captcha here (case-sensitive)..." required aria-required="true" />
           </div>
 
           <div class="form-group">
             <label for="agreeInput">
-              Click and read our <a href="https://poketube.fun/policies/" target="_blank" id="policies-link" onclick="markPoliciesRead()">Policies</a>.<br>Then type <strong>AGREE</strong> to accept, or <strong>DISAGREE</strong> to yk...disagree for some reason:
+              Click and read our <a href="https://poketube.fun/policies/" target="_blank" rel="noopener noreferrer" id="policies-link" onclick="markPoliciesRead()">Policies</a>.<br>Then type <strong>AGREE</strong> to accept, or <strong>DISAGREE</strong> to yk...disagree for some reason:
             </label>
             <input type="text" id="agreeInput" autocomplete="off" placeholder="AGREE or DISAGREE" required aria-required="true" />
           </div>
 
           <div class="error-msg" id="error-msg" role="alert"></div>
 
-            <button class="btn" onclick="verifyAndProceed()">Jump in!</button>
-          
-          <button class="btn-text" onclick="openLoginModal()">I already have one....</button>
+          <button type="button" class="btn" onclick="verifyAndProceed()">Jump in!</button>
+          <button type="button" class="btn-tonal" onclick="openLoginModal()">I already have one....</button>
+
+          <a class="fediverse-banner" href="https://social.poketube.fun" target="_blank" rel="noopener noreferrer">
+            <div class="fediverse-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="2" y1="12" x2="22" y2="12"></line>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+              </svg>
+            </div>
+            <div class="fediverse-text">
+              Wanna join Poke on the fediverse? Check out <span><strong>social.poketube.fun</strong></span>!
+            </div>
+          </a>
 
           <div class="disclaimer">
             You cannot use Poke for spamming or abuse. Poke accounts are for this single instance only and are not federated.<br><br>
             Poke is provided as is without warranty. <a href="/policies/privacy#warranty" target="_blank">Read Warranty Policy</a>.
           </div>
         </div>
-
       </div>
     </div>
   </div>
@@ -418,29 +700,29 @@ function yeast() {
     <div class="modal-content">
       <div class="modal-header">
         <h2 id="modalTitle">Log In</h2>
-        <button class="close-modal" onclick="closeLoginModal()" aria-label="Close modal">&times;</button>
+        <button type="button" class="close-modal" onclick="closeLoginModal()" aria-label="Close modal">&times;</button>
       </div>
       <p style="margin-top: 0; margin-bottom: 16px;">Enter your existing User ID to access ur account</p>
       <div class="form-group" style="margin-top: 0;">
         <label for="existingUserId">User ID:</label>
         <input type="text" id="existingUserId" placeholder="e.g. A1b2C3d4..." autocomplete="off" />
       </div>
-      <button class="btn" onclick="loginExistingUser()">Log In</button>
+      <button type="button" class="btn" onclick="loginExistingUser()">Log In</button>
     </div>
   </div>
 
   <script>
     var apiurl = "https://poketube.fun/api";
     <% var userid = yeast() %>
-    
+
     var currentUserId = localStorage.getItem("UserID");
     var currentCaptchaText = "";
     var policiesRead = false;
 
-    var rparamWords = ["poke", "liberate", "web", "mascot", "fun", "video", "stream", "chat", "friends", "hype", "pink", "dark", "light"];
+    var rparamWords = ["poke", "liberate", "web", "fun", "video", "stream", "chat", "friends", "hype", "pink", "dark", "light"];
 
     function generateBase64Rparam() {
-      var sentenceLength = Math.floor(Math.random() * 4) + 3; /* Sentence will be 3 to 6 words long */
+      var sentenceLength = Math.floor(Math.random() * 4) + 3;
       var selectedWords = [];
       for (var i = 0; i < sentenceLength; i++) {
         var randomIndex = Math.floor(Math.random() * rparamWords.length);
@@ -458,7 +740,6 @@ function yeast() {
       document.getElementById('a11yMenu').classList.toggle('hidden');
     }
 
-    /* Close A11y menu if clicked outside */
     document.addEventListener('click', function(e) {
       const menu = document.getElementById('a11yMenu');
       if (!menu.classList.contains('hidden') && !e.target.closest('.captcha-container')) {
@@ -469,25 +750,22 @@ function yeast() {
     function playCaptchaAudio() {
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
-        
+
         var speed = parseFloat(document.getElementById('ttsSpeed').value);
         var pitch = parseFloat(document.getElementById('ttsPitch').value);
-        
-        /* Convert characters to words, prefixing uppercase with Capital */
+
         var ttsChars = currentCaptchaText.split('').map(function(char) {
           if (char >= 'A' && char <= 'Z') {
             return 'Capital ' + char;
           }
           return char;
         });
-        
-        /* Join with a comma to force a small pause between characters in TTS */
+
         var spacedText = ttsChars.join(', ');
-        
         var msg = new SpeechSynthesisUtterance("The captcha characters are: " + spacedText);
-        msg.rate = speed; 
+        msg.rate = speed;
         msg.pitch = pitch;
-        
+
         window.speechSynthesis.speak(msg);
       } else {
         alert("Text-to-speech is not supported in your browser.");
@@ -497,45 +775,133 @@ function yeast() {
     function generateCaptcha() {
       const canvas = document.getElementById('captchaCanvas');
       const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const w = canvas.width;
+      const h = canvas.height;
 
-      ctx.fillStyle = '#111';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const bgGrad = ctx.createLinearGradient(0, 0, w, h);
+      bgGrad.addColorStop(0, '#181115');
+      bgGrad.addColorStop(0.5, '#251920');
+      bgGrad.addColorStop(1, '#151013');
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, w, h);
 
-      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-      currentCaptchaText = '';
-      for (let i = 0; i < 6; i++) {
-        currentCaptchaText += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-
-      for (let i = 0; i < 15; i++) {
-        ctx.strokeStyle = `rgba(255,255,255,0.4)`; /* Fixed syntax */
-        ctx.lineWidth = Math.random() * 2;
+      ctx.strokeStyle = 'rgba(255, 171, 204, 0.08)';
+      ctx.lineWidth = 1;
+      for (let gx = 0; gx < w; gx += 18) {
         ctx.beginPath();
-        ctx.moveTo(Math.random() * canvas.width, Math.random() * canvas.height);
-        ctx.lineTo(Math.random() * canvas.width, Math.random() * canvas.height);
+        ctx.moveTo(gx + (Math.random() * 6 - 3), 0);
+        ctx.lineTo(gx + (Math.random() * 6 - 3), h);
+        ctx.stroke();
+      }
+      for (let gy = 0; gy < h; gy += 18) {
+        ctx.beginPath();
+        ctx.moveTo(0, gy + (Math.random() * 6 - 3));
+        ctx.lineTo(w, gy + (Math.random() * 6 - 3));
         ctx.stroke();
       }
 
-      for (let i = 0; i < currentCaptchaText.length; i++) {
-        ctx.save();
-        const fontSize = 35 + Math.random() * 10;
-        ctx.font = `bold ${fontSize}px "OpenDyslexic3", sans-serif`;
-        
-        ctx.translate(25 + (i * 45), 45 + (Math.random() * 10 - 5)); 
-        ctx.rotate((Math.random() - 0.5) * 0.6);
-        ctx.fillStyle = `hsl(${Math.random() * 360}, 70%, 75%)`; /* Fixed syntax */
-        ctx.fillText(currentCaptchaText[i], 0, 0);
-        ctx.restore();
+      for (let i = 0; i < 10; i++) {
+        ctx.strokeStyle = `hsla(${320 + Math.random() * 60}, 65%, 75%, ${0.12 + Math.random() * 0.14})`;
+        ctx.lineWidth = 1 + Math.random() * 1.5;
+        ctx.beginPath();
+        ctx.arc(Math.random() * w, Math.random() * h, 6 + Math.random() * 16, 0, Math.PI * 2);
+        ctx.stroke();
       }
 
-      for (let i = 0; i < 80; i++) {
-        ctx.fillStyle = `rgba(255,255,255,0.2)`; /* Fixed syntax */
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+      const len = 7;
+      currentCaptchaText = '';
+      for (let i = 0; i < len; i++) {
+        currentCaptchaText += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+
+      const off = document.createElement('canvas');
+      off.width = w;
+      off.height = h;
+      const octx = off.getContext('2d');
+
+      const fonts = ['"OpenDyslexic3"', '"PokeTube Flex"', 'monospace'];
+      const slotWidth = (w - 44) / len;
+      const charColors = [];
+
+      for (let i = 0; i < len; i++) {
+        octx.save();
+        const fontSize = 32 + Math.random() * 10;
+        const chosenFont = fonts[Math.floor(Math.random() * fonts.length)];
+        octx.font = `700 ${fontSize}px ${chosenFont}, sans-serif`;
+        octx.textBaseline = 'middle';
+        octx.textAlign = 'center';
+
+        const cx = 24 + i * slotWidth + slotWidth * 0.5 + (Math.random() * 8 - 4);
+        const cy = h / 2 + (Math.random() * 16 - 8);
+        octx.translate(cx, cy);
+
+        const angle = (Math.random() - 0.5) * 0.72;
+        octx.rotate(angle);
+        const skewX = (Math.random() - 0.5) * 0.42;
+        const skewY = (Math.random() - 0.5) * 0.24;
+        const scaleX = 0.88 + Math.random() * 0.24;
+        const scaleY = 0.88 + Math.random() * 0.24;
+        octx.transform(scaleX, skewY, skewX, scaleY, 0, 0);
+
+        const hue = (310 + Math.random() * 140) % 360;
+        const color = `hsl(${hue}, 78%, 79%)`;
+        charColors.push(color);
+
+        octx.lineWidth = 2.5;
+        octx.strokeStyle = 'rgba(20, 12, 16, 0.85)';
+        octx.strokeText(currentCaptchaText[i], 0, 0);
+        octx.fillStyle = color;
+        octx.fillText(currentCaptchaText[i], 0, 0);
+        octx.restore();
+      }
+
+      const waveAmpY = 3.2 + Math.random() * 2.5;
+      const waveFreqY = 0.032 + Math.random() * 0.02;
+      const wavePhaseY = Math.random() * Math.PI * 2;
+      const waveAmpX = 1.6 + Math.random() * 1.6;
+      const waveFreqX = 0.05 + Math.random() * 0.03;
+      const wavePhaseX = Math.random() * Math.PI * 2;
+
+      for (let x = 0; x < w; x += 2) {
+        const dy = Math.sin(x * waveFreqY + wavePhaseY) * waveAmpY;
+        ctx.drawImage(off, x, 0, 2, h, x, dy, 2, h);
+      }
+
+      const off2 = document.createElement('canvas');
+      off2.width = w;
+      off2.height = h;
+      off2.getContext('2d').drawImage(canvas, 0, 0);
+
+      for (let y = 0; y < h; y += 2) {
+        const dx = Math.sin(y * waveFreqX + wavePhaseX) * waveAmpX;
+        ctx.drawImage(off2, 0, y, w, 2, dx, y, w, 2);
+      }
+
+      for (let i = 0; i < 4; i++) {
+        ctx.strokeStyle = charColors[i % charColors.length] || 'rgba(255, 171, 204, 0.65)';
+        ctx.globalAlpha = 0.45 + Math.random() * 0.25;
+        ctx.lineWidth = 1.4 + Math.random() * 1.4;
         ctx.beginPath();
-        ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, Math.random() * 2, 0, 2 * Math.PI);
+        ctx.moveTo(Math.random() * 35, Math.random() * h);
+        ctx.bezierCurveTo(
+          w * 0.3 + (Math.random() * 40 - 20), Math.random() * h,
+          w * 0.7 + (Math.random() * 40 - 20), Math.random() * h,
+          w - Math.random() * 35, Math.random() * h
+        );
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+
+      for (let i = 0; i < 160; i++) {
+        ctx.fillStyle = Math.random() > 0.5
+          ? `rgba(255, 171, 204, ${0.15 + Math.random() * 0.25})`
+          : `rgba(255, 255, 255, ${0.12 + Math.random() * 0.2})`;
+        ctx.beginPath();
+        ctx.arc(Math.random() * w, Math.random() * h, 0.7 + Math.random() * 1.4, 0, Math.PI * 2);
         ctx.fill();
       }
-      
+
       document.getElementById('captchaInput').value = '';
       document.getElementById('captchaInput').focus();
     }
@@ -545,7 +911,7 @@ function yeast() {
     } else {
       document.getElementById('loading-state').classList.add('hidden');
       document.getElementById('setup-state').classList.remove('hidden');
-      
+
       document.fonts.ready.then(function() {
         generateCaptcha();
       });
@@ -557,7 +923,7 @@ function yeast() {
       var errorMsg = document.getElementById('error-msg');
 
       if (agreeInput === 'DISAGREE') {
-        window.location.href = '/';
+        window.location.href = '/watch?v=dQw4w9WgXcQ';
         return;
       }
 
@@ -565,18 +931,18 @@ function yeast() {
         showError('You must click and read the Policies link before continuing.');
       } else if (captchaInput !== currentCaptchaText) {
         showError('Incorrect captcha. Please try again.');
-        generateCaptcha(); 
+        generateCaptcha();
       } else if (agreeInput !== 'AGREE') {
         showError('You must type AGREE to accept the policies, or DISAGREE to exit.');
       } else {
         errorMsg.style.display = 'none';
-        
+
         localStorage.setItem('UserID', `<%- userid %>`);
         <% db.set(`user.${userid}`, userid) %>
         location.href = "/my-acc?ID=" + `<%- userid %>` + "&rparam=" + generateBase64Rparam();
       }
     }
-    
+
     function showError(message) {
       var errorMsg = document.getElementById('error-msg');
       errorMsg.innerHTML = message;
@@ -584,20 +950,36 @@ function yeast() {
     }
 
     const modal = document.getElementById('loginModal');
-    
+
     function openLoginModal() {
       modal.classList.add('active');
       document.getElementById('existingUserId').focus();
     }
-    
+
     function closeLoginModal() {
       modal.classList.remove('active');
     }
-    
+
     modal.addEventListener('click', function(e) {
       if (e.target === modal) {
         closeLoginModal();
       }
+    });
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && modal.classList.contains('active')) {
+        closeLoginModal();
+      }
+    });
+
+    document.getElementById('captchaInput').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') verifyAndProceed();
+    });
+    document.getElementById('agreeInput').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') verifyAndProceed();
+    });
+    document.getElementById('existingUserId').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') loginExistingUser();
     });
 
     function loginExistingUser() {
@@ -606,7 +988,7 @@ function yeast() {
         alert("Please enter a valid User ID.");
         return;
       }
-      
+
       localStorage.setItem("UserID", inputId);
       location.href = "/my-acc?ID=" + inputId + "&rparam=" + generateBase64Rparam();
     }
