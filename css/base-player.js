@@ -8626,7 +8626,7 @@ window.SyncLevel = SyncLevel;
         var buildRedirectWatchUrl = function(item) {
           var nextId = extractNextVideoId(item);
           if (nextId) {
-            return '/watch?id=' + encodeURIComponent(nextId);
+            return '/watch?v=' + encodeURIComponent(nextId);
           }
           return (item && item.href) ? item.href : '';
         };
