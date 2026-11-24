@@ -2227,22 +2227,6 @@ function _applyRenderMetrics(arr) {
                  <script src="/static/custom-css.js?v=45485"> </script>
                               <script>    
                     // @license magnet:?xt=urn:btih:1f739d935676111cfff4b4693e3816e664797050&dn=gpl-3.0.txt GPL-3.0-or-later            
-                 if ('serviceWorker' in navigator) {
-                     navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                         for (let registration of registrations) {
-                             registration.unregister();
-                         }
-                     });
-                     if ('caches' in window) {
-                         caches.keys().then(function(cacheNames) {
-                             cacheNames.forEach(function(cacheName) {
-                                 caches.delete(cacheName);
-                             });
-                         });
-                     }
-
-                 }
-
                  document.addEventListener("DOMContentLoaded", function() {
                      if (localStorage.getItem('liar.')) {
                          var thumbnails = document.querySelectorAll('.thumbnail');
