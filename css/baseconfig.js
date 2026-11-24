@@ -90,9 +90,9 @@ function initSettingsApp() {
 
   const mainSections = [
     {
-      id: 'sec-fullscreen',
-      title: 'Fullscreen & Interface',
-      description: 'Customise how the video player overlays, descriptions, shortcuts, and playback gestures behave',
+      id: 'sec-appearance',
+      title: 'Appearance & Layout',
+      description: 'Control player framing, lighting effects, and fullscreen overlay details',
       items: [
         {
           key: 'ambientState',
@@ -108,23 +108,11 @@ function initSettingsApp() {
           icon: '<svg viewBox="0 0 24 24"><path d="M19 6H5c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 10H5V8h14v8z"/></svg>'
         },
         {
-          key: 'alabaster_disable_autoplay',
-          title: 'Disable autoplaying video',
-          subtitle: 'Prevent videos from playing automatically on load and show a play button over the player instead!',
-          icon: '<svg viewBox="0 0 24 24"><path d="M8 5.19V5l11 7-2.55 1.63L8 5.19zM20 19.73l-5.11-5.11L8 7.73 4.27 4 3 5.27l5 5V19l5.33-3.4 5.4 5.4L20 19.73z"/></svg>'
-        },
-        {
           key: 'dont_use_alabaster_style_description_opening_fs',
           title: 'Use Description button instead of title',
           subtitle: 'YouTube doesn\'t have a description button, so for parity reasons this defaults to clicking the title. Enable this to use a dedicated Description button instead.',
           icon: '<svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>',
           parity: true
-        },
-        {
-          key: 'close_full_screen_discover',
-          title: 'Remove Discover in fullscreen',
-          subtitle: 'Hide the recommended videos drawer when watching in fullscreen mode',
-          icon: '<svg viewBox="0 0 24 24"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46A11.804 11.804 0 0 0 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78 3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>'
         },
         {
           key: 'show_dislikes_on_full_screen_desc',
@@ -139,6 +127,44 @@ function initSettingsApp() {
           subtitle: 'Omit the verified checkmark next to channel names in the fullscreen description popup',
           icon: '<svg viewBox="0 0 24 24"><path d="M23 12l-2.44-2.79.34-3.69-3.61-.82-1.89-3.2L12 2.96 8.6 1.5 6.71 4.69 3.1 5.5l.34 3.7L1 12l2.44 2.79-.34 3.7 3.61.82L8.6 22.5l3.4-1.47 3.4 1.46 1.89-3.19 3.61-.82-.34-3.69L23 12zm-12.91 4.72-3.8-3.81 1.48-1.48 2.32 2.33 5.85-5.87 1.48 1.48-7.33 7.35z"/></svg>',
           parity: true
+        }
+      ]
+    },
+    {
+      id: 'sec-playback',
+      title: 'Playback & Queue',
+      description: 'Configure startup playback and what happens when a video finishes',
+      items: [
+        {
+          key: 'alabaster_disable_autoplay',
+          title: 'Disable autoplaying video',
+          subtitle: 'Prevent videos from playing automatically on load and show a play button over the player instead!',
+          icon: '<svg viewBox="0 0 24 24"><path d="M8 5.19V5l11 7-2.55 1.63L8 5.19zM20 19.73l-5.11-5.11L8 7.73 4.27 4 3 5.27l5 5V19l5.33-3.4 5.4 5.4L20 19.73z"/></svg>'
+        },
+        {
+          key: 'play_next_video_v2',
+          title: 'Autoplay next video',
+          subtitle: 'Automatically play the next recommended video when the current video finishes',
+          icon: '<svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>'
+        }
+      ]
+    },
+    {
+      id: 'sec-recommendations',
+      title: 'Recommendations & Endscreen',
+      description: 'Manage suggested video drawers, endscreen cards, and recommendation hotkeys',
+      items: [
+        {
+          key: 'close_full_screen_discover',
+          title: 'Remove Discover in fullscreen',
+          subtitle: 'Hide the recommended videos drawer when watching in fullscreen mode',
+          icon: '<svg viewBox="0 0 24 24"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46A11.804 11.804 0 0 0 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78 3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>'
+        },
+        {
+          key: 'alabaster_disable_endscreen_recommendations',
+          title: 'Disable endscreen recommendations',
+          subtitle: 'Hide recommended video cards and overlays shown at the end of a video',
+          icon: '<svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 14H7v-2h10v2zm0-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>'
         },
         {
           key: 'alabaster_dont_use_youtube_style_recommendations_shortcut',
@@ -150,7 +176,14 @@ function initSettingsApp() {
             value: true,
             reason: 'Unavailable while "Remove Discover in fullscreen" is enabled'
           }
-        },
+        }
+      ]
+    },
+    {
+      id: 'sec-controls',
+      title: 'Gestures & Input Behavior',
+      description: 'Adjust built-in speed holds and number-key seeking behaviors',
+      items: [
         {
           key: 'alabaster_disable_attention_span_fixer',
           title: 'Disable hold-to-2x playback speed',
@@ -192,7 +225,7 @@ function initSettingsApp() {
           key: 'alabaster_subtitle_default_use_system_language',
           title: 'Default to device display language for subtitles',
           subtitle: 'Try to select your device\'s display language first instead of the first available subtitle track, falling back to the first track if unavailable',
-          icon: '<svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zm6.93 6h-2.95c-.32-1.25-.78-2.45-1.38-3.56 1.84.63 3.37 1.91 4.33 3.56zM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82c.43-1.43 1.08-2.76 1.91-3.96zM4.26 14C4.1 13.36 4 12.69 4 12s.1-1.36.26-2h3.38c-.08.66-.14 1.32-.14 2 0 .68.06 1.34.14 2H4.26zm.82 2h2.95c.32 1.25.78 2.45 1.38 3.56-1.84-.63-3.37-1.91-4.33-3.56zm2.95-8H5.08c.96-1.66 2.49-2.93 4.33-3.56C8.81 5.55 8.35 6.75 8.03 8zM12 19.96c-.83-1.2-1.48-2.53-1.91-3.96h3.82c-.43 1.43-1.08 2.76-1.91 3.96zM14.34 14H9.66c-.09-.66-.16-1.32-.16-2 0-.68.07-1.35.16-2h4.68c.09.65.16 1.32.16 2 0 .68-.07 1.34-.16 2zm.25 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95c-.96 1.65-2.49 2.93-4.33 3.56zM16.36 14c.08-.66.14-1.32.14-2 0-.68-.06-1.34-.14-2h3.38c.16.64.26 1.31.26 2s-.1 1.36-.26 2h-3.38z"/></svg>',
+          icon: '<svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zm6.93 6h-2.95c-.32-1.25-.78-2.45-1.38-3.56 1.84.63 3.37 1.91 4.33 3.56zM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82c.43-1.43 1.08-2.76 1.91-3.96zM4.26 14C4.1 13.36 4 12.69 4 12s.1-1.36.26-2h3.38c-.08.66-.14 1.32-.14 2 0 .68.06 1.34.14 2H4.26zm.82 2h2.95c.32 1.25.78 2.45 1.38 3.56-1.84-.63-3.37-1.91-4.33-3.56zm2.95-8H5.08c.96-1.66 2.49-2.93 4.33-3.56C8.81 5.55 8.35 6.75 8.03 8zM12 19.96c-.83-1.2-1.48-2.53-1.91-3.96h3.82c-.43 1.43-1.08 2.76-1.91 3.96zm14.34 14H9.66c-.09-.66-.16-1.32-.16-2 0-.68.07-1.35.16-2h4.68c.09.65.16 1.32.16 2 0 .68-.07 1.34-.16 2zm.25 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95c-.96 1.65-2.49 2.93-4.33 3.56zM16.36 14c.08-.66.14-1.32.14-2 0-.68-.06-1.34-.14-2h3.38c.16.64.26 1.31.26 2s-.1 1.36-.26 2h-3.38z"/></svg>',
           disabledWhen: {
             key: 'dont_use_youtube_style_captions',
             value: true,
