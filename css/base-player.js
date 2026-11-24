@@ -23,7 +23,7 @@
  * ///////////////////////////////////////////////////////////////////////////
  * "It takes a lot of hard work to make something simple." ~ Steve Jobs 
  */
- const SyncLevel = {
+const SyncLevel = {
   driftSeconds: 0,
   driftMs: 0,
   synced: true,
@@ -1553,7 +1553,7 @@ window.SyncLevel = SyncLevel;
       '  justify-content: center !important;',
       '  padding: 20px 28px 72px 28px !important;',
       '  box-sizing: border-box !important;',
-      '  background: rgba(0, 0, 0, 0.86) !important;',
+      '  background: #000000 !important;',
       '  pointer-events: none !important;',
       '  user-select: none !important;',
       '  opacity: 0;',
@@ -2383,7 +2383,7 @@ window.SyncLevel = SyncLevel;
       '  padding: 0 !important;',
       '  background: transparent !important;',
       '  color: #ffffff !important;',
-      '  font-family: Roboto, "poketube flex", Arial, Helvetica, sans-serif !important;',
+      '  font-family: poketube flex, "poketube flex", Arial, Helvetica, sans-serif !important;',
       '  font-weight: 400 !important;',
       '  pointer-events: none !important;',
       '  user-select: none !important;',
@@ -2400,7 +2400,7 @@ window.SyncLevel = SyncLevel;
       '  align-items: center !important;',
       '  background: rgba(28, 28, 28, 0.8) !important;',
       '  color: #ffffff !important;',
-      '  font-family: Roboto, "poketube flex", Arial, Helvetica, sans-serif !important;',
+      '  font-family: poketube flex, "poketube flex", Arial, Helvetica, sans-serif !important;',
       '  font-size: 16px !important;',
       '  font-weight: 400 !important;',
       '  line-height: 1.25 !important;',
@@ -4406,16 +4406,6 @@ window.SyncLevel = SyncLevel;
             orderVal = computedOrder;
           }
         }
-        if (fsCommentsBtn) {
-          if (anchorEl && anchorEl.parentNode) {
-            if (fsCommentsBtn.nextSibling !== anchorEl && fsCommentsBtn.nextSibling !== fsSettingsBtn) {
-              anchorEl.parentNode.insertBefore(fsCommentsBtn, anchorEl);
-            }
-            if (orderVal) fsCommentsBtn.style.order = orderVal;
-          } else if (fsCommentsBtn.parentNode !== barElNode) {
-            barElNode.appendChild(fsCommentsBtn);
-          }
-        }
         if (fsSettingsBtn) {
           if (anchorEl && anchorEl.parentNode) {
             if (fsSettingsBtn.nextSibling !== anchorEl) {
@@ -4424,6 +4414,17 @@ window.SyncLevel = SyncLevel;
             if (orderVal) fsSettingsBtn.style.order = orderVal;
           } else if (fsSettingsBtn.parentNode !== barElNode) {
             barElNode.appendChild(fsSettingsBtn);
+          }
+        }
+        var commentsAnchor = (fsSettingsBtn && fsSettingsBtn.parentNode === barElNode) ? fsSettingsBtn : anchorEl;
+        if (fsCommentsBtn) {
+          if (commentsAnchor && commentsAnchor.parentNode) {
+            if (fsCommentsBtn.nextSibling !== commentsAnchor) {
+              commentsAnchor.parentNode.insertBefore(fsCommentsBtn, commentsAnchor);
+            }
+            if (orderVal) fsCommentsBtn.style.order = orderVal;
+          } else if (fsCommentsBtn.parentNode !== barElNode) {
+            barElNode.appendChild(fsCommentsBtn);
           }
         }
         if (fsAutoplayBtn) {
@@ -4440,9 +4441,12 @@ window.SyncLevel = SyncLevel;
               }
             }
           }
+          var fallbackLeftAnchor = (fsCommentsBtn && fsCommentsBtn.parentNode === barElNode)
+            ? fsCommentsBtn
+            : ((fsSettingsBtn && fsSettingsBtn.parentNode === barElNode) ? fsSettingsBtn : anchorEl);
           var autoAnchor = (hasCaptionsAvail && ccBtnEl && ccBtnEl.parentNode === barElNode)
             ? ccBtnEl
-            : ((fsSettingsBtn && fsSettingsBtn.parentNode === barElNode) ? fsSettingsBtn : anchorEl);
+            : fallbackLeftAnchor;
           if (autoAnchor && autoAnchor.parentNode) {
             if (fsAutoplayBtn.nextSibling !== autoAnchor) {
               autoAnchor.parentNode.insertBefore(fsAutoplayBtn, autoAnchor);
@@ -7948,9 +7952,9 @@ window.SyncLevel = SyncLevel;
           fsAutoplayBtn = document.createElement('button');
           fsAutoplayBtn.type = 'button';
           fsAutoplayBtn.className = 'vjs-alabaster-autoplay-btn vjs-control vjs-button';
-          fsAutoplayBtn.setAttribute('title', 'autoplay on off');
-          fsAutoplayBtn.title = 'autoplay on off';
-          fsAutoplayBtn.setAttribute('aria-label', 'autoplay on off');
+          fsAutoplayBtn.setAttribute('title', 'autoplay off');
+          fsAutoplayBtn.title = 'autoplay off';
+          fsAutoplayBtn.setAttribute('aria-label', 'autoplay off');
           fsAutoplayBtn.setAttribute('role', 'switch');
           fsAutoplayBtn.setAttribute('aria-checked', 'false');
           fsAutoplayBtn.innerHTML = [
@@ -7970,10 +7974,12 @@ window.SyncLevel = SyncLevel;
           syncAutoplayNextBtnUI = function() {
             if (!fsAutoplayBtn) return;
             var isAutoNextOn = isStorageFlagEnabled('play_next_video');
+            var titleText = isAutoNextOn ? 'autoplay on' : 'autoplay off';
             fsAutoplayBtn.classList.toggle('is-on', isAutoNextOn);
             fsAutoplayBtn.setAttribute('aria-checked', isAutoNextOn ? 'true' : 'false');
-            fsAutoplayBtn.setAttribute('title', 'autoplay on off');
-            fsAutoplayBtn.title = 'autoplay on off';
+            fsAutoplayBtn.setAttribute('title', titleText);
+            fsAutoplayBtn.title = titleText;
+            fsAutoplayBtn.setAttribute('aria-label', titleText);
           };
 
           ['mousedown', 'pointerdown', 'touchstart', 'touchend'].forEach(function(evName) {
@@ -7985,10 +7991,14 @@ window.SyncLevel = SyncLevel;
           fsAutoplayBtn.addEventListener('click', function(evt) {
             evt.preventDefault();
             evt.stopPropagation();
+            if (typeof clearUpNextTimer === 'function') {
+              clearUpNextTimer();
+            }
             var nextOn = !isStorageFlagEnabled('play_next_video');
             setStorageValue('play_next_video', nextOn ? 'true' : 'false');
             syncAutoplayNextBtnUI();
             var isEndedNow = Boolean(
+              isEndscreenVisible ||
               (typeof player.ended === 'function' && player.ended()) ||
               (rootEl && rootEl.classList.contains('vjs-ended'))
             );
@@ -8604,8 +8614,10 @@ window.SyncLevel = SyncLevel;
         rootEl.appendChild(endscreenOverlay);
 
         var upNextIntervalId = 0;
+        var upNextSessionToken = 0;
 
         clearUpNextTimer = function() {
+          upNextSessionToken++;
           if (upNextIntervalId) {
             clearInterval(upNextIntervalId);
             upNextIntervalId = 0;
@@ -8754,6 +8766,7 @@ window.SyncLevel = SyncLevel;
           if (!redirectUrl) return false;
 
           clearUpNextTimer();
+          var userToken = upNextSessionToken;
           upnextWrap.innerHTML = '';
 
           var headerRow = document.createElement('div');
@@ -8858,12 +8871,16 @@ window.SyncLevel = SyncLevel;
 
           var remainingSeconds = 3;
           upNextIntervalId = setInterval(function() {
-            if (!isEndscreenVisible) {
+            if (userToken !== upNextSessionToken || !isEndscreenVisible || !isStorageFlagEnabled('play_next_video')) {
               clearUpNextTimer();
               return;
             }
             remainingSeconds--;
             if (remainingSeconds <= 0) {
+              if (userToken !== upNextSessionToken || !isEndscreenVisible || !isStorageFlagEnabled('play_next_video')) {
+                clearUpNextTimer();
+                return;
+              }
               countSpan.textContent = '0';
               clearUpNextTimer();
               window.location.href = redirectUrl;
@@ -8885,15 +8902,13 @@ window.SyncLevel = SyncLevel;
             return;
           }
 
+          isEndscreenVisible = true;
           var autoplayNextEnabled = isStorageFlagEnabled('play_next_video');
-          var shownMode = '';
 
           if (autoplayNextEnabled && buildUpNextView()) {
-            shownMode = 'upnext';
             endscreenGrid.style.setProperty('display', 'none', 'important');
             upnextWrap.style.setProperty('display', 'flex', 'important');
           } else if (!isStorageFlagEnabled('disable_endscreen_rec') && buildEndscreenCards()) {
-            shownMode = 'cards';
             upnextWrap.style.setProperty('display', 'none', 'important');
             endscreenGrid.style.setProperty('display', 'grid', 'important');
           } else {
@@ -8901,7 +8916,6 @@ window.SyncLevel = SyncLevel;
             return;
           }
 
-          isEndscreenVisible = true;
           if (typeof applyRecStage === 'function') {
             applyRecStage(0);
           }
@@ -9096,8 +9110,13 @@ window.SyncLevel = SyncLevel;
           syncAutoplayNextBtnUI();
         }
 
-        if (isEndscreenVisible && isStorageFlagEnabled('disable_endscreen_rec') && !isStorageFlagEnabled('play_next_video') && typeof hideEndscreen === 'function') {
-          hideEndscreen();
+        if (isEndscreenVisible && !isStorageFlagEnabled('play_next_video')) {
+          if (typeof clearUpNextTimer === 'function') clearUpNextTimer();
+          if (isStorageFlagEnabled('disable_endscreen_rec') && typeof hideEndscreen === 'function') {
+            hideEndscreen();
+          } else if (typeof showEndscreen === 'function') {
+            showEndscreen();
+          }
         }
 
         bindTitleClickHandlers();
@@ -14216,6 +14235,7 @@ window.SyncLevel = SyncLevel;
     initAlabasterPlayer();
   }
 })();
+
 
 (function () {
   'use strict';
