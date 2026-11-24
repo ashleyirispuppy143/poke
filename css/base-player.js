@@ -1145,7 +1145,7 @@ window.SyncLevel = SyncLevel;
       var pixelCount = width * height;
       var fcState = null;
 
-      function ensureFullColorState() {
+      function getFullColorState() {
         if (fcState) return fcState;
         fcState = {
           hasPrev: false,
@@ -1166,7 +1166,7 @@ window.SyncLevel = SyncLevel;
         addFrame: function(rgba, delayCentisec, options) {
           var delay = Math.max(2, Math.round(delayCentisec || 8));
           if (options && options.fullColor) {
-            var fc = ensureFullColorState();
+            var fc = getFullColorState();
             var qf = quantizeFrameFullColor(rgba, width, height, fc);
             var gcePacked = qf.useTrans ? 0x05 : 0x04;
             var gceTransIdx = qf.useTrans ? 0xFF : 0x00;
@@ -1542,7 +1542,7 @@ window.SyncLevel = SyncLevel;
       '  visibility: visible !important;',
       '}',
       '.video-js.alabaster-endscreen-active .vjs-title-bar {',
-      '  z-index: 25 !important;',
+      '  display: none !important;',
       '}',
       '.video-js .alabaster-endscreen-overlay, .alabaster-endscreen-overlay {',
       '  position: absolute !important;',
@@ -2383,7 +2383,7 @@ window.SyncLevel = SyncLevel;
       '  padding: 0 !important;',
       '  background: transparent !important;',
       '  color: #ffffff !important;',
-      '  font-family: poketube flex, "poketube flex", Arial, Helvetica, sans-serif !important;',
+      '  font-family: poketube flex, "poketube flex", Arial, Helvetica, sans-serif !important;',   
       '  font-weight: 400 !important;',
       '  pointer-events: none !important;',
       '  user-select: none !important;',
@@ -4033,7 +4033,7 @@ window.SyncLevel = SyncLevel;
         var descNodes = rootEl.querySelectorAll('.vjs-title-bar-description, [class*="vjs-title-bar-description"]');
         for (var i = 0; i < descNodes.length; i++) {
           var dNode = descNodes[i];
-          if (!isFs || !info.description || isFsDescOpen || isFsCommentsOpen) {
+          if (!isFs || isEndscreenVisible || !info.description || isFsDescOpen || isFsCommentsOpen) {
             dNode.style.setProperty('display', 'none', 'important');
             dNode.style.setProperty('visibility', 'hidden', 'important');
             dNode.style.setProperty('opacity', '0', 'important');
@@ -6980,7 +6980,7 @@ window.SyncLevel = SyncLevel;
             });
           }
 
-          function ensureOffscreenVideo() {
+          function loadOffscreenVideo() {
             return new Promise(function(resolve) {
               if (gState.offVideo && gState.offVideo.readyState >= 1) {
                 return resolve(gState.offVideo);
@@ -7181,7 +7181,7 @@ window.SyncLevel = SyncLevel;
             gState.previewSeekTimer = setTimeout(function() {
               gState.previewSeekTimer = 0;
               if (!gState.open || gState.encoding || gState.previewing || jobSnapshot !== gState.jobId) return;
-              ensureOffscreenVideo().then(function(vid) {
+              loadOffscreenVideo().then(function(vid) {
                 if (!vid || !gState.open || gState.encoding || gState.previewing || jobSnapshot !== gState.jobId) return;
                 seekHelperVideo(vid, timeSec, 1500).then(function() {
                   if (!gState.open || gState.encoding || gState.previewing || jobSnapshot !== gState.jobId) return;
@@ -7205,7 +7205,7 @@ window.SyncLevel = SyncLevel;
 
             statusTextEl.textContent = 'Loading frames...';
 
-            ensureOffscreenVideo().then(function(vid) {
+            loadOffscreenVideo().then(function(vid) {
               if (!vid || !gState.open || myStripId !== gState.stripJobId || gState.encoding) return;
               var idx = 0;
               var nextThumb = function() {
@@ -7297,7 +7297,7 @@ window.SyncLevel = SyncLevel;
               return;
             }
             gState.stripJobId++;
-            ensureOffscreenVideo().then(function(vid) {
+            loadOffscreenVideo().then(function(vid) {
               if (!vid || !gState.open || gState.encoding) return;
               gState.previewing = true;
               previewBtn.textContent = 'Stop preview';
@@ -7393,7 +7393,7 @@ window.SyncLevel = SyncLevel;
               ? gState.subLoadPromise
               : Promise.resolve(gState.subCues);
 
-            Promise.all([ensureOffscreenVideo(), subReadyPromise]).then(function(results) {
+            Promise.all([loadOffscreenVideo(), subReadyPromise]).then(function(results) {
               var vid = results[0];
               if (!vid || !gState.open || myJob !== gState.jobId) {
                 return finishUI('Cancelled');
@@ -8932,6 +8932,9 @@ window.SyncLevel = SyncLevel;
 
           rootEl.classList.add('alabaster-endscreen-active');
           endscreenOverlay.style.display = 'flex';
+          if (typeof syncFullscreenTitleBarVisibility === 'function') {
+            syncFullscreenTitleBarVisibility();
+          }
           compat.raf(function() {
             if (isEndscreenVisible && endscreenOverlay) {
               endscreenOverlay.classList.add('is-visible');
@@ -9135,7 +9138,7 @@ window.SyncLevel = SyncLevel;
           if (node.classList.contains('vjs-title-bar-description') || (node.className && String(node.className).indexOf('description') !== -1)) {
             continue;
           }
-          if (!isFs) {
+          if (!isFs || isEndscreenVisible) {
             node.style.setProperty('display', 'none', 'important');
             node.style.setProperty('visibility', 'hidden', 'important');
             node.style.setProperty('opacity', '0', 'important');
