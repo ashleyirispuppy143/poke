@@ -58,6 +58,7 @@ window.SyncLevel = SyncLevel;
     { id: 'muted', key: 'alabaster_muted', legacy: null },
     { id: 'legacy_desc_btn', key: 'dont_use_alabaster_style_description_opening_fs', legacy: 'DontUseAlabasterStyleDescriptionOpeningFS' },
     { id: 'disable_fs_discover', key: 'close_full_screen_discover', legacy: 'CloseFullScreenDiscover' },
+    { id: 'disable_endscreen_rec', key: 'alabaster_disable_endscreen_recommendations', legacy: null },
     { id: 'show_dislikes_fs_desc', key: 'show_dislikes_on_full_screen_desc', legacy: 'ShowDislikesOnFullScreenDesc' },
     { id: 'hide_verify_badge_fs_desc', key: 'dont_show_verified_badge_on_pop_up_description', legacy: 'DontShowVerifiedBadgeOnPopUpDescription' },
     { id: 'disable_rec_shortcut', key: 'alabaster_dont_use_youtube_style_recommendations_shortcut', legacy: 'AlabasterDontUseYoutubeStyleRecommendationsShortcut' },
@@ -211,6 +212,7 @@ window.SyncLevel = SyncLevel;
     _hideErrorUI: null,
     _showPlayOverlay: null,
     _hidePlayOverlay: null,
+    _hideEndscreen: null,
     _onPlayOverlayClick: null,
     _playOverlayPending: false,
     _awaitingManualStart: false,
@@ -637,6 +639,395 @@ window.SyncLevel = SyncLevel;
       return { palette: palette, indices: indices };
     }
 
+    function quantizeFrameFullColor(rgba, width, height, fc) {
+      var pixelCount = width * height;
+      var useTrans = fc.hasPrev;
+      var maxPal = useTrans ? 255 : 256;
+      var prevRgb = fc.prevRgb;
+      var histCounts = fc.histCounts;
+      var histR = fc.histR;
+      var histG = fc.histG;
+      var histB = fc.histB;
+      var uniqueKeys = [];
+      var i, o, p3, r, g, b, dR, dG, dB, err, k;
+
+      if (!useTrans) {
+        for (i = 0; i < pixelCount; i++) {
+          o = i * 4;
+          r = rgba[o];
+          g = rgba[o + 1];
+          b = rgba[o + 2];
+          k = ((r >> 2) << 12) | ((g >> 2) << 6) | (b >> 2);
+          if (histCounts[k] === 0) {
+            uniqueKeys.push(k);
+          }
+          histCounts[k]++;
+          histR[k] += r;
+          histG[k] += g;
+          histB[k] += b;
+        }
+      } else {
+        for (i = 0; i < pixelCount; i++) {
+          o = i * 4;
+          p3 = i * 3;
+          r = rgba[o];
+          g = rgba[o + 1];
+          b = rgba[o + 2];
+          dR = r - prevRgb[p3];
+          dG = g - prevRgb[p3 + 1];
+          dB = b - prevRgb[p3 + 2];
+          if (dR * dR * 2 + dG * dG * 4 + dB * dB > 36) {
+            k = ((r >> 2) << 12) | ((g >> 2) << 6) | (b >> 2);
+            if (histCounts[k] === 0) {
+              uniqueKeys.push(k);
+            }
+            histCounts[k]++;
+            histR[k] += r;
+            histG[k] += g;
+            histB[k] += b;
+          }
+        }
+        if (uniqueKeys.length < maxPal) {
+          for (i = 0; i < pixelCount; i++) {
+            o = i * 4;
+            p3 = i * 3;
+            r = rgba[o];
+            g = rgba[o + 1];
+            b = rgba[o + 2];
+            dR = r - prevRgb[p3];
+            dG = g - prevRgb[p3 + 1];
+            dB = b - prevRgb[p3 + 2];
+            err = dR * dR * 2 + dG * dG * 4 + dB * dB;
+            if (err > 0 && err <= 36) {
+              k = ((r >> 2) << 12) | ((g >> 2) << 6) | (b >> 2);
+              if (histCounts[k] === 0) {
+                uniqueKeys.push(k);
+              }
+              histCounts[k]++;
+              histR[k] += r;
+              histG[k] += g;
+              histB[k] += b;
+            }
+          }
+        }
+        if (uniqueKeys.length === 0) {
+          return { empty: true, useTrans: true };
+        }
+      }
+
+      if (uniqueKeys.length === 0) {
+        uniqueKeys.push(0);
+        histCounts[0] = 1;
+      }
+
+      function makeBox666(keys) {
+        var rMin = 63, rMax = 0, gMin = 63, gMax = 0, bMin = 63, bMax = 0;
+        var count = 0;
+        for (var j = 0; j < keys.length; j++) {
+          var key = keys[j];
+          var rk = (key >> 12) & 63;
+          var gk = (key >> 6) & 63;
+          var bk = key & 63;
+          if (rk < rMin) rMin = rk;
+          if (rk > rMax) rMax = rk;
+          if (gk < gMin) gMin = gk;
+          if (gk > gMax) gMax = gk;
+          if (bk < bMin) bMin = bk;
+          if (bk > bMax) bMax = bk;
+          count += histCounts[key];
+        }
+        var pr = (rMax - rMin) * 3;
+        var pg = (gMax - gMin) * 4;
+        var pb = (bMax - bMin) * 2;
+        var maxSpan = pr >= pg && pr >= pb ? pr : (pg >= pb ? pg : pb);
+        return {
+          keys: keys,
+          rMin: rMin, rMax: rMax,
+          gMin: gMin, gMax: gMax,
+          bMin: bMin, bMax: bMax,
+          count: count,
+          maxSpan: maxSpan
+        };
+      }
+
+      var boxes = [makeBox666(uniqueKeys)];
+      while (boxes.length < maxPal) {
+        var bestIdx = -1;
+        var bestScore = -1;
+        for (var bIdx = 0; bIdx < boxes.length; bIdx++) {
+          var bx = boxes[bIdx];
+          if (bx.keys.length <= 1) continue;
+          var score = bx.count * (bx.maxSpan + 1);
+          if (score > bestScore) {
+            bestScore = score;
+            bestIdx = bIdx;
+          }
+        }
+        if (bestIdx === -1) break;
+        var box = boxes.splice(bestIdx, 1)[0];
+        var bpr = (box.rMax - box.rMin) * 3;
+        var bpg = (box.gMax - box.gMin) * 4;
+        var bpb = (box.bMax - box.bMin) * 2;
+        var ch = bpg >= bpr && bpg >= bpb ? 1 : (bpr >= bpb ? 0 : 2);
+        box.keys.sort(function(a, b) {
+          if (ch === 0) return ((a >> 12) & 63) - ((b >> 12) & 63);
+          if (ch === 1) return ((a >> 6) & 63) - ((b >> 6) & 63);
+          return (a & 63) - (b & 63);
+        });
+        var half = box.count >> 1;
+        var acc = 0;
+        var splitAt = 1;
+        for (var s = 0; s < box.keys.length - 1; s++) {
+          acc += histCounts[box.keys[s]];
+          if (acc >= half) {
+            splitAt = s + 1;
+            break;
+          }
+        }
+        boxes.push(makeBox666(box.keys.slice(0, splitAt)));
+        boxes.push(makeBox666(box.keys.slice(splitAt)));
+      }
+
+      var palCount = boxes.length;
+      var entries = [];
+      for (var p = 0; p < palCount; p++) {
+        var pbBox = boxes[p];
+        var rSum = 0, gSum = 0, bSum = 0, totalW = 0;
+        for (var m = 0; m < pbBox.keys.length; m++) {
+          var pk = pbBox.keys[m];
+          rSum += histR[pk];
+          gSum += histG[pk];
+          bSum += histB[pk];
+          totalW += histCounts[pk];
+        }
+        var cr = totalW > 0 ? Math.round(rSum / totalW) : 0;
+        var cg = totalW > 0 ? Math.round(gSum / totalW) : 0;
+        var cb = totalW > 0 ? Math.round(bSum / totalW) : 0;
+        if (cr > 255) cr = 255;
+        if (cg > 255) cg = 255;
+        if (cb > 255) cb = 255;
+        entries.push({ r: cr, g: cg, b: cb, y: cr * 2 + cg * 4 + cb });
+      }
+
+      for (var u = 0; u < uniqueKeys.length; u++) {
+        var uk = uniqueKeys[u];
+        histCounts[uk] = 0;
+        histR[uk] = 0;
+        histG[uk] = 0;
+        histB[uk] = 0;
+      }
+
+      entries.sort(function(a, b) { return a.y - b.y; });
+
+      var palette = new Uint8Array(768);
+      var palY = new Int32Array(palCount);
+      for (var pe = 0; pe < palCount; pe++) {
+        palette[pe * 3] = entries[pe].r;
+        palette[pe * 3 + 1] = entries[pe].g;
+        palette[pe * 3 + 2] = entries[pe].b;
+        palY[pe] = entries[pe].y;
+      }
+
+      var lut = fc.lut;
+      lut.fill(-1);
+
+      function findNearestPal(rVal, gVal, bVal) {
+        var key666 = ((rVal >> 2) << 12) | ((gVal >> 2) << 6) | (bVal >> 2);
+        var cached = lut[key666];
+        if (cached !== -1) return cached;
+        var yLum = rVal * 2 + gVal * 4 + bVal;
+        var lo = 0;
+        var hi = palCount - 1;
+        while (lo < hi) {
+          var mid = (lo + hi) >> 1;
+          if (palY[mid] < yLum) lo = mid + 1;
+          else hi = mid;
+        }
+        var bestP = lo;
+        var bp = bestP * 3;
+        var nR = rVal - palette[bp];
+        var nG = gVal - palette[bp + 1];
+        var nB = bVal - palette[bp + 2];
+        var bestDist = nR * nR * 2 + nG * nG * 4 + nB * nB;
+        if (bestDist > 0) {
+          var left = lo - 1;
+          var right = lo + 1;
+          while (left >= 0) {
+            var dyL = yLum - palY[left];
+            if (dyL * dyL >= bestDist * 7) break;
+            var l3 = left * 3;
+            nR = rVal - palette[l3];
+            nG = gVal - palette[l3 + 1];
+            nB = bVal - palette[l3 + 2];
+            var distL = nR * nR * 2 + nG * nG * 4 + nB * nB;
+            if (distL < bestDist) {
+              bestDist = distL;
+              bestP = left;
+              if (bestDist === 0) break;
+            }
+            left--;
+          }
+          if (bestDist > 0) {
+            while (right < palCount) {
+              var dyR = palY[right] - yLum;
+              if (dyR * dyR >= bestDist * 7) break;
+              var r3 = right * 3;
+              nR = rVal - palette[r3];
+              nG = gVal - palette[r3 + 1];
+              nB = bVal - palette[r3 + 2];
+              var distR = nR * nR * 2 + nG * nG * 4 + nB * nB;
+              if (distR < bestDist) {
+                bestDist = distR;
+                bestP = right;
+                if (bestDist === 0) break;
+              }
+              right++;
+            }
+          }
+        }
+        lut[key666] = bestP;
+        return bestP;
+      }
+
+      var indices = fc.indices;
+      var errCurr = fc.errCurr;
+      var errNext = fc.errNext;
+      errCurr.fill(0);
+      errNext.fill(0);
+
+      var minX = width;
+      var minY = height;
+      var maxX = -1;
+      var maxY = -1;
+
+      for (var y = 0; y < height; y++) {
+        var rev = (y & 1) === 1;
+        var xStart = rev ? (width - 1) : 0;
+        var xEnd = rev ? -1 : width;
+        var xStep = rev ? -1 : 1;
+
+        for (var x = xStart; x !== xEnd; x += xStep) {
+          var px = y * width + x;
+          var po = px * 4;
+          var r0 = rgba[po];
+          var g0 = rgba[po + 1];
+          var b0 = rgba[po + 2];
+          var prevIdx = px * 3;
+
+          if (useTrans) {
+            var rd0 = r0 - prevRgb[prevIdx];
+            var gd0 = g0 - prevRgb[prevIdx + 1];
+            var bd0 = b0 - prevRgb[prevIdx + 2];
+            if (rd0 * rd0 * 2 + gd0 * gd0 * 4 + bd0 * bd0 <= 24) {
+              indices[px] = 255;
+              continue;
+            }
+          }
+
+          var eIdx = (x + 1) * 3;
+          var eR = errCurr[eIdx] >> 4;
+          var eG = errCurr[eIdx + 1] >> 4;
+          var eB = errCurr[eIdx + 2] >> 4;
+          if (eR > 40) eR = 40; else if (eR < -40) eR = -40;
+          if (eG > 40) eG = 40; else if (eG < -40) eG = -40;
+          if (eB > 40) eB = 40; else if (eB < -40) eB = -40;
+
+          var rVal = r0 + eR;
+          var gVal = g0 + eG;
+          var bVal = b0 + eB;
+          if (rVal < 0) rVal = 0; else if (rVal > 255) rVal = 255;
+          if (gVal < 0) gVal = 0; else if (gVal > 255) gVal = 255;
+          if (bVal < 0) bVal = 0; else if (bVal > 255) bVal = 255;
+
+          var bestPal = findNearestPal(rVal, gVal, bVal);
+          var bp3 = bestPal * 3;
+          var chosenR = palette[bp3];
+          var chosenG = palette[bp3 + 1];
+          var chosenB = palette[bp3 + 2];
+          var keepPrev = false;
+
+          if (useTrans) {
+            var nDR = rVal - chosenR;
+            var nDG = gVal - chosenG;
+            var nDB = bVal - chosenB;
+            var distNew = nDR * nDR * 2 + nDG * nDG * 4 + nDB * nDB;
+            var pr0 = prevRgb[prevIdx];
+            var pg0 = prevRgb[prevIdx + 1];
+            var pb0 = prevRgb[prevIdx + 2];
+            var pDR = rVal - pr0;
+            var pDG = gVal - pg0;
+            var pDB = bVal - pb0;
+            var distPrev = pDR * pDR * 2 + pDG * pDG * 4 + pDB * pDB;
+            if (distPrev <= distNew) {
+              keepPrev = true;
+              chosenR = pr0;
+              chosenG = pg0;
+              chosenB = pb0;
+            }
+          }
+
+          if (keepPrev) {
+            indices[px] = 255;
+          } else {
+            indices[px] = bestPal;
+            prevRgb[prevIdx] = chosenR;
+            prevRgb[prevIdx + 1] = chosenG;
+            prevRgb[prevIdx + 2] = chosenB;
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+
+          var qR = Math.round((rVal - chosenR) * 0.85);
+          var qG = Math.round((gVal - chosenG) * 0.85);
+          var qB = Math.round((bVal - chosenB) * 0.85);
+
+          var fwdIdx = (x + 1 + xStep) * 3;
+          errCurr[fwdIdx] += qR * 7;
+          errCurr[fwdIdx + 1] += qG * 7;
+          errCurr[fwdIdx + 2] += qB * 7;
+
+          var blIdx = (x + 1 - xStep) * 3;
+          errNext[blIdx] += qR * 3;
+          errNext[blIdx + 1] += qG * 3;
+          errNext[blIdx + 2] += qB * 3;
+
+          errNext[eIdx] += qR * 5;
+          errNext[eIdx + 1] += qG * 5;
+          errNext[eIdx + 2] += qB * 5;
+
+          errNext[fwdIdx] += qR;
+          errNext[fwdIdx + 1] += qG;
+          errNext[fwdIdx + 2] += qB;
+        }
+
+        var tmpErr = errCurr;
+        errCurr = errNext;
+        errNext = tmpErr;
+        errNext.fill(0);
+      }
+
+      fc.errCurr = errCurr;
+      fc.errNext = errNext;
+      fc.hasPrev = true;
+
+      if (useTrans && maxX < minX) {
+        return { empty: true, useTrans: true };
+      }
+
+      return {
+        empty: false,
+        useTrans: useTrans,
+        palette: palette,
+        indices: indices,
+        minX: minX,
+        minY: minY,
+        maxX: maxX,
+        maxY: maxY
+      };
+    }
+
     function lzwEncode(indices, out) {
       var minCodeSize = 8;
       var clearCode = 256;
@@ -750,10 +1141,91 @@ window.SyncLevel = SyncLevel;
       ]);
       var chunks = [header];
       var totalLen = header.length;
+      var pixelCount = width * height;
+      var fcState = null;
+
+      function ensureFullColorState() {
+        if (fcState) return fcState;
+        fcState = {
+          hasPrev: false,
+          prevRgb: new Uint8Array(pixelCount * 3),
+          histCounts: new Uint32Array(262144),
+          histR: new Uint32Array(262144),
+          histG: new Uint32Array(262144),
+          histB: new Uint32Array(262144),
+          lut: new Int16Array(262144),
+          errCurr: new Int16Array((width + 2) * 3),
+          errNext: new Int16Array((width + 2) * 3),
+          indices: new Uint8Array(pixelCount)
+        };
+        return fcState;
+      }
 
       return {
         addFrame: function(rgba, delayCentisec, options) {
           var delay = Math.max(2, Math.round(delayCentisec || 8));
+          if (options && options.fullColor) {
+            var fc = ensureFullColorState();
+            var qf = quantizeFrameFullColor(rgba, width, height, fc);
+            var gcePacked = qf.useTrans ? 0x05 : 0x04;
+            var gceTransIdx = qf.useTrans ? 0xFF : 0x00;
+            var left = 0;
+            var top = 0;
+            var subW = width;
+            var subH = height;
+            var frameIndices;
+            var framePal;
+
+            if (qf.empty) {
+              subW = 1;
+              subH = 1;
+              frameIndices = new Uint8Array([255]);
+              framePal = new Uint8Array(768);
+              gcePacked = 0x05;
+              gceTransIdx = 0xFF;
+            } else if (qf.useTrans) {
+              left = qf.minX;
+              top = qf.minY;
+              subW = qf.maxX - qf.minX + 1;
+              subH = qf.maxY - qf.minY + 1;
+              framePal = qf.palette;
+              if (left === 0 && top === 0 && subW === width && subH === height) {
+                frameIndices = qf.indices;
+              } else {
+                frameIndices = new Uint8Array(subW * subH);
+                var dstOff = 0;
+                for (var sy = top; sy <= qf.maxY; sy++) {
+                  var srcStart = sy * width + left;
+                  frameIndices.set(qf.indices.subarray(srcStart, srcStart + subW), dstOff);
+                  dstOff += subW;
+                }
+              }
+            } else {
+              framePal = qf.palette;
+              frameIndices = qf.indices;
+            }
+
+            var fcBytes = [
+              0x21, 0xF9, 0x04, gcePacked,
+              delay & 0xFF, (delay >> 8) & 0xFF,
+              gceTransIdx, 0x00,
+              0x2C,
+              left & 0xFF, (left >> 8) & 0xFF,
+              top & 0xFF, (top >> 8) & 0xFF,
+              subW & 0xFF, (subW >> 8) & 0xFF,
+              subH & 0xFF, (subH >> 8) & 0xFF,
+              0x87
+            ];
+            for (var fp = 0; fp < 768; fp++) {
+              fcBytes.push(framePal[fp]);
+            }
+            lzwEncode(frameIndices, fcBytes);
+            var fcChunk = new Uint8Array(fcBytes);
+            chunks.push(fcChunk);
+            totalLen += fcChunk.length;
+            return;
+          }
+
           var q = quantizeFrame(rgba, width, height, options);
           var frameBytes = [
             0x21, 0xF9, 0x04, 0x04,
@@ -1059,6 +1531,158 @@ window.SyncLevel = SyncLevel;
     styleEl.textContent = [
       '.video-js.alabaster-play-overlay-active .vjs-big-play-button {',
       '  display: none !important;',
+      '}',
+      '.video-js.alabaster-endscreen-active .vjs-big-play-button {',
+      '  display: none !important;',
+      '}',
+      '.video-js.alabaster-endscreen-active .vjs-control-bar {',
+      '  z-index: 25 !important;',
+      '  opacity: 1 !important;',
+      '  visibility: visible !important;',
+      '}',
+      '.video-js.alabaster-endscreen-active .vjs-title-bar {',
+      '  z-index: 25 !important;',
+      '}',
+      '.video-js .alabaster-endscreen-overlay, .alabaster-endscreen-overlay {',
+      '  position: absolute !important;',
+      '  inset: 0 !important;',
+      '  z-index: 20 !important;',
+      '  display: none;',
+      '  align-items: center !important;',
+      '  justify-content: center !important;',
+      '  padding: 24px 28px 78px 28px !important;',
+      '  box-sizing: border-box !important;',
+      '  background: rgba(0, 0, 0, 0.72) !important;',
+      '  pointer-events: none !important;',
+      '  user-select: none !important;',
+      '  opacity: 0;',
+      '  transition: opacity 0.22s ease !important;',
+      '}',
+      '.video-js .alabaster-endscreen-overlay.is-visible, .alabaster-endscreen-overlay.is-visible {',
+      '  opacity: 1 !important;',
+      '}',
+      '.alabaster-endscreen-grid {',
+      '  display: flex !important;',
+      '  flex-direction: row !important;',
+      '  align-items: center !important;',
+      '  justify-content: center !important;',
+      '  gap: 16px !important;',
+      '  width: 100% !important;',
+      '  max-width: 980px !important;',
+      '  box-sizing: border-box !important;',
+      '  pointer-events: none !important;',
+      '}',
+      '.vjs-fullscreen .alabaster-endscreen-grid {',
+      '  max-width: 1180px !important;',
+      '  gap: 22px !important;',
+      '}',
+      '.alabaster-endscreen-card {',
+      '  position: relative !important;',
+      '  flex: 0 1 310px !important;',
+      '  min-width: 0 !important;',
+      '  aspect-ratio: 16 / 9 !important;',
+      '  border-radius: 12px !important;',
+      '  overflow: hidden !important;',
+      '  display: block !important;',
+      '  text-decoration: none !important;',
+      '  color: #ffffff !important;',
+      '  background: #141414 !important;',
+      '  border: 1px solid rgba(255, 255, 255, 0.16) !important;',
+      '  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.65) !important;',
+      '  pointer-events: auto !important;',
+      '  cursor: pointer !important;',
+      '  font-family: "poketube flex", "PokeTube Flex", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;',
+      '  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease !important;',
+      '}',
+      '.vjs-fullscreen .alabaster-endscreen-card {',
+      '  flex: 0 1 370px !important;',
+      '}',
+      '.alabaster-endscreen-card:hover {',
+      '  transform: translateY(-3px) !important;',
+      '  border-color: rgba(255, 255, 255, 0.42) !important;',
+      '  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.8) !important;',
+      '}',
+      '.alabaster-endscreen-thumb {',
+      '  position: absolute !important;',
+      '  inset: 0 !important;',
+      '  width: 100% !important;',
+      '  height: 100% !important;',
+      '  object-fit: cover !important;',
+      '  display: block !important;',
+      '  transition: transform 0.22s ease !important;',
+      '}',
+      '.alabaster-endscreen-card:hover .alabaster-endscreen-thumb {',
+      '  transform: scale(1.04) !important;',
+      '}',
+      '.alabaster-endscreen-info {',
+      '  position: absolute !important;',
+      '  top: 0 !important;',
+      '  left: 0 !important;',
+      '  right: 0 !important;',
+      '  padding: 10px 12px 26px 12px !important;',
+      '  box-sizing: border-box !important;',
+      '  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.86) 0%, rgba(0, 0, 0, 0.5) 62%, rgba(0, 0, 0, 0) 100%) !important;',
+      '  display: flex !important;',
+      '  flex-direction: column !important;',
+      '  gap: 3px !important;',
+      '  pointer-events: none !important;',
+      '}',
+      '.alabaster-endscreen-title {',
+      '  font-size: clamp(11px, 1.3vw, 14.5px) !important;',
+      '  font-weight: 700 !important;',
+      '  line-height: 1.28 !important;',
+      '  color: #ffffff !important;',
+      '  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85) !important;',
+      '  display: -webkit-box !important;',
+      '  -webkit-line-clamp: 2 !important;',
+      '  -webkit-box-orient: vertical !important;',
+      '  overflow: hidden !important;',
+      '  text-overflow: ellipsis !important;',
+      '  word-break: break-word !important;',
+      '}',
+      '.alabaster-endscreen-meta {',
+      '  font-size: clamp(10px, 1.05vw, 12px) !important;',
+      '  font-weight: 500 !important;',
+      '  line-height: 1.25 !important;',
+      '  color: rgba(255, 255, 255, 0.84) !important;',
+      '  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85) !important;',
+      '  white-space: nowrap !important;',
+      '  overflow: hidden !important;',
+      '  text-overflow: ellipsis !important;',
+      '}',
+      '.alabaster-endscreen-duration {',
+      '  position: absolute !important;',
+      '  right: 8px !important;',
+      '  bottom: 8px !important;',
+      '  padding: 2px 6px !important;',
+      '  border-radius: 5px !important;',
+      '  background: rgba(0, 0, 0, 0.84) !important;',
+      '  color: #ffffff !important;',
+      '  font-size: 11px !important;',
+      '  font-weight: 600 !important;',
+      '  line-height: 1.2 !important;',
+      '  letter-spacing: 0.2px !important;',
+      '  pointer-events: none !important;',
+      '}',
+      '@media (max-width: 560px) {',
+      '  .video-js .alabaster-endscreen-overlay, .alabaster-endscreen-overlay {',
+      '    padding: 14px 12px 64px 12px !important;',
+      '  }',
+      '  .alabaster-endscreen-grid {',
+      '    gap: 8px !important;',
+      '  }',
+      '  .alabaster-endscreen-card {',
+      '    border-radius: 8px !important;',
+      '  }',
+      '  .alabaster-endscreen-info {',
+      '    padding: 6px 7px 16px 7px !important;',
+      '  }',
+      '  .alabaster-endscreen-duration {',
+      '    right: 4px !important;',
+      '    bottom: 4px !important;',
+      '    padding: 1px 4px !important;',
+      '    font-size: 9.5px !important;',
+      '  }',
       '}',
       '.video-js .alabaster-autoplay-overlay, .alabaster-autoplay-overlay {',
       '  position: absolute !important;',
@@ -1528,15 +2152,16 @@ window.SyncLevel = SyncLevel;
       '  top: 14px !important;',
       '  left: 14px !important;',
       '  z-index: 43 !important;',
-      '  padding: 8px 14px !important;',
-      '  border-radius: 0 !important;',
-      '  background: rgba(15, 15, 15, 0.85) !important;',
+      '  display: flex !important;',
+      '  flex-direction: column !important;',
+      '  align-items: flex-start !important;',
+      '  gap: 0 !important;',
+      '  margin: 0 !important;',
+      '  padding: 0 !important;',
+      '  background: transparent !important;',
       '  color: #ffffff !important;',
-      '  font-family: "poketube flex", "PokeTube Flex", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;',
-      '  font-size: 13px !important;',
-      '  font-weight: 600 !important;',
-      '  line-height: 1.25 !important;',
-      '  letter-spacing: 0.1px !important;',
+      '  font-family: Poketube Flex, "PokeTube Flex", Arial, Helvetica, sans-serif !important;',
+      '  font-weight: 400 !important;',
       '  pointer-events: none !important;',
       '  user-select: none !important;',
       '  opacity: 0 !important;',
@@ -1546,6 +2171,51 @@ window.SyncLevel = SyncLevel;
       '.video-js .alabaster-cc-toast.is-visible, .alabaster-cc-toast.is-visible {',
       '  opacity: 1 !important;',
       '  visibility: visible !important;',
+      '}',
+      '.alabaster-cc-toast-line {',
+      '  display: inline-flex !important;',
+      '  align-items: center !important;',
+      '  background: rgba(28, 28, 28, 0.8) !important;',
+      '  color: #ffffff !important;',
+      '  font-family: Roboto, "PokeTube Flex", Arial, Helvetica, sans-serif !important;',
+      '  font-size: 16px !important;',
+      '  font-weight: 400 !important;',
+      '  line-height: 1.25 !important;',
+      '  letter-spacing: 0 !important;',
+      '  white-space: nowrap !important;',
+      '  box-sizing: border-box !important;',
+      '}',
+      '.vjs-fullscreen .alabaster-cc-toast-line {',
+      '  font-size: 20px !important;',
+      '}',
+      '.alabaster-cc-toast-lang {',
+      '  padding: 4px 10px 2px 10px !important;',
+      '  border-radius: 6px 6px 6px 0 !important;',
+      '}',
+      '.alabaster-cc-toast-hint {',
+      '  padding: 2px 10px 4px 10px !important;',
+      '  border-radius: 0 6px 6px 6px !important;',
+      '}',
+      '.alabaster-cc-toast.is-bottom-wider .alabaster-cc-toast-lang {',
+      '  border-radius: 6px 6px 0 0 !important;',
+      '}',
+      '.alabaster-cc-toast.is-bottom-wider .alabaster-cc-toast-hint {',
+      '  border-radius: 0 6px 6px 6px !important;',
+      '}',
+      '.alabaster-cc-toast.is-equal-width .alabaster-cc-toast-lang {',
+      '  border-radius: 6px 6px 0 0 !important;',
+      '}',
+      '.alabaster-cc-toast.is-equal-width .alabaster-cc-toast-hint {',
+      '  border-radius: 0 0 6px 6px !important;',
+      '}',
+      '.alabaster-cc-toast-gear {',
+      '  width: 0.62em !important;',
+      '  height: 0.62em !important;',
+      '  margin: 0 0.52em !important;',
+      '  flex-shrink: 0 !important;',
+      '  display: inline-block !important;',
+      '  vertical-align: middle !important;',
+      '  transform: translateY(0.08em) !important;',
       '}',
       '.video-js .alabaster-subtitles-settings-row, .alabaster-subtitles-settings-row {',
       '  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;',
@@ -3081,6 +3751,12 @@ window.SyncLevel = SyncLevel;
       var syncYoutubeCaptionsUI = null;
       var toggleCaptionsByUser = null;
 
+      var endscreenOverlay = null;
+      var endscreenGrid = null;
+      var isEndscreenVisible = false;
+      var showEndscreen = null;
+      var hideEndscreen = null;
+
       var gifMakerBackdrop = null;
       var closeGifMaker = null;
       var openGifMaker = null;
@@ -3792,6 +4468,19 @@ window.SyncLevel = SyncLevel;
 
         var ccToastEl = document.createElement('div');
         ccToastEl.className = 'alabaster-cc-toast';
+        var ccToastLangEl = document.createElement('div');
+        ccToastLangEl.className = 'alabaster-cc-toast-line alabaster-cc-toast-lang';
+        var ccToastHintEl = document.createElement('div');
+        ccToastHintEl.className = 'alabaster-cc-toast-line alabaster-cc-toast-hint';
+        ccToastHintEl.innerHTML = [
+          '<span>Click</span>',
+          '<svg class="alabaster-cc-toast-gear" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">',
+          '  <path fill-rule="evenodd" d="M10.21 4.82L9.86 1.01L14.14 1.01L13.79 4.82L15.81 5.66L18.26 2.71L21.29 5.74L18.34 8.19L19.18 10.21L22.99 9.86L22.99 14.14L19.18 13.79L18.34 15.81L21.29 18.26L18.26 21.29L15.81 18.34L13.79 19.18L14.14 22.99L9.86 22.99L10.21 19.18L8.19 18.34L5.74 21.29L2.71 18.26L5.66 15.81L4.82 13.79L1.01 14.14L1.01 9.86L4.82 10.21L5.66 8.19L2.71 5.74L5.74 2.71L8.19 5.66ZM12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 1 0 0-7.6z"></path>',
+          '</svg>',
+          '<span>for settings</span>'
+        ].join('');
+        ccToastEl.appendChild(ccToastLangEl);
+        ccToastEl.appendChild(ccToastHintEl);
         rootEl.appendChild(ccToastEl);
 
         var showCaptionToast = function(langText) {
@@ -3803,12 +4492,20 @@ window.SyncLevel = SyncLevel;
             ccToastEl.classList.remove('is-visible');
             return;
           }
-          ccToastEl.textContent = langText + ' subtitle on';
+          ccToastLangEl.textContent = langText;
+          ccToastEl.classList.remove('is-bottom-wider', 'is-equal-width');
+          var wTop = ccToastLangEl.offsetWidth;
+          var wBot = ccToastHintEl.offsetWidth;
+          if (wBot > wTop + 4) {
+            ccToastEl.classList.add('is-bottom-wider');
+          } else if (Math.abs(wTop - wBot) <= 4) {
+            ccToastEl.classList.add('is-equal-width');
+          }
           ccToastEl.classList.add('is-visible');
           ccToastTimer = setTimeout(function() {
             ccToastTimer = 0;
             ccToastEl.classList.remove('is-visible');
-          }, 2400);
+          }, 2800);
         };
 
         var getCaptionTracks = function() {
@@ -6443,7 +7140,7 @@ window.SyncLevel = SyncLevel;
                   maxFramesCap: 150,
                   maxSrcFps: 60,
                   maxGifW: 1280,
-                  encodeOpts: { maxColors: 256, dither: true, sampleStep: 1 }
+                  encodeOpts: { fullColor: true, maxColors: 256, dither: true, sampleStep: 1 }
                 };
               } else if (gState.quality === 'low') {
                 qualPreset = {
@@ -7125,7 +7822,7 @@ window.SyncLevel = SyncLevel;
         };
 
         applyRecStage = function(stage) {
-          if (stage > 0 && (!checkIsPlayerFullscreen() || isStorageFlagEnabled('disable_fs_discover'))) {
+          if (stage > 0 && (!checkIsPlayerFullscreen() || isStorageFlagEnabled('disable_fs_discover') || isEndscreenVisible)) {
             stage = 0;
           }
           if (stage > 0 && !buildRecCards()) return;
@@ -7169,7 +7866,7 @@ window.SyncLevel = SyncLevel;
         });
 
         var isPointInControlBarCenterGap = function(clientX, clientY, targetEl) {
-          if (!checkIsPlayerFullscreen() || isStorageFlagEnabled('disable_fs_discover')) return false;
+          if (!checkIsPlayerFullscreen() || isStorageFlagEnabled('disable_fs_discover') || isEndscreenVisible) return false;
           if (targetEl && recOpenBtn && (targetEl === recOpenBtn || recOpenBtn.contains(targetEl))) {
             return true;
           }
@@ -7238,7 +7935,7 @@ window.SyncLevel = SyncLevel;
         var consumeOutsideClickUntil = 0;
 
         var onDragStart = function(clientX, clientY, targetEl, sourceType) {
-          if (!checkIsPlayerFullscreen() || isStorageFlagEnabled('disable_fs_discover')) return false;
+          if (!checkIsPlayerFullscreen() || isStorageFlagEnabled('disable_fs_discover') || isEndscreenVisible) return false;
           if (sourceType === 'bar') {
             if (recStage !== 0) return false;
             if (!isPointInControlBarCenterGap(clientX, clientY, targetEl)) return false;
@@ -7506,7 +8203,7 @@ window.SyncLevel = SyncLevel;
 
           if (evt.key === 'v' || evt.key === 'V') {
             if (isStorageFlagEnabled('disable_rec_shortcut')) return;
-            if (!checkIsPlayerFullscreen() || isStorageFlagEnabled('disable_fs_discover')) return;
+            if (!checkIsPlayerFullscreen() || isStorageFlagEnabled('disable_fs_discover') || isEndscreenVisible) return;
             evt.preventDefault();
             applyRecStage(recStage === 0 ? 1 : 0);
           }
@@ -7566,6 +8263,191 @@ window.SyncLevel = SyncLevel;
 
           cBar.appendChild(recOpenBtn);
         }
+      }
+
+      if (rootEl && !rootEl.querySelector('.alabaster-endscreen-overlay')) {
+        endscreenOverlay = document.createElement('div');
+        endscreenOverlay.className = 'alabaster-endscreen-overlay';
+
+        endscreenGrid = document.createElement('div');
+        endscreenGrid.className = 'alabaster-endscreen-grid';
+
+        endscreenOverlay.appendChild(endscreenGrid);
+        rootEl.appendChild(endscreenOverlay);
+
+        var buildEndscreenCards = function() {
+          if (isStorageFlagEnabled('disable_endscreen_rec')) return false;
+          var list = metadataParser.readRecommended();
+          if (!list || !list.length) return false;
+
+          var pool = [];
+          for (var i = 0; i < list.length; i++) {
+            if (list[i] && list[i].href) pool.push(list[i]);
+          }
+          if (!pool.length) return false;
+
+          for (var j = pool.length - 1; j > 0; j--) {
+            var swapIdx = Math.floor(Math.random() * (j + 1));
+            var tmp = pool[j];
+            pool[j] = pool[swapIdx];
+            pool[swapIdx] = tmp;
+          }
+
+          var picked = pool.slice(0, 3);
+          endscreenGrid.innerHTML = '';
+
+          for (var k = 0; k < picked.length; k++) {
+            (function(item) {
+              var card = document.createElement('a');
+              card.className = 'alabaster-endscreen-card';
+              card.href = item.href;
+
+              var img = document.createElement('img');
+              img.className = 'alabaster-endscreen-thumb';
+              img.loading = 'eager';
+              img.alt = item.title || '';
+
+              var triedFallback = false;
+              var applyFallback = function() {
+                if (triedFallback) return;
+                triedFallback = true;
+                if (item.fallbackThumbUrl && img.src !== item.fallbackThumbUrl) {
+                  img.src = item.fallbackThumbUrl;
+                }
+              };
+              img.addEventListener('error', applyFallback, false);
+              img.addEventListener('load', function() {
+                if (img.naturalWidth === 120 && img.naturalHeight === 90) {
+                  applyFallback();
+                }
+              }, false);
+              img.src = item.thumbUrl || item.fallbackThumbUrl || '';
+
+              var infoWrap = document.createElement('div');
+              infoWrap.className = 'alabaster-endscreen-info';
+
+              var titleEl = document.createElement('div');
+              titleEl.className = 'alabaster-endscreen-title';
+              titleEl.textContent = item.title || '';
+              infoWrap.appendChild(titleEl);
+
+              var metaParts = [];
+              if (item.author) metaParts.push(item.author);
+              if (item.viewCountText) metaParts.push(item.viewCountText);
+              else if (item.publishedText) metaParts.push(item.publishedText);
+              if (metaParts.length) {
+                var metaEl = document.createElement('div');
+                metaEl.className = 'alabaster-endscreen-meta';
+                metaEl.textContent = metaParts.join(' \u2022 ');
+                infoWrap.appendChild(metaEl);
+              }
+
+              card.appendChild(img);
+              card.appendChild(infoWrap);
+
+              if (item.durationText) {
+                var durEl = document.createElement('span');
+                durEl.className = 'alabaster-endscreen-duration';
+                durEl.textContent = item.durationText;
+                card.appendChild(durEl);
+              }
+
+              ['click', 'mousedown', 'pointerdown', 'touchstart', 'touchend'].forEach(function(evName) {
+                card.addEventListener(evName, function(evt) {
+                  evt.stopPropagation();
+                }, false);
+              });
+
+              endscreenGrid.appendChild(card);
+            })(picked[k]);
+          }
+
+          return endscreenGrid.children.length > 0;
+        };
+
+        showEndscreen = function() {
+          if (!endscreenOverlay || !rootEl) return;
+          if (isStorageFlagEnabled('disable_endscreen_rec')) {
+            hideEndscreen();
+            return;
+          }
+          var vNode = (rootEl && rootEl.querySelector('video')) || document.querySelector('video.video-js, video');
+          var loopOn = Boolean((vNode && (vNode.loop || vNode.hasAttribute('loop'))) || (typeof player.loop === 'function' && player.loop()));
+          if (loopOn) {
+            hideEndscreen();
+            return;
+          }
+          if (!buildEndscreenCards()) {
+            hideEndscreen();
+            return;
+          }
+
+          isEndscreenVisible = true;
+          if (typeof applyRecStage === 'function') {
+            applyRecStage(0);
+          }
+          if (recOpenBtn) {
+            recOpenBtn.style.display = 'none';
+            recOpenBtn.classList.remove('is-open');
+            recOpenBtn.setAttribute('aria-expanded', 'false');
+          }
+          if (recDrawer) {
+            recStage = 0;
+            recDrawer.classList.remove('is-visible');
+            recDrawer.style.display = 'none';
+          }
+
+          rootEl.classList.add('alabaster-endscreen-active');
+          endscreenOverlay.style.display = 'flex';
+          compat.raf(function() {
+            if (isEndscreenVisible && endscreenOverlay) {
+              endscreenOverlay.classList.add('is-visible');
+            }
+          });
+        };
+
+        hideEndscreen = function() {
+          var wasVisible = isEndscreenVisible;
+          isEndscreenVisible = false;
+          if (rootEl) rootEl.classList.remove('alabaster-endscreen-active');
+          if (endscreenOverlay) {
+            endscreenOverlay.classList.remove('is-visible');
+            setTimeout(function() {
+              if (!isEndscreenVisible && endscreenOverlay) {
+                endscreenOverlay.style.display = 'none';
+              }
+            }, 220);
+          }
+          if (wasVisible && typeof syncFullscreenTitleBarVisibility === 'function') {
+            syncFullscreenTitleBarVisibility();
+          }
+        };
+
+        window.Alabaster._hideEndscreen = hideEndscreen;
+
+        var hideEndscreenIfNotEnded = function() {
+          if (!isEndscreenVisible) return;
+          var isEndedNow = Boolean(
+            (typeof player.ended === 'function' && player.ended()) ||
+            (rootEl && rootEl.classList.contains('vjs-ended'))
+          );
+          if (!isEndedNow) {
+            hideEndscreen();
+          }
+        };
+
+        player.on('ended', showEndscreen);
+        player.on('play', hideEndscreen);
+        player.on('playing', hideEndscreen);
+        player.on('seeking', hideEndscreen);
+        player.on('loadstart', hideEndscreen);
+        player.on('seeked', hideEndscreenIfNotEnded);
+        player.on('timeupdate', hideEndscreenIfNotEnded);
+        player.on('dispose', function() {
+          if (window.Alabaster._hideEndscreen === hideEndscreen) {
+            window.Alabaster._hideEndscreen = null;
+          }
+        });
       }
 
       var loopInd = document.getElementById('loopedIndicator');
@@ -7689,6 +8571,10 @@ window.SyncLevel = SyncLevel;
           isFsCommentsOpen = false;
         }
 
+        if (isEndscreenVisible && isStorageFlagEnabled('disable_endscreen_rec') && typeof hideEndscreen === 'function') {
+          hideEndscreen();
+        }
+
         bindTitleClickHandlers();
         positionCustomButtons();
         if (typeof syncYoutubeCaptionsUI === 'function') {
@@ -7766,7 +8652,7 @@ window.SyncLevel = SyncLevel;
         if (recOpenBtn && recDrawer) {
           var hasRecNode = Boolean(document.querySelector('.recommended-list .video'));
           var discoverDisabled = isStorageFlagEnabled('disable_fs_discover');
-          if (isFs && hasRecNode && !discoverDisabled) {
+          if (isFs && hasRecNode && !discoverDisabled && !isEndscreenVisible) {
             recOpenBtn.style.display = 'inline-flex';
           } else {
             recOpenBtn.style.display = 'none';
@@ -7933,7 +8819,7 @@ window.SyncLevel = SyncLevel;
         var isInteractivePlayerUI = function(target) {
           if (!target || !target.closest) return false;
           return Boolean(target.closest(
-            '.vjs-control-bar, .alabaster-autoplay-overlay, .alabaster-fs-settings-popup, .alabaster-stats-for-nerds, .alabaster-fs-desc-drawer, .alabaster-fs-comments-drawer, .alabaster-rec-drawer, .alabaster-fs-desc-toggle, .alabaster-gif-backdrop, .vjs-title-bar-title, .vjs-big-play-button, button, a, input'
+            '.vjs-control-bar, .alabaster-autoplay-overlay, .alabaster-endscreen-card, .alabaster-fs-settings-popup, .alabaster-stats-for-nerds, .alabaster-fs-desc-drawer, .alabaster-fs-comments-drawer, .alabaster-rec-drawer, .alabaster-fs-desc-toggle, .alabaster-gif-backdrop, .vjs-title-bar-title, .vjs-big-play-button, button, a, input'
           ));
         };
 
@@ -11357,6 +12243,9 @@ window.SyncLevel = SyncLevel;
         state.alignAttemptCount = 0;
         state.audioWakeRetryCount = 0;
         player.removeClass('vjs-ended');
+        if (typeof window.Alabaster._hideEndscreen === 'function') {
+          window.Alabaster._hideEndscreen();
+        }
         state.userSeeking = true;
         state.seekAudioRetried = false;
         state.seekVideoRetried = false;
