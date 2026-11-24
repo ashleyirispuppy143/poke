@@ -23,7 +23,7 @@
  * ///////////////////////////////////////////////////////////////////////////
  * "It takes a lot of hard work to make something simple." ~ Steve Jobs 
  */
-const SyncLevel = {
+ const SyncLevel = {
   driftSeconds: 0,
   driftMs: 0,
   synced: true,
@@ -59,6 +59,7 @@ window.SyncLevel = SyncLevel;
     { id: 'legacy_desc_btn', key: 'dont_use_alabaster_style_description_opening_fs', legacy: 'DontUseAlabasterStyleDescriptionOpeningFS' },
     { id: 'disable_fs_discover', key: 'close_full_screen_discover', legacy: 'CloseFullScreenDiscover' },
     { id: 'disable_endscreen_rec', key: 'alabaster_disable_endscreen_recommendations', legacy: null },
+    { id: 'play_next_video', key: 'play_next_video_v2', legacy: null },
     { id: 'show_dislikes_fs_desc', key: 'show_dislikes_on_full_screen_desc', legacy: 'ShowDislikesOnFullScreenDesc' },
     { id: 'hide_verify_badge_fs_desc', key: 'dont_show_verified_badge_on_pop_up_description', legacy: 'DontShowVerifiedBadgeOnPopUpDescription' },
     { id: 'disable_rec_shortcut', key: 'alabaster_dont_use_youtube_style_recommendations_shortcut', legacy: 'AlabasterDontUseYoutubeStyleRecommendationsShortcut' },
@@ -1550,9 +1551,9 @@ window.SyncLevel = SyncLevel;
       '  display: none;',
       '  align-items: center !important;',
       '  justify-content: center !important;',
-      '  padding: 24px 28px 78px 28px !important;',
+      '  padding: 20px 28px 72px 28px !important;',
       '  box-sizing: border-box !important;',
-      '  background: rgba(0, 0, 0, 0.72) !important;',
+      '  background: rgba(0, 0, 0, 0.86) !important;',
       '  pointer-events: none !important;',
       '  user-select: none !important;',
       '  opacity: 0;',
@@ -1562,49 +1563,52 @@ window.SyncLevel = SyncLevel;
       '  opacity: 1 !important;',
       '}',
       '.alabaster-endscreen-grid {',
-      '  display: flex !important;',
-      '  flex-direction: row !important;',
-      '  align-items: center !important;',
+      '  display: grid !important;',
+      '  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;',
+      '  align-items: start !important;',
       '  justify-content: center !important;',
-      '  gap: 16px !important;',
-      '  width: 100% !important;',
-      '  max-width: 980px !important;',
+      '  gap: 18px !important;',
+      '  width: min(94%, 860px) !important;',
+      '  max-width: 860px !important;',
       '  box-sizing: border-box !important;',
       '  pointer-events: none !important;',
       '}',
       '.vjs-fullscreen .alabaster-endscreen-grid {',
-      '  max-width: 1180px !important;',
-      '  gap: 22px !important;',
+      '  width: min(90vw, 1520px) !important;',
+      '  max-width: 1520px !important;',
+      '  gap: 28px !important;',
       '}',
       '.alabaster-endscreen-card {',
       '  position: relative !important;',
-      '  flex: 0 1 310px !important;',
       '  min-width: 0 !important;',
-      '  aspect-ratio: 16 / 9 !important;',
-      '  border-radius: 12px !important;',
-      '  overflow: hidden !important;',
-      '  display: block !important;',
+      '  display: flex !important;',
+      '  flex-direction: column !important;',
+      '  gap: 10px !important;',
       '  text-decoration: none !important;',
       '  color: #ffffff !important;',
-      '  background: #141414 !important;',
-      '  border: 1px solid rgba(255, 255, 255, 0.16) !important;',
-      '  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.65) !important;',
+      '  background: transparent !important;',
+      '  border: none !important;',
+      '  box-shadow: none !important;',
       '  pointer-events: auto !important;',
       '  cursor: pointer !important;',
-      '  font-family: "poketube flex", "PokeTube Flex", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;',
-      '  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease !important;',
+      '  font-family: Roboto, "poketube flex", "PokeTube Flex", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif !important;',
       '}',
       '.vjs-fullscreen .alabaster-endscreen-card {',
-      '  flex: 0 1 370px !important;',
+      '  gap: 14px !important;',
       '}',
-      '.alabaster-endscreen-card:hover {',
-      '  transform: translateY(-3px) !important;',
-      '  border-color: rgba(255, 255, 255, 0.42) !important;',
-      '  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.8) !important;',
+      '.alabaster-endscreen-thumb-wrap {',
+      '  position: relative !important;',
+      '  width: 100% !important;',
+      '  aspect-ratio: 16 / 9 !important;',
+      '  border-radius: 10px !important;',
+      '  overflow: hidden !important;',
+      '  background: #141414 !important;',
+      '  flex-shrink: 0 !important;',
+      '}',
+      '.vjs-fullscreen .alabaster-endscreen-thumb-wrap {',
+      '  border-radius: 14px !important;',
       '}',
       '.alabaster-endscreen-thumb {',
-      '  position: absolute !important;',
-      '  inset: 0 !important;',
       '  width: 100% !important;',
       '  height: 100% !important;',
       '  object-fit: cover !important;',
@@ -1612,27 +1616,22 @@ window.SyncLevel = SyncLevel;
       '  transition: transform 0.22s ease !important;',
       '}',
       '.alabaster-endscreen-card:hover .alabaster-endscreen-thumb {',
-      '  transform: scale(1.04) !important;',
+      '  transform: scale(1.03) !important;',
       '}',
       '.alabaster-endscreen-info {',
-      '  position: absolute !important;',
-      '  top: 0 !important;',
-      '  left: 0 !important;',
-      '  right: 0 !important;',
-      '  padding: 10px 12px 26px 12px !important;',
-      '  box-sizing: border-box !important;',
-      '  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.86) 0%, rgba(0, 0, 0, 0.5) 62%, rgba(0, 0, 0, 0) 100%) !important;',
       '  display: flex !important;',
       '  flex-direction: column !important;',
-      '  gap: 3px !important;',
-      '  pointer-events: none !important;',
+      '  gap: 2px !important;',
+      '  min-width: 0 !important;',
+      '  text-align: left !important;',
+      '  padding: 0 2px !important;',
       '}',
       '.alabaster-endscreen-title {',
-      '  font-size: clamp(11px, 1.3vw, 14.5px) !important;',
+      '  font-size: clamp(12px, 1.35vw, 15px) !important;',
       '  font-weight: 700 !important;',
-      '  line-height: 1.28 !important;',
+      '  line-height: 1.3 !important;',
       '  color: #ffffff !important;',
-      '  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85) !important;',
+      '  margin: 0 0 2px 0 !important;',
       '  display: -webkit-box !important;',
       '  -webkit-line-clamp: 2 !important;',
       '  -webkit-box-orient: vertical !important;',
@@ -1640,48 +1639,272 @@ window.SyncLevel = SyncLevel;
       '  text-overflow: ellipsis !important;',
       '  word-break: break-word !important;',
       '}',
-      '.alabaster-endscreen-meta {',
-      '  font-size: clamp(10px, 1.05vw, 12px) !important;',
-      '  font-weight: 500 !important;',
-      '  line-height: 1.25 !important;',
-      '  color: rgba(255, 255, 255, 0.84) !important;',
-      '  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85) !important;',
+      '.vjs-fullscreen .alabaster-endscreen-title {',
+      '  font-size: clamp(16px, 1.45vw, 21px) !important;',
+      '  margin-bottom: 4px !important;',
+      '}',
+      '.alabaster-endscreen-author, .alabaster-endscreen-stats {',
+      '  font-size: clamp(11px, 1.1vw, 13px) !important;',
+      '  font-weight: 400 !important;',
+      '  line-height: 1.3 !important;',
+      '  color: #aaaaaa !important;',
       '  white-space: nowrap !important;',
       '  overflow: hidden !important;',
       '  text-overflow: ellipsis !important;',
+      '}',
+      '.vjs-fullscreen .alabaster-endscreen-author, .vjs-fullscreen .alabaster-endscreen-stats {',
+      '  font-size: clamp(14px, 1.15vw, 17px) !important;',
       '}',
       '.alabaster-endscreen-duration {',
       '  position: absolute !important;',
       '  right: 8px !important;',
       '  bottom: 8px !important;',
       '  padding: 2px 6px !important;',
-      '  border-radius: 5px !important;',
-      '  background: rgba(0, 0, 0, 0.84) !important;',
+      '  border-radius: 4px !important;',
+      '  background: rgba(0, 0, 0, 0.85) !important;',
       '  color: #ffffff !important;',
-      '  font-size: 11px !important;',
+      '  font-size: 11.5px !important;',
       '  font-weight: 600 !important;',
       '  line-height: 1.2 !important;',
       '  letter-spacing: 0.2px !important;',
       '  pointer-events: none !important;',
       '}',
+      '.vjs-fullscreen .alabaster-endscreen-duration {',
+      '  right: 10px !important;',
+      '  bottom: 10px !important;',
+      '  padding: 3px 8px !important;',
+      '  border-radius: 5px !important;',
+      '  font-size: 14px !important;',
+      '}',
+      '.alabaster-upnext-wrap {',
+      '  display: none;',
+      '  flex-direction: column !important;',
+      '  width: min(370px, 78%) !important;',
+      '  max-width: 390px !important;',
+      '  box-sizing: border-box !important;',
+      '  pointer-events: auto !important;',
+      '  font-family: Roboto, "poketube flex", "PokeTube Flex", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif !important;',
+      '}',
+      '.vjs-fullscreen .alabaster-upnext-wrap {',
+      '  width: min(640px, 56vw) !important;',
+      '  max-width: 660px !important;',
+      '}',
+      '.alabaster-upnext-header {',
+      '  display: flex !important;',
+      '  flex-direction: row !important;',
+      '  align-items: center !important;',
+      '  justify-content: space-between !important;',
+      '  margin-bottom: 10px !important;',
+      '  width: 100% !important;',
+      '}',
+      '.vjs-fullscreen .alabaster-upnext-header {',
+      '  margin-bottom: 14px !important;',
+      '}',
+      '.alabaster-upnext-label {',
+      '  font-size: 14px !important;',
+      '  font-weight: 500 !important;',
+      '  color: #b5b5b5 !important;',
+      '  line-height: 1.2 !important;',
+      '}',
+      '.vjs-fullscreen .alabaster-upnext-label {',
+      '  font-size: 19px !important;',
+      '}',
+      '.alabaster-upnext-count {',
+      '  color: #ffffff !important;',
+      '  font-weight: 700 !important;',
+      '}',
+      '.video-js .alabaster-upnext-cancel, .alabaster-upnext-cancel {',
+      '  width: 26px !important;',
+      '  height: 26px !important;',
+      '  min-width: 26px !important;',
+      '  padding: 0 !important;',
+      '  margin: 0 !important;',
+      '  border: none !important;',
+      '  border-radius: 50% !important;',
+      '  background: transparent !important;',
+      '  color: #ffffff !important;',
+      '  display: inline-flex !important;',
+      '  align-items: center !important;',
+      '  justify-content: center !important;',
+      '  cursor: pointer !important;',
+      '  opacity: 0.9 !important;',
+      '  transition: opacity 0.15s ease, background 0.15s ease !important;',
+      '}',
+      '.vjs-fullscreen .alabaster-upnext-cancel {',
+      '  width: 34px !important;',
+      '  height: 34px !important;',
+      '  min-width: 34px !important;',
+      '}',
+      '.video-js .alabaster-upnext-cancel:hover, .alabaster-upnext-cancel:hover {',
+      '  opacity: 1 !important;',
+      '  background: rgba(255, 255, 255, 0.12) !important;',
+      '}',
+      '.alabaster-upnext-card {',
+      '  display: flex !important;',
+      '  flex-direction: column !important;',
+      '  width: 100% !important;',
+      '  text-decoration: none !important;',
+      '  color: #ffffff !important;',
+      '  cursor: pointer !important;',
+      '}',
+      '.alabaster-upnext-thumb-box {',
+      '  position: relative !important;',
+      '  width: 100% !important;',
+      '  aspect-ratio: 16 / 9 !important;',
+      '  border-radius: 10px !important;',
+      '  overflow: hidden !important;',
+      '  background: #141414 !important;',
+      '  border: 1px solid rgba(255, 255, 255, 0.2) !important;',
+      '  box-sizing: border-box !important;',
+      '}',
+      '.vjs-fullscreen .alabaster-upnext-thumb-box {',
+      '  border-radius: 14px !important;',
+      '}',
+      '.alabaster-upnext-thumb {',
+      '  width: 100% !important;',
+      '  height: 100% !important;',
+      '  object-fit: cover !important;',
+      '  display: block !important;',
+      '  transition: transform 0.22s ease !important;',
+      '}',
+      '.alabaster-upnext-card:hover .alabaster-upnext-thumb {',
+      '  transform: scale(1.03) !important;',
+      '}',
+      '.alabaster-upnext-duration {',
+      '  position: absolute !important;',
+      '  right: 10px !important;',
+      '  bottom: 8px !important;',
+      '  padding: 2px 8px !important;',
+      '  border-radius: 999px !important;',
+      '  background: rgba(0, 0, 0, 0.85) !important;',
+      '  color: #ffffff !important;',
+      '  font-size: 11.5px !important;',
+      '  font-weight: 700 !important;',
+      '  line-height: 1.2 !important;',
+      '  pointer-events: none !important;',
+      '}',
+      '.vjs-fullscreen .alabaster-upnext-duration {',
+      '  right: 14px !important;',
+      '  bottom: 12px !important;',
+      '  padding: 4px 11px !important;',
+      '  font-size: 14.5px !important;',
+      '}',
+      '.alabaster-upnext-meta {',
+      '  display: flex !important;',
+      '  flex-direction: column !important;',
+      '  gap: 3px !important;',
+      '  margin-top: 10px !important;',
+      '  text-align: left !important;',
+      '}',
+      '.vjs-fullscreen .alabaster-upnext-meta {',
+      '  gap: 5px !important;',
+      '  margin-top: 14px !important;',
+      '}',
+      '.alabaster-upnext-title {',
+      '  font-size: 14.5px !important;',
+      '  font-weight: 700 !important;',
+      '  line-height: 1.3 !important;',
+      '  color: #ffffff !important;',
+      '  display: -webkit-box !important;',
+      '  -webkit-line-clamp: 2 !important;',
+      '  -webkit-box-orient: vertical !important;',
+      '  overflow: hidden !important;',
+      '  text-overflow: ellipsis !important;',
+      '}',
+      '.vjs-fullscreen .alabaster-upnext-title {',
+      '  font-size: 20px !important;',
+      '}',
+      '.alabaster-upnext-author {',
+      '  font-size: 13px !important;',
+      '  font-weight: 400 !important;',
+      '  line-height: 1.25 !important;',
+      '  color: #aaaaaa !important;',
+      '  white-space: nowrap !important;',
+      '  overflow: hidden !important;',
+      '  text-overflow: ellipsis !important;',
+      '}',
+      '.vjs-fullscreen .alabaster-upnext-author {',
+      '  font-size: 16px !important;',
+      '}',
+      '.video-js .vjs-alabaster-autoplay-btn, .vjs-alabaster-autoplay-btn {',
+      '  width: auto !important;',
+      '  min-width: 44px !important;',
+      '  height: var(--poke-custom-player-button-size, 36px) !important;',
+      '  padding: 0 5px !important;',
+      '  margin: 0 !important;',
+      '  background: transparent !important;',
+      '  background-color: transparent !important;',
+      '  background-image: none !important;',
+      '  border: none !important;',
+      '  box-shadow: none !important;',
+      '  display: inline-flex !important;',
+      '  align-items: center !important;',
+      '  justify-content: center !important;',
+      '  cursor: pointer !important;',
+      '}',
+      '.alabaster-autoplay-switch-track {',
+      '  position: relative !important;',
+      '  width: 36px !important;',
+      '  height: 20px !important;',
+      '  border-radius: 999px !important;',
+      '  background: rgba(255, 255, 255, 0.24) !important;',
+      '  transition: background-color 0.2s ease !important;',
+      '  box-sizing: border-box !important;',
+      '  display: inline-block !important;',
+      '  pointer-events: none !important;',
+      '}',
+      '.vjs-alabaster-autoplay-btn.is-on .alabaster-autoplay-switch-track {',
+      '  background: #ffffff !important;',
+      '}',
+      '.alabaster-autoplay-switch-thumb {',
+      '  position: absolute !important;',
+      '  top: 2px !important;',
+      '  left: 2px !important;',
+      '  width: 16px !important;',
+      '  height: 16px !important;',
+      '  border-radius: 50% !important;',
+      '  background: #ffffff !important;',
+      '  color: #0b0b0b !important;',
+      '  display: flex !important;',
+      '  align-items: center !important;',
+      '  justify-content: center !important;',
+      '  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.2s ease, color 0.2s ease !important;',
+      '}',
+      '.vjs-alabaster-autoplay-btn.is-on .alabaster-autoplay-switch-thumb {',
+      '  transform: translateX(16px) !important;',
+      '  background: #0b0b0b !important;',
+      '  color: #ffffff !important;',
+      '}',
+      '.alabaster-autoplay-icon-play {',
+      '  display: none !important;',
+      '}',
+      '.alabaster-autoplay-icon-pause {',
+      '  display: block !important;',
+      '}',
+      '.vjs-alabaster-autoplay-btn.is-on .alabaster-autoplay-icon-play {',
+      '  display: block !important;',
+      '}',
+      '.vjs-alabaster-autoplay-btn.is-on .alabaster-autoplay-icon-pause {',
+      '  display: none !important;',
+      '}',
       '@media (max-width: 560px) {',
       '  .video-js .alabaster-endscreen-overlay, .alabaster-endscreen-overlay {',
-      '    padding: 14px 12px 64px 12px !important;',
+      '    padding: 12px 10px 62px 10px !important;',
       '  }',
       '  .alabaster-endscreen-grid {',
       '    gap: 8px !important;',
       '  }',
-      '  .alabaster-endscreen-card {',
-      '    border-radius: 8px !important;',
-      '  }',
-      '  .alabaster-endscreen-info {',
-      '    padding: 6px 7px 16px 7px !important;',
+      '  .alabaster-endscreen-thumb-wrap {',
+      '    border-radius: 7px !important;',
       '  }',
       '  .alabaster-endscreen-duration {',
       '    right: 4px !important;',
       '    bottom: 4px !important;',
       '    padding: 1px 4px !important;',
       '    font-size: 9.5px !important;',
+      '  }',
+      '  .alabaster-upnext-wrap {',
+      '    width: min(290px, 84%) !important;',
       '  }',
       '}',
       '.video-js .alabaster-autoplay-overlay, .alabaster-autoplay-overlay {',
@@ -2160,7 +2383,7 @@ window.SyncLevel = SyncLevel;
       '  padding: 0 !important;',
       '  background: transparent !important;',
       '  color: #ffffff !important;',
-      '  font-family: Poketube Flex, "PokeTube Flex", Arial, Helvetica, sans-serif !important;',
+      '  font-family: Roboto, "poketube flex", Arial, Helvetica, sans-serif !important;',
       '  font-weight: 400 !important;',
       '  pointer-events: none !important;',
       '  user-select: none !important;',
@@ -2177,7 +2400,7 @@ window.SyncLevel = SyncLevel;
       '  align-items: center !important;',
       '  background: rgba(28, 28, 28, 0.8) !important;',
       '  color: #ffffff !important;',
-      '  font-family: Roboto, "PokeTube Flex", Arial, Helvetica, sans-serif !important;',
+      '  font-family: Roboto, "poketube flex", Arial, Helvetica, sans-serif !important;',
       '  font-size: 16px !important;',
       '  font-weight: 400 !important;',
       '  line-height: 1.25 !important;',
@@ -3744,6 +3967,9 @@ window.SyncLevel = SyncLevel;
       var isFsCommentsOpen = false;
       var setCommentsDrawerState = null;
 
+      var fsAutoplayBtn = null;
+      var syncAutoplayNextBtnUI = null;
+
       var fsSettingsBtn = null;
       var fsSettingsPopup = null;
       var isFsSettingsOpen = false;
@@ -3753,9 +3979,11 @@ window.SyncLevel = SyncLevel;
 
       var endscreenOverlay = null;
       var endscreenGrid = null;
+      var upnextWrap = null;
       var isEndscreenVisible = false;
       var showEndscreen = null;
       var hideEndscreen = null;
+      var clearUpNextTimer = null;
 
       var gifMakerBackdrop = null;
       var closeGifMaker = null;
@@ -4196,6 +4424,41 @@ window.SyncLevel = SyncLevel;
             if (orderVal) fsSettingsBtn.style.order = orderVal;
           } else if (fsSettingsBtn.parentNode !== barElNode) {
             barElNode.appendChild(fsSettingsBtn);
+          }
+        }
+        if (fsAutoplayBtn) {
+          var ccBtnEl = barElNode.querySelector('.vjs-subs-caps-button:not(.vjs-hidden), .vjs-captions-button:not(.vjs-hidden), .vjs-subtitles-button:not(.vjs-hidden)');
+          var hasCaptionsAvail = false;
+          if (ccBtnEl) {
+            var ttList = typeof player.textTracks === 'function' ? player.textTracks() : null;
+            if (ttList && ttList.length > 0) {
+              for (var ti = 0; ti < ttList.length; ti++) {
+                if (ttList[ti] && (ttList[ti].kind === 'captions' || ttList[ti].kind === 'subtitles')) {
+                  hasCaptionsAvail = true;
+                  break;
+                }
+              }
+            }
+          }
+          var autoAnchor = (hasCaptionsAvail && ccBtnEl && ccBtnEl.parentNode === barElNode)
+            ? ccBtnEl
+            : ((fsSettingsBtn && fsSettingsBtn.parentNode === barElNode) ? fsSettingsBtn : anchorEl);
+          if (autoAnchor && autoAnchor.parentNode) {
+            if (fsAutoplayBtn.nextSibling !== autoAnchor) {
+              autoAnchor.parentNode.insertBefore(fsAutoplayBtn, autoAnchor);
+            }
+            var autoOrder = '';
+            if (window.getComputedStyle) {
+              var compAutoOrder = window.getComputedStyle(autoAnchor).order;
+              if (compAutoOrder && compAutoOrder !== '0' && compAutoOrder !== 'auto') {
+                autoOrder = compAutoOrder;
+              }
+            }
+            if (autoOrder) fsAutoplayBtn.style.order = autoOrder;
+            else if (orderVal) fsAutoplayBtn.style.order = orderVal;
+            else fsAutoplayBtn.style.removeProperty('order');
+          } else if (fsAutoplayBtn.parentNode !== barElNode) {
+            barElNode.appendChild(fsAutoplayBtn);
           }
         }
       };
@@ -5422,6 +5685,8 @@ window.SyncLevel = SyncLevel;
           if (subtitlesPanel.classList.contains('is-active')) {
             rebuildSubtitlesList();
           }
+
+          positionCustomButtons();
         };
 
         fsSettingsPopup.appendChild(mainPanel);
@@ -7678,6 +7943,63 @@ window.SyncLevel = SyncLevel;
 
           positionCustomButtons();
         }
+
+        if (cBarForSettings && !cBarForSettings.querySelector('.vjs-alabaster-autoplay-btn')) {
+          fsAutoplayBtn = document.createElement('button');
+          fsAutoplayBtn.type = 'button';
+          fsAutoplayBtn.className = 'vjs-alabaster-autoplay-btn vjs-control vjs-button';
+          fsAutoplayBtn.setAttribute('title', 'autoplay on off');
+          fsAutoplayBtn.title = 'autoplay on off';
+          fsAutoplayBtn.setAttribute('aria-label', 'autoplay on off');
+          fsAutoplayBtn.setAttribute('role', 'switch');
+          fsAutoplayBtn.setAttribute('aria-checked', 'false');
+          fsAutoplayBtn.innerHTML = [
+            '<span class="alabaster-autoplay-switch-track">',
+            '  <span class="alabaster-autoplay-switch-thumb">',
+            '    <svg class="alabaster-autoplay-icon-play" viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true">',
+            '      <polygon points="7,5 19,12 7,19"></polygon>',
+            '    </svg>',
+            '    <svg class="alabaster-autoplay-icon-pause" viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true">',
+            '      <rect x="6" y="5" width="4" height="14" rx="1"></rect>',
+            '      <rect x="14" y="5" width="4" height="14" rx="1"></rect>',
+            '    </svg>',
+            '  </span>',
+            '</span>'
+          ].join('');
+
+          syncAutoplayNextBtnUI = function() {
+            if (!fsAutoplayBtn) return;
+            var isAutoNextOn = isStorageFlagEnabled('play_next_video');
+            fsAutoplayBtn.classList.toggle('is-on', isAutoNextOn);
+            fsAutoplayBtn.setAttribute('aria-checked', isAutoNextOn ? 'true' : 'false');
+            fsAutoplayBtn.setAttribute('title', 'autoplay on off');
+            fsAutoplayBtn.title = 'autoplay on off';
+          };
+
+          ['mousedown', 'pointerdown', 'touchstart', 'touchend'].forEach(function(evName) {
+            fsAutoplayBtn.addEventListener(evName, function(evt) {
+              evt.stopPropagation();
+            }, false);
+          });
+
+          fsAutoplayBtn.addEventListener('click', function(evt) {
+            evt.preventDefault();
+            evt.stopPropagation();
+            var nextOn = !isStorageFlagEnabled('play_next_video');
+            setStorageValue('play_next_video', nextOn ? 'true' : 'false');
+            syncAutoplayNextBtnUI();
+            var isEndedNow = Boolean(
+              (typeof player.ended === 'function' && player.ended()) ||
+              (rootEl && rootEl.classList.contains('vjs-ended'))
+            );
+            if (isEndedNow && typeof showEndscreen === 'function') {
+              showEndscreen();
+            }
+          });
+
+          syncAutoplayNextBtnUI();
+          positionCustomButtons();
+        }
       }
 
       var recDrawer = null;
@@ -7885,12 +8207,14 @@ window.SyncLevel = SyncLevel;
                 tag === 'input' ||
                 curr.getAttribute('role') === 'slider' ||
                 curr.getAttribute('role') === 'button' ||
+                curr.getAttribute('role') === 'switch' ||
                 cls.indexOf('vjs-progress-control') !== -1 ||
                 cls.indexOf('vjs-slider') !== -1 ||
                 cls.indexOf('vjs-volume') !== -1 ||
                 cls.indexOf('vjs-play-control') !== -1 ||
                 cls.indexOf('vjs-fullscreen-control') !== -1 ||
                 cls.indexOf('vjs-picture-in-picture') !== -1 ||
+                cls.indexOf('vjs-alabaster-autoplay-btn') !== -1 ||
                 cls.indexOf('vjs-alabaster-comments-btn') !== -1 ||
                 cls.indexOf('vjs-alabaster-settings-btn') !== -1 ||
                 cls.indexOf('vjs-menu') !== -1 ||
@@ -7912,7 +8236,7 @@ window.SyncLevel = SyncLevel;
             if (tRect.width > 0) leftBoundary = Math.max(leftBoundary, tRect.right + 16);
           }
 
-          var rightButtons = bar.querySelectorAll('.vjs-alabaster-comments-btn, .vjs-alabaster-settings-btn, .vjs-picture-in-picture-control, .vjs-fullscreen-control, .vjs-subs-caps-button, .vjs-playback-rate, .vjs-quality-selector');
+          var rightButtons = bar.querySelectorAll('.vjs-alabaster-autoplay-btn, .vjs-alabaster-comments-btn, .vjs-alabaster-settings-btn, .vjs-picture-in-picture-control, .vjs-fullscreen-control, .vjs-subs-caps-button, .vjs-playback-rate, .vjs-quality-selector');
           for (var i = 0; i < rightButtons.length; i++) {
             var rbRect = rightButtons[i].getBoundingClientRect();
             if (rbRect.width > 0 && rbRect.left > barRect.left + barRect.width * 0.45) {
@@ -8272,8 +8596,49 @@ window.SyncLevel = SyncLevel;
         endscreenGrid = document.createElement('div');
         endscreenGrid.className = 'alabaster-endscreen-grid';
 
+        upnextWrap = document.createElement('div');
+        upnextWrap.className = 'alabaster-upnext-wrap';
+
         endscreenOverlay.appendChild(endscreenGrid);
+        endscreenOverlay.appendChild(upnextWrap);
         rootEl.appendChild(endscreenOverlay);
+
+        var upNextIntervalId = 0;
+
+        clearUpNextTimer = function() {
+          if (upNextIntervalId) {
+            clearInterval(upNextIntervalId);
+            upNextIntervalId = 0;
+          }
+        };
+
+        var extractNextVideoId = function(item) {
+          if (!item) return '';
+          var rawHref = String(item.href || '').trim();
+          var rawThumb = String(item.thumbUrl || item.fallbackThumbUrl || '').trim();
+          var match = rawHref.match(/[?&](?:v|id)=([a-zA-Z0-9_-]{11})/) ||
+                      rawThumb.match(/\/vi\/([a-zA-Z0-9_-]{11})\//) ||
+                      rawHref.match(/\/(?:watch|v|embed)\/([a-zA-Z0-9_-]{11})/) ||
+                      rawHref.match(/[?&](?:v|id)=([^&#]+)/);
+          return (match && match[1]) ? match[1].trim() : '';
+        };
+
+        var buildRedirectWatchUrl = function(item) {
+          var nextId = extractNextVideoId(item);
+          if (nextId) {
+            return '/watch?id=' + encodeURIComponent(nextId);
+          }
+          return (item && item.href) ? item.href : '';
+        };
+
+        var formatCleanCardStats = function(item) {
+          var cleanViews = String((item && item.viewCountText) || '').replace(/^[•|\-–—\s]+|[•|\-–—\s]+$/g, '').trim();
+          var cleanPub = String((item && item.publishedText) || '').replace(/^[•|\-–—\s]+|[•|\-–—\s]+$/g, '').trim();
+          if (cleanViews && cleanPub) {
+            return cleanViews + ' \u2022 ' + cleanPub;
+          }
+          return cleanViews || cleanPub;
+        };
 
         var buildEndscreenCards = function() {
           if (isStorageFlagEnabled('disable_endscreen_rec')) return false;
@@ -8302,6 +8667,9 @@ window.SyncLevel = SyncLevel;
               card.className = 'alabaster-endscreen-card';
               card.href = item.href;
 
+              var thumbWrap = document.createElement('div');
+              thumbWrap.className = 'alabaster-endscreen-thumb-wrap';
+
               var img = document.createElement('img');
               img.className = 'alabaster-endscreen-thumb';
               img.loading = 'eager';
@@ -8322,6 +8690,14 @@ window.SyncLevel = SyncLevel;
                 }
               }, false);
               img.src = item.thumbUrl || item.fallbackThumbUrl || '';
+              thumbWrap.appendChild(img);
+
+              if (item.durationText) {
+                var durEl = document.createElement('span');
+                durEl.className = 'alabaster-endscreen-duration';
+                durEl.textContent = item.durationText;
+                thumbWrap.appendChild(durEl);
+              }
 
               var infoWrap = document.createElement('div');
               infoWrap.className = 'alabaster-endscreen-info';
@@ -8331,26 +8707,23 @@ window.SyncLevel = SyncLevel;
               titleEl.textContent = item.title || '';
               infoWrap.appendChild(titleEl);
 
-              var metaParts = [];
-              if (item.author) metaParts.push(item.author);
-              if (item.viewCountText) metaParts.push(item.viewCountText);
-              else if (item.publishedText) metaParts.push(item.publishedText);
-              if (metaParts.length) {
-                var metaEl = document.createElement('div');
-                metaEl.className = 'alabaster-endscreen-meta';
-                metaEl.textContent = metaParts.join(' \u2022 ');
-                infoWrap.appendChild(metaEl);
+              if (item.author) {
+                var authorEl = document.createElement('div');
+                authorEl.className = 'alabaster-endscreen-author';
+                authorEl.textContent = item.author;
+                infoWrap.appendChild(authorEl);
               }
 
-              card.appendChild(img);
+              var statsStr = formatCleanCardStats(item);
+              if (statsStr) {
+                var statsEl = document.createElement('div');
+                statsEl.className = 'alabaster-endscreen-stats';
+                statsEl.textContent = statsStr;
+                infoWrap.appendChild(statsEl);
+              }
+
+              card.appendChild(thumbWrap);
               card.appendChild(infoWrap);
-
-              if (item.durationText) {
-                var durEl = document.createElement('span');
-                durEl.className = 'alabaster-endscreen-duration';
-                durEl.textContent = item.durationText;
-                card.appendChild(durEl);
-              }
 
               ['click', 'mousedown', 'pointerdown', 'touchstart', 'touchend'].forEach(function(evName) {
                 card.addEventListener(evName, function(evt) {
@@ -8365,19 +8738,165 @@ window.SyncLevel = SyncLevel;
           return endscreenGrid.children.length > 0;
         };
 
+        var buildUpNextView = function() {
+          var list = metadataParser.readRecommended();
+          if (!list || !list.length) return false;
+          var nextItem = null;
+          for (var i = 0; i < list.length; i++) {
+            if (list[i] && list[i].href) {
+              nextItem = list[i];
+              break;
+            }
+          }
+          if (!nextItem) return false;
+
+          var redirectUrl = buildRedirectWatchUrl(nextItem);
+          if (!redirectUrl) return false;
+
+          clearUpNextTimer();
+          upnextWrap.innerHTML = '';
+
+          var headerRow = document.createElement('div');
+          headerRow.className = 'alabaster-upnext-header';
+
+          var labelEl = document.createElement('div');
+          labelEl.className = 'alabaster-upnext-label';
+          labelEl.appendChild(document.createTextNode('Up next in '));
+          var countSpan = document.createElement('span');
+          countSpan.className = 'alabaster-upnext-count';
+          countSpan.textContent = '3';
+          labelEl.appendChild(countSpan);
+
+          var cancelBtn = document.createElement('button');
+          cancelBtn.type = 'button';
+          cancelBtn.className = 'alabaster-upnext-cancel';
+          cancelBtn.setAttribute('aria-label', 'Cancel autoplay');
+          cancelBtn.innerHTML = [
+            '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
+            '  <line x1="18" y1="6" x2="6" y2="18"></line>',
+            '  <line x1="6" y1="6" x2="18" y2="18"></line>',
+            '</svg>'
+          ].join('');
+
+          headerRow.appendChild(labelEl);
+          headerRow.appendChild(cancelBtn);
+
+          var cardLink = document.createElement('a');
+          cardLink.className = 'alabaster-upnext-card';
+          cardLink.href = redirectUrl;
+
+          var thumbBox = document.createElement('div');
+          thumbBox.className = 'alabaster-upnext-thumb-box';
+
+          var img = document.createElement('img');
+          img.className = 'alabaster-upnext-thumb';
+          img.loading = 'eager';
+          img.alt = nextItem.title || '';
+
+          var triedFallback = false;
+          var applyFallback = function() {
+            if (triedFallback) return;
+            triedFallback = true;
+            if (nextItem.fallbackThumbUrl && img.src !== nextItem.fallbackThumbUrl) {
+              img.src = nextItem.fallbackThumbUrl;
+            }
+          };
+          img.addEventListener('error', applyFallback, false);
+          img.addEventListener('load', function() {
+            if (img.naturalWidth === 120 && img.naturalHeight === 90) {
+              applyFallback();
+            }
+          }, false);
+          img.src = nextItem.thumbUrl || nextItem.fallbackThumbUrl || '';
+          thumbBox.appendChild(img);
+
+          if (nextItem.durationText) {
+            var durBadge = document.createElement('span');
+            durBadge.className = 'alabaster-upnext-duration';
+            durBadge.textContent = nextItem.durationText;
+            thumbBox.appendChild(durBadge);
+          }
+
+          var metaBox = document.createElement('div');
+          metaBox.className = 'alabaster-upnext-meta';
+
+          var titleEl = document.createElement('div');
+          titleEl.className = 'alabaster-upnext-title';
+          titleEl.textContent = nextItem.title || '';
+          metaBox.appendChild(titleEl);
+
+          if (nextItem.author) {
+            var authorEl = document.createElement('div');
+            authorEl.className = 'alabaster-upnext-author';
+            authorEl.textContent = nextItem.author;
+            metaBox.appendChild(authorEl);
+          }
+
+          cardLink.appendChild(thumbBox);
+          cardLink.appendChild(metaBox);
+
+          upnextWrap.appendChild(headerRow);
+          upnextWrap.appendChild(cardLink);
+
+          ['click', 'mousedown', 'pointerdown', 'touchstart', 'touchend'].forEach(function(evName) {
+            upnextWrap.addEventListener(evName, function(evt) {
+              evt.stopPropagation();
+            }, false);
+          });
+
+          cancelBtn.addEventListener('click', function(evt) {
+            evt.preventDefault();
+            evt.stopPropagation();
+            clearUpNextTimer();
+            if (!isStorageFlagEnabled('disable_endscreen_rec') && buildEndscreenCards()) {
+              upnextWrap.style.setProperty('display', 'none', 'important');
+              endscreenGrid.style.setProperty('display', 'grid', 'important');
+            } else {
+              hideEndscreen();
+            }
+          });
+
+          var remainingSeconds = 3;
+          upNextIntervalId = setInterval(function() {
+            if (!isEndscreenVisible) {
+              clearUpNextTimer();
+              return;
+            }
+            remainingSeconds--;
+            if (remainingSeconds <= 0) {
+              countSpan.textContent = '0';
+              clearUpNextTimer();
+              window.location.href = redirectUrl;
+            } else {
+              countSpan.textContent = String(remainingSeconds);
+            }
+          }, 1000);
+
+          return true;
+        };
+
         showEndscreen = function() {
           if (!endscreenOverlay || !rootEl) return;
-          if (isStorageFlagEnabled('disable_endscreen_rec')) {
-            hideEndscreen();
-            return;
-          }
+          clearUpNextTimer();
           var vNode = (rootEl && rootEl.querySelector('video')) || document.querySelector('video.video-js, video');
           var loopOn = Boolean((vNode && (vNode.loop || vNode.hasAttribute('loop'))) || (typeof player.loop === 'function' && player.loop()));
           if (loopOn) {
             hideEndscreen();
             return;
           }
-          if (!buildEndscreenCards()) {
+
+          var autoplayNextEnabled = isStorageFlagEnabled('play_next_video');
+          var shownMode = '';
+
+          if (autoplayNextEnabled && buildUpNextView()) {
+            shownMode = 'upnext';
+            endscreenGrid.style.setProperty('display', 'none', 'important');
+            upnextWrap.style.setProperty('display', 'flex', 'important');
+          } else if (!isStorageFlagEnabled('disable_endscreen_rec') && buildEndscreenCards()) {
+            shownMode = 'cards';
+            upnextWrap.style.setProperty('display', 'none', 'important');
+            endscreenGrid.style.setProperty('display', 'grid', 'important');
+          } else {
             hideEndscreen();
             return;
           }
@@ -8407,6 +8926,7 @@ window.SyncLevel = SyncLevel;
         };
 
         hideEndscreen = function() {
+          clearUpNextTimer();
           var wasVisible = isEndscreenVisible;
           isEndscreenVisible = false;
           if (rootEl) rootEl.classList.remove('alabaster-endscreen-active');
@@ -8444,6 +8964,7 @@ window.SyncLevel = SyncLevel;
         player.on('seeked', hideEndscreenIfNotEnded);
         player.on('timeupdate', hideEndscreenIfNotEnded);
         player.on('dispose', function() {
+          clearUpNextTimer();
           if (window.Alabaster._hideEndscreen === hideEndscreen) {
             window.Alabaster._hideEndscreen = null;
           }
@@ -8571,7 +9092,11 @@ window.SyncLevel = SyncLevel;
           isFsCommentsOpen = false;
         }
 
-        if (isEndscreenVisible && isStorageFlagEnabled('disable_endscreen_rec') && typeof hideEndscreen === 'function') {
+        if (typeof syncAutoplayNextBtnUI === 'function') {
+          syncAutoplayNextBtnUI();
+        }
+
+        if (isEndscreenVisible && isStorageFlagEnabled('disable_endscreen_rec') && !isStorageFlagEnabled('play_next_video') && typeof hideEndscreen === 'function') {
           hideEndscreen();
         }
 
@@ -8819,7 +9344,7 @@ window.SyncLevel = SyncLevel;
         var isInteractivePlayerUI = function(target) {
           if (!target || !target.closest) return false;
           return Boolean(target.closest(
-            '.vjs-control-bar, .alabaster-autoplay-overlay, .alabaster-endscreen-card, .alabaster-fs-settings-popup, .alabaster-stats-for-nerds, .alabaster-fs-desc-drawer, .alabaster-fs-comments-drawer, .alabaster-rec-drawer, .alabaster-fs-desc-toggle, .alabaster-gif-backdrop, .vjs-title-bar-title, .vjs-big-play-button, button, a, input'
+            '.vjs-control-bar, .alabaster-autoplay-overlay, .alabaster-endscreen-card, .alabaster-upnext-wrap, .alabaster-fs-settings-popup, .alabaster-stats-for-nerds, .alabaster-fs-desc-drawer, .alabaster-fs-comments-drawer, .alabaster-rec-drawer, .alabaster-fs-desc-toggle, .alabaster-gif-backdrop, .vjs-title-bar-title, .vjs-big-play-button, button, a, input'
           ));
         };
 
@@ -13691,7 +14216,6 @@ window.SyncLevel = SyncLevel;
     initAlabasterPlayer();
   }
 })();
-
 
 (function () {
   'use strict';
