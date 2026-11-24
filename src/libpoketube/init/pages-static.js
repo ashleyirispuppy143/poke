@@ -861,6 +861,9 @@ app.get('/calendar', (req, res) => {
   app.get("/bg-480.webm", function (req, res) {
     res.sendFile("bg-480.webm", { root: cssDir });
   });
+  app.get("/poke-notifs-sw.js", function (req, res) {
+    res.sendFile("poke-notifs-sw.js", { root: cssDir });
+  });
 
 app.get("/css/:id", (req, res) => {
   const requestedId = req.params.id;
