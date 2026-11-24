@@ -3,7 +3,7 @@
     This Source Code Form is subject to the terms of the GNU General Public License:
 
     Copyright (C) 2021-2026 Poke (https://codeberg.org/ashleyirispuppy/poke)
-    
+
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
@@ -1154,6 +1154,21 @@
       color: var(--md-sys-color-on-error-container);
     }
 
+    .sw-status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--md-sys-color-on-surface-variant);
+      background: var(--md-sys-color-surface-container-high);
+      padding: 6px 12px;
+      border-radius: 12px;
+    }
+    .sw-status-pill.ready {
+      background: rgba(31, 71, 51, 0.5);
+      color: var(--md-sys-color-e2ee);
+    }
+
     .import-section {
       display: flex;
       flex-direction: column;
@@ -1496,12 +1511,13 @@
                 <span class="field-label">minutes</span>
                 <button type="button" class="primary-btn" id="saveIntervalBtn">Apply Interval</button>
               </div>
+              <div class="sw-status-pill" id="swStatusPill">Starting background worker...</div>
               <div class="test-status-box" id="intervalStatusBox"></div>
             </div>
 
             <div class="m3-card">
               <h4 class="m3-card-title">Test Notification Delivery</h4>
-              <p class="m3-card-desc">Grabs a real video from a channel's feed and pops a desktop notification after a delay so u can check that alerts actually show up (handy if u wanna switch tabs or minimize first!)</p>
+              <p class="m3-card-desc">Grabs a real video from a channel's feed and pops a desktop notification after a delay so u can check that alerts actually show up (even if u switch tabs or close this one!)</p>
 
               <div class="field-row">
                 <div class="field-group">
@@ -1665,6 +1681,7 @@
                  data-id="<%= c.id %>"
                  data-name="<%= c.name.toLowerCase() %>"
                  data-real-name="<%= c.name %>"
+                 data-avatar="<%= c.avatar %>"
                  data-unsub-url="/api/remove-channel-sub?ID=<%= encodeURIComponent(userid) %>&channelID=<%= encodeURIComponent(c.id) %>">
               <div class="channel-avatar-wrapper">
                 <a href="/channel?id=<%= encodeURIComponent(c.id) %>" class="channel-avatar-link">
@@ -1731,6 +1748,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const NOTIF_KNOWN_CHANNELS_KEY = `poke_notif_known_channels_${USER_ID}`;
   const NOTIF_BASELINE_MS_KEY = `poke_notif_channel_baseline_${USER_ID}`;
   const NOTIF_INTERVAL_KEY = `poke_notif_interval_mins_${USER_ID}`;
+  const META_SYNC_LAST_KEY = `poke_channel_meta_sync_${USER_ID}`;
+  const META_SYNC_INTERVAL_MS = 60 * 60 * 1000;
+
+  const SW_URL = '/static/poke-notifs-sw.js';
+  const IDB_NAME = 'poke_notifs_db';
+  const IDB_STORE = 'state';
 
   const BELL_ON_SVG = '<svg viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>';
   const BELL_OFF_SVG = '<svg viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-2.79-1.4-5.16-3.78-6.06L12 2.72V4a1.5 1.5 0 0 0-3 0v.68c-.28.07-.56.16-.82.27L3.27 2 2 3.27l4.17 4.17A6.47 6.47 0 0 0 6 11v5l-2 2v1h13.73l2 2L21 19.73 18 16.73V16z"/></svg>';
@@ -1750,10 +1773,55 @@ document.addEventListener("DOMContentLoaded", () => {
   const feedUnsubBtn = document.getElementById('feedUnsubBtn');
   const scrollLeftBtn = document.getElementById('scrollLeft');
   const scrollRightBtn = document.getElementById('scrollRight');
+  const swStatusPill = document.getElementById('swStatusPill');
 
   let selectedChannelId = null;
   let selectedChannelName = '';
   let selectedChannelUnsubUrl = '';
+  let swRegistration = null;
+  let isImporting = false;
+  let isSyncingMeta = false;
+
+  function openNotifDb() {
+    return new Promise((resolve, reject) => {
+      if (!('indexedDB' in window)) return reject(new Error('No IndexedDB'));
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          db.createObjectStore(IDB_STORE);
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function idbGet(key) {
+    try {
+      const db = await openNotifDb();
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, 'readonly');
+        const req = tx.objectStore(IDB_STORE).get(key);
+        req.onsuccess = () => resolve(req.result ?? null);
+        req.onerror = () => reject(req.error);
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async function idbSet(key, value) {
+    try {
+      const db = await openNotifDb();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        tx.objectStore(IDB_STORE).put(value, key);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch {}
+  }
 
   function loadJsonStorage(key, fallback) {
     try {
@@ -1833,6 +1901,111 @@ document.addEventListener("DOMContentLoaded", () => {
   let cachedNotifications = [];
   let isCheckingFeeds = false;
 
+  function buildSwConfigSnapshot(lastCheckMs = 0) {
+    return {
+      userId: USER_ID,
+      origin: window.location.origin,
+      checkIntervalMinutes,
+      channels: getSubscribedChannelsInfo(),
+      notifPrefs,
+      readVideoIds: Array.from(readVideoIds).slice(-3000),
+      alertedVideoIds: Array.from(alertedVideoIds).slice(-3000),
+      dismissedVideoIds: Array.from(dismissedVideoIds).slice(-3000),
+      knownChannelIds: Array.from(knownChannelIds).filter(id => currentSubIds.has(id)),
+      channelBaselineMs,
+      lastCheckMs
+    };
+  }
+
+  async function pullSwStateIntoLocal() {
+    const swCfg = await idbGet('config');
+    if (!swCfg || swCfg.userId !== USER_ID) return;
+
+    if (Array.isArray(swCfg.readVideoIds)) {
+      swCfg.readVideoIds.forEach(id => readVideoIds.add(id));
+    }
+    if (Array.isArray(swCfg.alertedVideoIds)) {
+      swCfg.alertedVideoIds.forEach(id => {
+        alertedVideoIds.add(id);
+        sessionAlertedIds.add(id);
+      });
+    }
+    if (Array.isArray(swCfg.knownChannelIds)) {
+      swCfg.knownChannelIds.forEach(id => {
+        if (currentSubIds.has(id)) knownChannelIds.add(id);
+      });
+    }
+    if (swCfg.channelBaselineMs && typeof swCfg.channelBaselineMs === 'object') {
+      Object.entries(swCfg.channelBaselineMs).forEach(([chId, ms]) => {
+        if (currentSubIds.has(chId) && typeof ms === 'number' && ms > (channelBaselineMs[chId] || 0)) {
+          channelBaselineMs[chId] = ms;
+        }
+      });
+    }
+    persistNotifState(false);
+  }
+
+  async function pushStateToSw(lastCheckMs = 0) {
+    const snapshot = buildSwConfigSnapshot(lastCheckMs);
+    const activeWorker = swRegistration?.active || navigator.serviceWorker?.controller;
+    if (activeWorker) {
+      try {
+        activeWorker.postMessage({ type: 'SYNC_CONFIG', config: snapshot });
+        return;
+      } catch {}
+    }
+    await idbSet('config', snapshot);
+  }
+
+  async function registerPeriodicSyncIfAvailable(reg) {
+    if (!reg || !('periodicSync' in reg)) return false;
+    try {
+      const status = await navigator.permissions.query({ name: 'periodic-background-sync' });
+      if (status.state === 'granted') {
+        await reg.periodicSync.register('poke-check-feeds', {
+          minInterval: Math.max(5, checkIntervalMinutes) * 60 * 1000
+        });
+        return true;
+      }
+    } catch {}
+    return false;
+  }
+
+  async function initBackgroundServiceWorker() {
+    if (!('serviceWorker' in navigator)) {
+      swStatusPill.textContent = 'Background worker unavailable in this browser';
+      return;
+    }
+    try {
+      const reg = await navigator.serviceWorker.register(SW_URL, { scope: '/' });
+      swRegistration = await navigator.serviceWorker.ready;
+      const periodicOk = await registerPeriodicSyncIfAvailable(swRegistration || reg);
+      await pullSwStateIntoLocal();
+      await pushStateToSw();
+
+      swStatusPill.classList.add('ready');
+      swStatusPill.textContent = periodicOk
+        ? 'Background worker active (works even when tabs are closed!)'
+        : 'Background worker active (checks on any Poke page & keeps test timers alive if u close this tab!)';
+    } catch {
+      swStatusPill.textContent = 'Background worker needs /poke-notifs-sw.js hosted at root (/)';
+    }
+  }
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', async (event) => {
+      const msg = event.data || {};
+      if (msg.type === 'SW_STATE_UPDATED') {
+        await pullSwStateIntoLocal();
+        renderNotifications();
+      } else if (msg.type === 'TEST_NOTIF_DELIVERED' && msg.item) {
+        clearPendingTestNotification(false);
+        testNotifStatusBox.className = 'test-status-box visible success';
+        testNotifStatusBox.textContent = `Donesie! delivered desktop notification for "${msg.item.title}" (${msg.item.channelName})!`;
+      }
+    });
+  }
+
   function syncStateFromStorage() {
     const storedRead = loadJsonStorage(NOTIF_READ_KEY, []);
     if (Array.isArray(storedRead)) storedRead.forEach(id => readVideoIds.add(id));
@@ -1862,13 +2035,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function persistNotifState() {
+  function persistNotifState(alsoSyncSw = true, lastCheckMs = 0) {
     mergeAndSaveSet(NOTIF_READ_KEY, readVideoIds);
     mergeAndSaveSet(NOTIF_ALERTED_KEY, alertedVideoIds);
     const knownPruned = Array.from(knownChannelIds).filter(id => currentSubIds.has(id));
     knownChannelIds = new Set(knownPruned);
     saveJsonStorage(NOTIF_KNOWN_CHANNELS_KEY, knownPruned);
     mergeAndSaveBaselines(channelBaselineMs);
+    if (alsoSyncSw) pushStateToSw(lastCheckMs);
   }
 
   function baselineChannelEntries(channelId, allEntries, ok) {
@@ -1959,12 +2133,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!enabled) {
       cachedNotifications = cachedNotifications.filter(n => n.channelId !== channelId);
+      pushStateToSw();
       renderNotifications();
     } else {
       fetchChannelFeedResult(channelId).then(({ ok, allEntries, entries }) => {
         syncStateFromStorage();
         if (baselineChannelEntries(channelId, allEntries, ok)) {
-          persistNotifState();
+          persistNotifState(true);
+        } else {
+          pushStateToSw();
         }
         const visibleEntries = entries.filter(e => !dismissedVideoIds.has(e.videoId));
         if (visibleEntries.length) {
@@ -2031,18 +2208,19 @@ document.addEventListener("DOMContentLoaded", () => {
   function getSubscribedChannelsInfo() {
     return Array.from(channels).map(ch => ({
       id: ch.dataset.id,
-      name: ch.dataset.realName || ch.querySelector('.channel-title')?.textContent || 'Unknown Channel'
+      name: ch.dataset.realName || ch.querySelector('.channel-title')?.textContent || 'Unknown Channel',
+      avatar: ch.dataset.avatar || ch.querySelector('.channel-avatar-link img')?.getAttribute('src') || ''
     }));
   }
 
   async function fetchChannelFeedResult(channelId) {
     try {
       const res = await fetch(`/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`);
-      if (!res.ok) return { ok: false, allEntries: [], entries: [] };
+      if (!res.ok) return { ok: false, feedTitle: '', allEntries: [], entries: [] };
       const xmlText = await res.text();
       const parser = new DOMParser();
       const doc = parser.parseFromString(xmlText, 'text/xml');
-      if (doc.querySelector('parsererror')) return { ok: false, allEntries: [], entries: [] };
+      if (doc.querySelector('parsererror')) return { ok: false, feedTitle: '', allEntries: [], entries: [] };
 
       const feedTitle = (doc.querySelector('feed > title')?.textContent || '').trim();
       const rawEntries = Array.from(doc.getElementsByTagName('entry'));
@@ -2072,9 +2250,9 @@ document.addEventListener("DOMContentLoaded", () => {
         };
       }).filter(item => item.videoId);
 
-      return { ok: true, allEntries: allParsed, entries: allParsed.slice(0, 5) };
+      return { ok: true, feedTitle, allEntries: allParsed, entries: allParsed.slice(0, 5) };
     } catch {
-      return { ok: false, allEntries: [], entries: [] };
+      return { ok: false, feedTitle: '', allEntries: [], entries: [] };
     }
   }
 
@@ -2129,6 +2307,7 @@ document.addEventListener("DOMContentLoaded", () => {
       sessionAlertedIds.add(n.videoId);
     });
     mergeAndSaveSet(NOTIF_ALERTED_KEY, alertedVideoIds);
+    pushStateToSw();
   }
 
   function updateDesktopAlertButton() {
@@ -2155,6 +2334,7 @@ document.addEventListener("DOMContentLoaded", () => {
       updateDesktopAlertButton();
       if (perm === 'granted') {
         markVisibleInboxAsAlerted();
+        if (swRegistration) registerPeriodicSyncIfAvailable(swRegistration);
       }
     }
   });
@@ -2196,6 +2376,7 @@ document.addEventListener("DOMContentLoaded", () => {
         restoreBtn.addEventListener('click', () => {
           dismissedVideoIds.clear();
           saveJsonStorage(NOTIF_DISMISSED_KEY, []);
+          pushStateToSw();
           checkAllNotificationFeeds(false);
         });
         emptyBox.appendChild(restoreBtn);
@@ -2246,6 +2427,7 @@ document.addEventListener("DOMContentLoaded", () => {
         sessionAlertedIds.add(item.videoId);
         mergeAndSaveSet(NOTIF_READ_KEY, readVideoIds);
         mergeAndSaveSet(NOTIF_ALERTED_KEY, alertedVideoIds);
+        pushStateToSw();
         a.classList.remove('unread');
         updateUnreadBadge();
       });
@@ -2254,11 +2436,26 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  function fireDesktopNotification(item, isTest = false) {
+  async function fireDesktopNotification(item, isTest = false) {
+    const tag = isTest ? `poke-test-${Date.now()}` : `poke-video-${item.videoId}`;
+    const icon = item.thumbnail || '/css/poke-icon-logo.svg?v=6';
+
+    if (swRegistration && swRegistration.showNotification) {
+      try {
+        await swRegistration.showNotification(item.channelName, {
+          body: item.title,
+          icon,
+          tag,
+          data: { url: item.url, videoId: item.videoId, isTest }
+        });
+        return;
+      } catch {}
+    }
+
     const n = new Notification(item.channelName, {
       body: item.title,
-      icon: item.thumbnail || '/css/poke-icon-logo.svg?v=6',
-      tag: isTest ? `poke-test-${Date.now()}` : `poke-video-${item.videoId}`
+      icon,
+      tag
     });
     n.onclick = () => {
       window.focus();
@@ -2284,6 +2481,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     mergeAndSaveSet(NOTIF_ALERTED_KEY, alertedVideoIds);
     mergeAndSaveBaselines(channelBaselineMs);
+    pushStateToSw(Date.now());
 
     fresh.slice(0, 3).forEach(item => fireDesktopNotification(item, false));
   }
@@ -2294,6 +2492,7 @@ document.addEventListener("DOMContentLoaded", () => {
     notifStatusText.textContent = 'Checking feeds...';
 
     syncStateFromStorage();
+    await pullSwStateIntoLocal();
 
     const enabledChannels = getSubscribedChannelsInfo().filter(c => isChannelNotifEnabled(c.id));
     if (!enabledChannels.length) {
@@ -2321,8 +2520,11 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
 
+    const nowMs = Date.now();
     if (baselinedAny) {
-      persistNotifState();
+      persistNotifState(true, nowMs);
+    } else {
+      pushStateToSw(nowMs);
     }
 
     const dedup = new Map();
@@ -2377,6 +2579,8 @@ document.addEventListener("DOMContentLoaded", () => {
     try { localStorage.setItem(NOTIF_INTERVAL_KEY, String(parsed)); } catch {}
     syncIntervalUI();
     startAutoCheckSchedule();
+    pushStateToSw();
+    if (swRegistration) registerPeriodicSyncIfAvailable(swRegistration);
     intervalStatusBox.className = 'test-status-box visible success';
     intervalStatusBox.textContent = `Auto-check interval updated to every...... ${parsed} minute${parsed === 1 ? '' : 's'}!`;
   }
@@ -2422,8 +2626,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let activeTestCountdown = null;
   let activeTestTimeout = null;
+  let activeTestInSw = false;
 
-  function clearPendingTestNotification() {
+  function clearPendingTestNotification(cancelSw = true) {
     if (activeTestCountdown) {
       clearInterval(activeTestCountdown);
       activeTestCountdown = null;
@@ -2432,12 +2637,19 @@ document.addEventListener("DOMContentLoaded", () => {
       clearTimeout(activeTestTimeout);
       activeTestTimeout = null;
     }
+    if (cancelSw && activeTestInSw) {
+      const worker = swRegistration?.active || navigator.serviceWorker?.controller;
+      if (worker) {
+        try { worker.postMessage({ type: 'CANCEL_TEST_NOTIF' }); } catch {}
+      }
+    }
+    activeTestInSw = false;
     cancelTestNotifBtn.style.display = 'none';
     sendTestNotifBtn.disabled = false;
   }
 
   cancelTestNotifBtn.addEventListener('click', () => {
-    clearPendingTestNotification();
+    clearPendingTestNotification(true);
     testNotifStatusBox.className = 'test-status-box visible';
     testNotifStatusBox.textContent = 'Scheduled test notification canceled... :< sad';
   });
@@ -2463,7 +2675,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   sendTestNotifBtn.addEventListener('click', async () => {
-    clearPendingTestNotification();
+    clearPendingTestNotification(true);
 
     if (!('Notification' in window)) {
       testNotifStatusBox.className = 'test-status-box visible error';
@@ -2478,6 +2690,7 @@ document.addEventListener("DOMContentLoaded", () => {
       updateDesktopAlertButton();
       if (perm === 'granted') {
         markVisibleInboxAsAlerted();
+        if (swRegistration) registerPeriodicSyncIfAvailable(swRegistration);
       }
     }
 
@@ -2503,8 +2716,43 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    const activeWorker = swRegistration?.active || navigator.serviceWorker?.controller;
+
+    if (activeWorker) {
+      activeTestInSw = true;
+      activeWorker.postMessage({
+        type: 'SCHEDULE_TEST_NOTIF',
+        item: rssItem,
+        delayMs: delaySec * 1000
+      });
+
+      if (delaySec === 0) {
+        testNotifStatusBox.className = 'test-status-box visible success';
+        testNotifStatusBox.textContent = `Donesie! delivered desktop notification for "${rssItem.title}" (${rssItem.channelName})!`;
+        sendTestNotifBtn.disabled = false;
+        activeTestInSw = false;
+        return;
+      }
+
+      let remaining = delaySec;
+      cancelTestNotifBtn.style.display = 'inline-flex';
+      testNotifStatusBox.className = 'test-status-box visible';
+      testNotifStatusBox.textContent = `Sending notification for "${rssItem.title}" (${rssItem.channelName}) in ${remaining}s (safe to close this tab!)...`;
+
+      activeTestCountdown = setInterval(() => {
+        remaining -= 1;
+        if (remaining > 0) {
+          testNotifStatusBox.textContent = `Sending notification for "${rssItem.title}" (${rssItem.channelName}) in ${remaining}s (safe to close this tab!)...`;
+        } else {
+          clearInterval(activeTestCountdown);
+          activeTestCountdown = null;
+        }
+      }, 1000);
+      return;
+    }
+
     const deliverNow = () => {
-      clearPendingTestNotification();
+      clearPendingTestNotification(false);
       fireDesktopNotification(rssItem, true);
       testNotifStatusBox.className = 'test-status-box visible success';
       testNotifStatusBox.textContent = `Donesie! delivered desktop notification for "${rssItem.title}" (${rssItem.channelName})!`;
@@ -2551,6 +2799,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     mergeAndSaveSet(NOTIF_READ_KEY, readVideoIds);
     mergeAndSaveSet(NOTIF_ALERTED_KEY, alertedVideoIds);
+    pushStateToSw();
     renderNotifications();
   });
 
@@ -2564,12 +2813,237 @@ document.addEventListener("DOMContentLoaded", () => {
     saveJsonStorage(NOTIF_DISMISSED_KEY, Array.from(dismissedVideoIds).slice(-3000));
     mergeAndSaveSet(NOTIF_READ_KEY, readVideoIds);
     mergeAndSaveSet(NOTIF_ALERTED_KEY, alertedVideoIds);
+    pushStateToSw();
     cachedNotifications = [];
     renderNotifications();
   });
 
-  checkAllNotificationFeeds(true);
-  startAutoCheckSchedule();
+  function isLikelyChannelAvatarUrl(url) {
+    if (!url || typeof url !== 'string') return false;
+    const trimmed = url.trim();
+    if (!trimmed) return false;
+    return /yt3\.(ggpht|googleusercontent)\.com/i.test(trimmed);
+  }
+
+  function findChannelAvatarInDoc(doc) {
+    const imgs = Array.from(doc.querySelectorAll('img'));
+    for (const img of imgs) {
+      const src = (img.getAttribute('src') || img.src || '').trim();
+      if (isLikelyChannelAvatarUrl(src)) return src;
+    }
+    const ogImg = doc.querySelector('meta[property="og:image"]')?.getAttribute('content') || '';
+    if (isLikelyChannelAvatarUrl(ogImg)) return ogImg.trim();
+    const fallbackImg = doc.querySelector('.channel-avatar img, .avatar img');
+    return fallbackImg ? (fallbackImg.getAttribute('src') || fallbackImg.src || '').trim() : '';
+  }
+
+  function resolveChannelSubViaIframe(ch, allowAlreadySubbedMeta = false) {
+    return new Promise((resolve) => {
+      const bgFrame = document.createElement('iframe');
+      bgFrame.style.cssText = 'position:fixed;width:1px;height:1px;left:-9999px;top:-9999px;opacity:0;pointer-events:none;border:0;';
+      bgFrame.setAttribute('aria-hidden', 'true');
+      bgFrame.tabIndex = -1;
+
+      let finished = false;
+      let pollTimer = null;
+      let timeoutTimer = null;
+
+      const cleanup = (result) => {
+        if (finished) return;
+        finished = true;
+        if (pollTimer) clearInterval(pollTimer);
+        if (timeoutTimer) clearTimeout(timeoutTimer);
+        try { bgFrame.src = 'about:blank'; } catch {}
+        bgFrame.remove();
+        resolve(result);
+      };
+
+      const extractTitleFromDoc = (doc) => {
+        const ogTitle = (doc.querySelector('meta[property="og:title"]')?.getAttribute('content') || '').trim();
+        const heading = (doc.querySelector('.channel-name, .channel-header h1, h1')?.textContent || '').trim();
+        const docTitle = (doc.title || '').replace(/\s*[-|]\s*Poke.*$/i, '').trim();
+        return heading || ogTitle || docTitle || '';
+      };
+
+      const inspectDoc = () => {
+        try {
+          const doc = bgFrame.contentDocument || bgFrame.contentWindow?.document;
+          if (!doc) return false;
+
+          const subEl = doc.getElementById('sub');
+          const rawHref = subEl ? (subEl.getAttribute('href') || '').trim() : '';
+
+          if (rawHref && rawHref !== '#' && !rawHref.startsWith('javascript:')) {
+            const parsedUrl = new URL(rawHref, window.location.origin);
+
+            if (parsedUrl.pathname.includes('remove-channel-sub')) {
+              const avatar = findChannelAvatarInDoc(doc) || ch.avatar || '';
+              const docName = extractTitleFromDoc(doc);
+              const name = docName || ch.name || ch.id;
+              if (allowAlreadySubbedMeta) {
+                const params = new URLSearchParams({
+                  ID: USER_ID,
+                  channelName: name,
+                  avatar,
+                  channelID: ch.id
+                });
+                cleanup({
+                  alreadySubbed: true,
+                  url: `/api/set-channel-subs?${params.toString()}`,
+                  avatar,
+                  name
+                });
+              } else {
+                cleanup({ alreadySubbed: true, url: null, avatar, name });
+              }
+              return true;
+            }
+
+            if (parsedUrl.pathname.includes('set-channel-subs')) {
+              if (USER_ID) parsedUrl.searchParams.set('ID', USER_ID);
+              if (!parsedUrl.searchParams.get('channelID')) parsedUrl.searchParams.set('channelID', ch.id);
+
+              const foundName = (parsedUrl.searchParams.get('channelName') || extractTitleFromDoc(doc) || ch.name || ch.id).trim();
+              parsedUrl.searchParams.set('channelName', foundName);
+
+              let foundAvatar = (parsedUrl.searchParams.get('avatar') || '').trim();
+              if (!foundAvatar) {
+                foundAvatar = findChannelAvatarInDoc(doc) || ch.avatar || '';
+                if (foundAvatar) parsedUrl.searchParams.set('avatar', foundAvatar);
+              }
+
+              cleanup({
+                alreadySubbed: false,
+                url: `${parsedUrl.pathname}?${parsedUrl.searchParams.toString()}`,
+                avatar: foundAvatar,
+                name: foundName
+              });
+              return true;
+            }
+          }
+        } catch {}
+        return false;
+      };
+
+      bgFrame.addEventListener('load', () => {
+        if (inspectDoc()) return;
+        pollTimer = setInterval(() => {
+          inspectDoc();
+        }, 150);
+      });
+
+      bgFrame.addEventListener('error', () => cleanup(null));
+
+      timeoutTimer = setTimeout(() => {
+        try {
+          const doc = bgFrame.contentDocument || bgFrame.contentWindow?.document;
+          if (doc) {
+            const foundAvatar = findChannelAvatarInDoc(doc) || ch.avatar || '';
+            const titleText = extractTitleFromDoc(doc);
+            const foundName = titleText || ch.name || ch.id;
+            const params = new URLSearchParams({
+              ID: USER_ID,
+              channelName: foundName,
+              avatar: foundAvatar,
+              channelID: ch.id
+            });
+            cleanup({
+              alreadySubbed: false,
+              url: `/api/set-channel-subs?${params.toString()}`,
+              avatar: foundAvatar,
+              name: foundName
+            });
+            return;
+          }
+        } catch {}
+        cleanup(null);
+      }, 10000);
+
+      document.body.appendChild(bgFrame);
+      bgFrame.src = `/channel?id=${encodeURIComponent(ch.id)}`;
+    });
+  }
+
+  async function syncChannelMetadataToDb(force = false) {
+    if (isSyncingMeta || isImporting || !USER_ID) return;
+
+    const lastSyncMs = parseInt(localStorage.getItem(META_SYNC_LAST_KEY), 10) || 0;
+    if (!force && (Date.now() - lastSyncMs) < META_SYNC_INTERVAL_MS) return;
+
+    isSyncingMeta = true;
+    const allSubs = getSubscribedChannelsInfo();
+
+    for (const ch of allSubs) {
+      if (isImporting) break;
+      try {
+        const [meta, feedRes] = await Promise.all([
+          resolveChannelSubViaIframe(ch, true),
+          fetchChannelFeedResult(ch.id)
+        ]);
+
+        const freshName = (feedRes.feedTitle || meta?.name || '').trim();
+        const freshAvatar = (meta?.avatar || '').trim();
+
+        const nextName = freshName && freshName !== ch.id ? freshName : ch.name;
+        const nextAvatar = isLikelyChannelAvatarUrl(freshAvatar) ? freshAvatar : ch.avatar;
+
+        const nameChanged = Boolean(nextName && nextName !== ch.name);
+        const avatarChanged = Boolean(nextAvatar && nextAvatar !== ch.avatar);
+
+        if (nameChanged || avatarChanged) {
+          const params = new URLSearchParams({
+            ID: USER_ID,
+            channelName: nextName,
+            avatar: nextAvatar,
+            channelID: ch.id
+          });
+          const res = await fetch(`/api/set-channel-subs?${params.toString()}`, {
+            credentials: 'same-origin'
+          });
+
+          if (res.ok) {
+            const card = document.querySelector(`.channel-card[data-id="${CSS.escape(ch.id)}"]`);
+            if (card) {
+              if (nameChanged) {
+                card.dataset.realName = nextName;
+                card.dataset.name = nextName.toLowerCase();
+                const titleLink = card.querySelector('.channel-title');
+                if (titleLink) {
+                  titleLink.textContent = nextName;
+                  titleLink.title = nextName;
+                }
+                if (selectedChannelId === ch.id) {
+                  selectedChannelName = nextName;
+                  toolbarTitle.textContent = nextName;
+                }
+              }
+              if (avatarChanged) {
+                card.dataset.avatar = nextAvatar;
+                const img = card.querySelector('.channel-avatar-link img');
+                if (img) img.src = nextAvatar;
+              }
+            }
+          }
+        }
+      } catch {}
+
+      await new Promise((r) => setTimeout(r, 350));
+    }
+
+    if (!isImporting) {
+      try { localStorage.setItem(META_SYNC_LAST_KEY, String(Date.now())); } catch {}
+      pushStateToSw();
+    }
+    isSyncingMeta = false;
+  }
+
+  initBackgroundServiceWorker().finally(() => {
+    checkAllNotificationFeeds(true);
+    startAutoCheckSchedule();
+  });
+
+  setTimeout(() => syncChannelMetadataToDb(false), 5000);
+  setInterval(() => syncChannelMetadataToDb(false), META_SYNC_INTERVAL_MS);
 
   const importYtBtn = document.getElementById('importYtBtn');
   const importOverlay = document.getElementById('importOverlay');
@@ -2597,7 +3071,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const bgImportPillActionBtn = document.getElementById('bgImportPillActionBtn');
 
   let parsedImportChannels = [];
-  let isImporting = false;
   let importFinishedInBg = false;
 
   function setImportVisualAvatar(avatarUrl, channelName) {
@@ -2779,116 +3252,6 @@ document.addEventListener("DOMContentLoaded", () => {
     startImportBtn.textContent = 'Import Channels';
   }
 
-  function resolveChannelSubViaIframe(ch) {
-    return new Promise((resolve) => {
-      const bgFrame = document.createElement('iframe');
-      bgFrame.style.cssText = 'position:fixed;width:1px;height:1px;left:-9999px;top:-9999px;opacity:0;pointer-events:none;border:0;';
-      bgFrame.setAttribute('aria-hidden', 'true');
-      bgFrame.tabIndex = -1;
-
-      let finished = false;
-      let pollTimer = null;
-      let timeoutTimer = null;
-
-      const cleanup = (result) => {
-        if (finished) return;
-        finished = true;
-        if (pollTimer) clearInterval(pollTimer);
-        if (timeoutTimer) clearTimeout(timeoutTimer);
-        try { bgFrame.src = 'about:blank'; } catch {}
-        bgFrame.remove();
-        resolve(result);
-      };
-
-      const findAvatarInDoc = (doc) => {
-        const imgEl = doc.querySelector('img[src*="image-proxy.poketube.fun"], img[src*="yt3."], .channel-avatar img, .avatar img');
-        return imgEl ? (imgEl.getAttribute('src') || imgEl.src || '') : '';
-      };
-
-      const inspectDoc = () => {
-        try {
-          const doc = bgFrame.contentDocument || bgFrame.contentWindow?.document;
-          if (!doc) return false;
-
-          const subEl = doc.getElementById('sub');
-          const rawHref = subEl ? (subEl.getAttribute('href') || '').trim() : '';
-
-          if (rawHref && rawHref !== '#' && !rawHref.startsWith('javascript:')) {
-            const parsedUrl = new URL(rawHref, window.location.origin);
-
-            if (parsedUrl.pathname.includes('remove-channel-sub')) {
-              const avatar = findAvatarInDoc(doc) || ch.avatar || '';
-              cleanup({ alreadySubbed: true, url: null, avatar, name: ch.name });
-              return true;
-            }
-
-            if (parsedUrl.pathname.includes('set-channel-subs')) {
-              if (USER_ID) parsedUrl.searchParams.set('ID', USER_ID);
-              if (!parsedUrl.searchParams.get('channelID')) parsedUrl.searchParams.set('channelID', ch.id);
-
-              const foundName = (parsedUrl.searchParams.get('channelName') || ch.name || ch.id).trim();
-              parsedUrl.searchParams.set('channelName', foundName);
-
-              let foundAvatar = (parsedUrl.searchParams.get('avatar') || '').trim();
-              if (!foundAvatar) {
-                foundAvatar = findAvatarInDoc(doc) || ch.avatar || '';
-                if (foundAvatar) parsedUrl.searchParams.set('avatar', foundAvatar);
-              }
-
-              cleanup({
-                alreadySubbed: false,
-                url: `${parsedUrl.pathname}?${parsedUrl.searchParams.toString()}`,
-                avatar: foundAvatar,
-                name: foundName
-              });
-              return true;
-            }
-          }
-        } catch {}
-        return false;
-      };
-
-      bgFrame.addEventListener('load', () => {
-        if (inspectDoc()) return;
-        pollTimer = setInterval(() => {
-          inspectDoc();
-        }, 150);
-      });
-
-      bgFrame.addEventListener('error', () => cleanup(null));
-
-      timeoutTimer = setTimeout(() => {
-        try {
-          const doc = bgFrame.contentDocument || bgFrame.contentWindow?.document;
-          if (doc) {
-            const foundAvatar = findAvatarInDoc(doc) || ch.avatar || '';
-            const titleText = (doc.querySelector('h1, .channel-name')?.textContent || doc.title || '')
-              .replace(/\s*[-|]\s*Poke.*$/i, '')
-              .trim();
-            const foundName = (ch.name && ch.name !== ch.id) ? ch.name : (titleText || ch.id);
-            const params = new URLSearchParams({
-              ID: USER_ID,
-              channelName: foundName,
-              avatar: foundAvatar,
-              channelID: ch.id
-            });
-            cleanup({
-              alreadySubbed: false,
-              url: `/api/set-channel-subs?${params.toString()}`,
-              avatar: foundAvatar,
-              name: foundName
-            });
-            return;
-          }
-        } catch {}
-        cleanup(null);
-      }, 10000);
-
-      document.body.appendChild(bgFrame);
-      bgFrame.src = `/channel?id=${encodeURIComponent(ch.id)}`;
-    });
-  }
-
   importYtBtn.addEventListener('click', () => {
     if (!isImporting) {
       resetImportModal();
@@ -3011,7 +3374,7 @@ document.addEventListener("DOMContentLoaded", () => {
             name: ch.name
           };
         } else {
-          subInfo = await resolveChannelSubViaIframe(ch);
+          subInfo = await resolveChannelSubViaIframe(ch, false);
         }
 
         if (subInfo) {
