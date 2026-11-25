@@ -351,6 +351,13 @@
       word-break: break-word;
     }
 
+    .algo-note {
+      display: block;
+      font-size: 11px;
+      color: var(--accent);
+      margin-top: 2px;
+    }
+
     .about-value {
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-size: 12px;
@@ -506,7 +513,7 @@
 
     .coming-soon {
       margin: 8px 0 28px 0;
-      display:none;
+      display: none;
       font-size: 13px;
       color: var(--text-secondary);
     }
@@ -593,9 +600,7 @@
   <noscript>
     <style>
       .layout { display: none; }
-      .top-bar {
-      display:none;
-      }
+      .top-bar { display: none; }
     </style>
   </noscript>
 </head>
@@ -615,21 +620,45 @@
 
   <div class="layout">
     <aside class="sidebar" aria-label="Settings categories">
-      <button class="nav-pill active" data-view="main" data-target="sec-fullscreen">
-         <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+      <button type="button" class="nav-pill active" data-view="main">
+        <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
         <span>Home</span>
       </button>
-      <button class="nav-pill" data-view="keybinds">
+      <button type="button" class="nav-pill" data-view="tab-sec-appearance">
+        <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z"/></svg>
+        <span>Appearance & Layout</span>
+      </button>
+      <button type="button" class="nav-pill" data-view="tab-sec-playback">
+        <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        <span>Playback & Queue</span>
+      </button>
+      <button type="button" class="nav-pill" data-view="tab-sec-recommendations">
+        <svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>
+        <span>Recommendations & Endscreen</span>
+      </button>
+      <button type="button" class="nav-pill" data-view="tab-sec-controls">
+        <svg viewBox="0 0 24 24"><path d="M20 5H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z"/></svg>
+        <span>Gestures & Input Behavior</span>
+      </button>
+      <button type="button" class="nav-pill" data-view="tab-sec-captions">
+        <svg viewBox="0 0 24 24"><path d="M19 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v1c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1zm7 0h-1.5v-.5h-2v3h2V13H18v1c0 .55-.45 1-1 1h-3c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1z"/></svg>
+        <span>Captions & Subtitles</span>
+      </button>
+      <button type="button" class="nav-pill" data-view="keybinds">
         <svg viewBox="0 0 24 24"><path d="M20 5H4c-1.1 0-1.99.9-1.99 2L2 17c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z"/></svg>
         <span>Keybinds</span>
       </button>
-      <button class="nav-pill" data-view="parity">
+      <button type="button" class="nav-pill" data-view="parity">
         <svg viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zM9.5 16l6.5-4-6.5-4v8z"/></svg>
         <span>YouTube Parity</span>
       </button>
-      <button class="nav-pill" data-view="about">
+      <button type="button" class="nav-pill" data-view="experiments">
+        <svg viewBox="0 0 24 24"><path d="M7 2v2h1v6.29L3.3 17.6A2.5 2.5 0 0 0 5.42 21h13.16a2.5 2.5 0 0 0 2.12-3.4L16 10.29V4h1V2H7zm3 2h4v6.84l3.82 6.01A.5.5 0 0 1 17.4 18H6.6a.5.5 0 0 1-.42-.77L10 10.84V4z"/></svg>
+        <span>Experiments</span>
+      </button>
+      <button type="button" class="nav-pill" data-view="about">
         <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
-        <span>About Alabaster</span>
+        <span>About PokePlayer</span>
       </button>
 
       <div class="sidebar-actions">
@@ -644,8 +673,14 @@
         <div class="loader-bar"></div>
       </div>
       <div id="main-view"></div>
+      <div id="tab-sec-appearance" class="view-hidden"></div>
+      <div id="tab-sec-playback" class="view-hidden"></div>
+      <div id="tab-sec-recommendations" class="view-hidden"></div>
+      <div id="tab-sec-controls" class="view-hidden"></div>
+      <div id="tab-sec-captions" class="view-hidden"></div>
       <div id="keybinds-view" class="view-hidden"></div>
       <div id="parity-view" class="view-hidden"></div>
+      <div id="experiments-view" class="view-hidden"></div>
       <div id="about-view" class="view-hidden"></div>
 
       <p id="coming-soon" class="coming-soon">more is coming soon!</p>
@@ -660,6 +695,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script src="/static/baseconfig.js?v=540"> </script>
+  <script src="/static/baseconfig.js?v=5440"></script>
 </body>
 </html>
