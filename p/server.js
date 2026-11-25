@@ -359,7 +359,7 @@ const renderIndexPage = () => `<!DOCTYPE html>
       flex-direction: column;
     }
     .hero {
-      background: #5b9bd5;
+      background: #ffabcc;
       color: #ffffff;
       text-align: center;
       padding: 56px 24px 52px;
@@ -369,7 +369,7 @@ const renderIndexPage = () => `<!DOCTYPE html>
       height: 104px;
       margin: 0 auto 18px;
       border-radius: 50%;
-      background: #ffffff url("https://poketube.fun/static/poke-mascot-new.webp?v=78") no-repeat center 18% / 78%;
+      background: #ffffff url("https://poketube.fun/static/yt-ukraine.svg?v=78") no-repeat center 18% / 78%;
       border: 4px solid rgba(255, 255, 255, 0.35);
       box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
     }
