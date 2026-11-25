@@ -1,16 +1,36 @@
+function hasDesktopBypass() {
+  const params = new URLSearchParams(window.location.search);
+  const param = params.get('desktop');
+
+  if (param === '1' || param === 'true') {
+    localStorage.setItem('alabaster_force_desktop', 'true');
+    return true;
+  }
+  if (param === '0' || param === 'false') {
+    localStorage.removeItem('alabaster_force_desktop');
+    return false;
+  }
+
+  return localStorage.getItem('alabaster_force_desktop') === 'true';
+}
+
 function isMobileDevice() {
+  if (hasDesktopBypass()) return false;
+
   const ua = navigator.userAgent || '';
   const uaDataMobile = navigator.userAgentData && navigator.userAgentData.mobile === true;
   const uaMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua);
   const isIPadOS = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1 && !window.MSStream;
   const coarsePointer = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  const hasFinePointer = window.matchMedia && window.matchMedia('(any-pointer: fine)').matches;
   const noHover = window.matchMedia && window.matchMedia('(hover: none)').matches;
   const hasTouch = navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
-  const smallScreen = Math.min(window.screen.width, window.screen.height) <= 900;
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth || window.screen.width;
+  const smallViewport = viewportWidth <= 900;
 
   if (uaDataMobile || isIPadOS) return true;
   if (uaMobile && (hasTouch || coarsePointer)) return true;
-  if (coarsePointer && noHover && hasTouch && smallScreen) return true;
+  if (coarsePointer && !hasFinePointer && noHover && hasTouch && smallViewport) return true;
   return false;
 }
 
@@ -420,16 +440,17 @@ function initSettingsApp() {
     return scored.slice(0, 3);
   }
 
-function refreshRecommendedSection() {
-  const recList = document.getElementById('recommended-cards-list');
-  if (!recList) return;
+  function refreshRecommendedSection() {
+    const recList = document.getElementById('recommended-cards-list');
+    if (!recList) return;
 
-  const recs = getRecommendedSettings();
-  recList.innerHTML = '';
-  recs.forEach(({ item }) => {
-    recList.appendChild(createToggleCard(item));
-  });
-}
+    const recs = getRecommendedSettings();
+    recList.innerHTML = '';
+    recs.forEach(({ item }) => {
+      recList.appendChild(createToggleCard(item));
+    });
+  }
+
   function buildRecommendedSection() {
     const secEl = document.createElement('section');
     secEl.className = 'section';
