@@ -56,7 +56,6 @@ function initSettingsApp() {
 
   const DEFAULT_KEYBINDS = {
     playPause: 'k',
-    playPauseAlt: ' ',
     fullscreen: 'f',
     mute: 'm',
     seekForward: 'arrowright',
@@ -72,8 +71,6 @@ function initSettingsApp() {
   };
 
   const keybindItems = [
-    { action: 'playPause', title: 'Play / Pause', subtitle: 'Toggle video playback', icon: '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>' },
-    { action: 'playPauseAlt', title: 'Play / Pause (alternate)', subtitle: 'Secondary shortcut to toggle playback', icon: '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>' },
     { action: 'fullscreen', title: 'Fullscreen', subtitle: 'Enter or exit fullscreen mode', icon: '<svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>' },
     { action: 'mute', title: 'Mute / Unmute', subtitle: 'Toggle audio mute', icon: '<svg viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>' },
     { action: 'seekForward', title: 'Seek forward (10s)', subtitle: 'Jump forward 10 seconds', icon: '<svg viewBox="0 0 24 24"><path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/></svg>' },
@@ -93,6 +90,7 @@ function initSettingsApp() {
       id: 'sec-appearance',
       title: 'Appearance & Layout',
       description: 'Control how the player looks n feels!',
+      icon: '<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z"/></svg>',
       items: [
         {
           key: 'ambientState',
@@ -134,6 +132,7 @@ function initSettingsApp() {
       id: 'sec-playback',
       title: 'Playback & Queue',
       description: 'Configure playback of the player!',
+      icon: '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>',
       items: [
         {
           key: 'alabaster_disable_autoplay',
@@ -153,6 +152,7 @@ function initSettingsApp() {
       id: 'sec-recommendations',
       title: 'Recommendations & Endscreen',
       description: 'Manage everything about recommendations!',
+      icon: '<svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>',
       items: [
         {
           key: 'close_full_screen_discover',
@@ -183,6 +183,7 @@ function initSettingsApp() {
       id: 'sec-controls',
       title: 'Gestures & Input Behavior',
       description: 'Adjust All gesture behaviors!',
+      icon: '<svg viewBox="0 0 24 24"><path d="M20 5H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z"/></svg>',
       items: [
         {
           key: 'alabaster_disable_attention_span_fixer',
@@ -202,34 +203,19 @@ function initSettingsApp() {
       id: 'sec-captions',
       title: 'Captions & Subtitles',
       description: 'Manage subtitle settings!',
+      icon: '<svg viewBox="0 0 24 24"><path d="M19 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v1c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1zm7 0h-1.5v-.5h-2v3h2V13H18v1c0 .55-.45 1-1 1h-3c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1z"/></svg>',
       items: [
-        {
-          key: 'dont_use_youtube_style_captions',
-          title: 'Use default browser captions menu',
-          subtitle: 'Replace the custom YouTube-style caption overlay with the native player menu',
-          icon: '<svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 12h4v2H4v-2zm10 6H4v-2h10v2zm6 0h-4v-2h4v2zm0-4H10v-2h10v2z"/></svg>',
-          parity: true
-        },
         {
           key: 'dont_save_subtitle_state',
           title: 'Don\'t save subtitle state across videos',
           subtitle: 'Reset subtitle visibility and language selection whenever a new video loads',
-          icon: '<svg viewBox="0 0 24 24"><path d="M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7 1.62-4.33L19.12 17h-3.24z"/></svg>',
-          disabledWhen: {
-            key: 'dont_use_youtube_style_captions',
-            value: true,
-            reason: 'Requires "Use default browser captions menu" to be off'
-          }
+          icon: '<svg viewBox="0 0 24 24"><path d="M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7 1.62-4.33L19.12 17h-3.24z"/></svg>'
         },
         {
           key: 'alabaster_subtitle_default_use_system_language',
           title: 'Default to device display language for subtitles',
           subtitle: 'Try to select your device\'s display language first instead of the first available subtitle track, falling back to the first track if unavailable',
-          icon: '<svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zm6.93 6h-2.95c-.32-1.25-.78-2.45-1.38-3.56 1.84.63 3.37 1.91 4.33 3.56zM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82c.43-1.43 1.08-2.76 1.91-3.96zM4.26 14C4.1 13.36 4 12.69 4 12s.1-1.36.26-2h3.38c-.08.66-.14 1.32-.14 2 0 .68.06 1.34.14 2H4.26zm.82 2h2.95c.32 1.25.78 2.45 1.38 3.56-1.84-.63-3.37-1.91-4.33-3.56zm2.95-8H5.08c.96-1.66 2.49-2.93 4.33-3.56C8.81 5.55 8.35 6.75 8.03 8zM12 19.96c-.83-1.2-1.48-2.53-1.91-3.96h3.82c-.43 1.43-1.08 2.76-1.91 3.96zM14.34 14H9.66c-.09-.66-.16-1.32-.16-2 0-.68.07-1.35.16-2h4.68c.09.65.16 1.32.16 2 0 .68-.07 1.34-.16 2zm.25 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95c-.96 1.65-2.49 2.93-4.33 3.56zM16.36 14c.08-.66.14-1.32.14-2 0-.68-.06-1.34-.14-2h3.38c.16.64.26 1.31.26 2s-.1 1.36-.26 2h-3.38z"/></svg>',           disabledWhen: {
-            key: 'dont_use_youtube_style_captions',
-            value: true,
-            reason: 'Requires "Use default browser captions menu" to be off'
-          }
+          icon: '<svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zm6.93 6h-2.95c-.32-1.25-.78-2.45-1.38-3.56 1.84.63 3.37 1.91 4.33 3.56zM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82c.43-1.43 1.08-2.76 1.91-3.96zM4.26 14C4.1 13.36 4 12.69 4 12s.1-1.36.26-2h3.38c-.08.66-.14 1.32-.14 2 0 .68.06 1.34.14 2H4.26zm.82 2h2.95c.32 1.25.78 2.45 1.38 3.56-1.84-.63-3.37-1.91-4.33-3.56zm2.95-8H5.08c.96-1.66 2.49-2.93 4.33-3.56C8.81 5.55 8.35 6.75 8.03 8zM12 19.96c-.83-1.2-1.48-2.53-1.91-3.96h3.82c-.43 1.43-1.08 2.76-1.91 3.96zM14.34 14H9.66c-.09-.66-.16-1.32-.16-2 0-.68.07-1.35.16-2h4.68c.09.65.16 1.32.16 2 0 .68-.07 1.34-.16 2zm.25 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95c-.96 1.65-2.49 2.93-4.33 3.56zM16.36 14c.08-.66.14-1.32.14-2 0-.68-.06-1.34-.14-2h3.38c.16.64.26 1.31.26 2s-.1 1.36-.26 2h-3.38z"/></svg>'
         }
       ]
     }
@@ -239,19 +225,7 @@ function initSettingsApp() {
     id: 'sec-experiments',
     title: 'Experiments',
     description: 'Experimental player features that may change or be removed in future updates',
-    items: [
-      {
-        key: 'alabaster_enable_auto_subtitle',
-        title: 'Auto-enable subtitles in device language',
-        subtitle: 'Automatically turn on subtitles when a track matches your device language; does nothing if no matching track exists',
-        icon: '<svg viewBox="0 0 24 24"><path d="M19 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v1c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1zm7 0h-1.5v-.5h-2v3h2V13H18v1c0 .55-.45 1-1 1h-3c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1z"/></svg>',
-        disabledWhen: {
-          key: 'dont_use_youtube_style_captions',
-          value: true,
-          reason: 'Requires "Use default browser captions menu" to be off'
-        }
-      }
-    ]
+    items: []
   };
 
   const allItems = [
@@ -265,22 +239,6 @@ function initSettingsApp() {
     description: 'Adjust player features that differ from or match the standard YouTube experience',
     items: allItems.filter(item => item.parity)
   };
-
-  const aboutPillSpan = document.querySelector('.nav-pill[data-view="about"] span');
-  if (aboutPillSpan) {
-    aboutPillSpan.textContent = aboutPillSpan.textContent.replace(/Alabaster/i, 'PokePlayer');
-  }
-
-  const parityPill = document.querySelector('.nav-pill[data-view="parity"]');
-  if (parityPill && !document.querySelector('.nav-pill[data-view="experiments"]')) {
-    const expPill = document.createElement('button');
-    expPill.className = 'nav-pill';
-    expPill.dataset.view = 'experiments';
-    expPill.innerHTML =
-      '<svg viewBox="0 0 24 24"><path d="M7 2v2h1v6.29L3.3 17.6A2.5 2.5 0 0 0 5.42 21h13.16a2.5 2.5 0 0 0 2.12-3.4L16 10.29V4h1V2H7zm3 2h4v6.84l3.82 6.01A.5.5 0 0 1 17.4 18H6.6a.5.5 0 0 1-.42-.77L10 10.84V4z"/></svg>' +
-      '<span>Experiments</span>';
-    parityPill.insertAdjacentElement('afterend', expPill);
-  }
 
   const loader = document.getElementById('loader');
   const mainView = document.getElementById('main-view');
@@ -297,11 +255,52 @@ function initSettingsApp() {
   }
 
   const comingSoon = document.getElementById('coming-soon');
-  const navPills = document.querySelectorAll('.nav-pill');
   const exportBtn = document.getElementById('export-settings-btn');
   const importBtn = document.getElementById('import-settings-btn');
   const importInput = document.getElementById('import-settings-input');
   const toastEl = document.getElementById('toast');
+  const navContainer = document.querySelector('.nav-pills') || document.querySelector('nav') || document.querySelector('aside');
+
+  const sectionViews = new Map();
+  if (navContainer && mainView) {
+    mainSections.forEach(sec => {
+      const viewId = `tab-${sec.id}`;
+      let viewEl = document.getElementById(viewId);
+      if (!viewEl) {
+        viewEl = document.createElement('div');
+        viewEl.id = viewId;
+        viewEl.className = 'view-hidden';
+        mainView.insertAdjacentElement('afterend', viewEl);
+      }
+      sectionViews.set(sec.id, viewEl);
+
+      if (!navContainer.querySelector(`.nav-pill[data-view="${viewId}"]`)) {
+        const pill = document.createElement('button');
+        pill.type = 'button';
+        pill.className = 'nav-pill';
+        pill.dataset.view = viewId;
+        pill.innerHTML = `${sec.icon || ''}<span>${sec.title}</span>`;
+        navContainer.appendChild(pill);
+      }
+    });
+  }
+
+  const aboutPillSpan = document.querySelector('.nav-pill[data-view="about"] span');
+  if (aboutPillSpan) {
+    aboutPillSpan.textContent = aboutPillSpan.textContent.replace(/Alabaster/i, 'PokePlayer');
+  }
+
+  const parityPill = document.querySelector('.nav-pill[data-view="parity"]');
+  if (parityPill && !document.querySelector('.nav-pill[data-view="experiments"]')) {
+    const expPill = document.createElement('button');
+    expPill.type = 'button';
+    expPill.className = 'nav-pill';
+    expPill.dataset.view = 'experiments';
+    expPill.innerHTML =
+      '<svg viewBox="0 0 24 24"><path d="M7 2v2h1v6.29L3.3 17.6A2.5 2.5 0 0 0 5.42 21h13.16a2.5 2.5 0 0 0 2.12-3.4L16 10.29V4h1V2H7zm3 2h4v6.84l3.82 6.01A.5.5 0 0 1 17.4 18H6.6a.5.5 0 0 1-.42-.77L10 10.84V4z"/></svg>' +
+      '<span>Experiments</span>';
+    parityPill.insertAdjacentElement('afterend', expPill);
+  }
 
   let recordingAction = null;
   let toastTimer = null;
@@ -336,6 +335,7 @@ function initSettingsApp() {
     localStorage.setItem(KEYBINDS_STORAGE_KEY, JSON.stringify(binds));
     syncKeybindsUI();
     updateAboutConfig();
+    refreshRecommendedSection();
   }
 
   function formatKeyLabel(key) {
@@ -387,6 +387,182 @@ function initSettingsApp() {
     if (pre) {
       pre.textContent = JSON.stringify(getConfigSnapshot(), null, 2);
     }
+  }
+
+  function getRecommendedSettings() {
+    const binds = getSavedKeybinds();
+    const os = detectOS();
+    const wideScreen = Math.max(window.innerWidth || 0, window.screen?.width || 0) >= 1200;
+    const customBindCount = Object.keys(DEFAULT_KEYBINDS).filter(
+      k => binds[k] !== DEFAULT_KEYBINDS[k]
+    ).length;
+
+    const weights = {
+      theaterMode: {
+        base: wideScreen ? 76 : 48,
+        whenEnabled: -45,
+        reason: wideScreen
+          ? 'Fits wide desktop screens and reduces side clutter'
+          : 'Expands the player horizontally on smaller viewports'
+      },
+      alabaster_disable_endscreen_recommendations: {
+        base: 72,
+        whenEnabled: -40,
+        reason: 'Keeps video endings clean without blocking overlays'
+      },
+      close_full_screen_discover: {
+        base: 66,
+        whenEnabled: -40,
+        reason: 'Prevents accidental recommendation drawers in fullscreen'
+      },
+      alabaster_disable_attention_span_fixer: {
+        base: binds.playPause === ' ' || customBindCount > 0 ? 84 : 58,
+        whenEnabled: -45,
+        reason: binds.playPause === ' '
+          ? 'Avoids holding Space accidentally triggering 2x speed'
+          : 'Keeps input timing predictable with your shortcut setup'
+      },
+      AlabasterDisableNumberKeySeeking: {
+        base: customBindCount >= 2 ? 78 : 54,
+        whenEnabled: -42,
+        reason: 'Stops number keys from jumping unexpectedly while navigating'
+      },
+      alabaster_subtitle_default_use_system_language: {
+        base: navigator.language ? 74 : 45,
+        whenEnabled: -40,
+        reason: `Matches your detected locale (${navigator.language || 'system'}) automatically`
+      },
+      dont_save_subtitle_state: {
+        base: 42,
+        whenEnabled: -25,
+        reason: 'Useful if you switch between different subtitle languages often'
+      },
+      alabaster_disable_autoplay: {
+        base: os === 'macOS' || os === 'GNU/Linux' ? 56 : 44,
+        whenEnabled: -30,
+        reason: 'Gives manual control before playback starts on new videos'
+      },
+      play_next_video_v2: {
+        base: 40,
+        whenEnabled: -25,
+        reason: 'Great for continuous queues and marathon sessions'
+      },
+      ambientState: {
+        base: 50,
+        whenEnabled: -35,
+        reason: 'Adds soft edge glow that matches current frame colors'
+      }
+    };
+
+    const scored = allItems
+      .filter(item => weights[item.key])
+      .map(item => {
+        const w = weights[item.key];
+        const active = getSettingBool(item);
+        const score = active ? w.base + w.whenEnabled : w.base;
+        return { item, score, reason: w.reason, active };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    return scored.slice(0, 3);
+  }
+
+  function refreshRecommendedSection() {
+    const recList = document.getElementById('recommended-cards-list');
+    const tryOutBtn = document.getElementById('try-this-out-apply-btn');
+    const tryOutDesc = document.getElementById('try-this-out-desc');
+    if (!recList) return;
+
+    const recs = getRecommendedSettings();
+    recList.innerHTML = '';
+    recs.forEach(({ item, score, reason }) => {
+      const card = createToggleCard(item);
+      const badge = document.createElement('span');
+      badge.className = 'dependency-note';
+      badge.textContent = `Algo match ${Math.max(5, score)}% · ${reason}`;
+      const info = card.querySelector('.setting-info');
+      if (info) info.appendChild(badge);
+      recList.appendChild(card);
+    });
+
+    if (recs[0] && tryOutDesc && tryOutBtn) {
+      const top = recs[0];
+      tryOutDesc.textContent = `${top.item.title} — ${top.reason}.`;
+      tryOutBtn.textContent = top.active ? 'Applied ✓' : `Enable "${top.item.title}"`;
+      tryOutBtn.onclick = () => {
+        const nextVal = !top.active;
+        localStorage.setItem(top.item.key, String(nextVal));
+        syncSettings();
+        showToast(
+          nextVal
+            ? `Enabled "${top.item.title}"!`
+            : `Disabled "${top.item.title}".`
+        );
+      };
+    }
+  }
+
+  function buildTryThisOutBanner() {
+    const banner = document.createElement('section');
+    banner.className = 'section';
+    banner.id = 'sec-try-this-out';
+
+    const header = document.createElement('div');
+    header.className = 'section-header';
+
+    const headerText = document.createElement('div');
+    const h2 = document.createElement('h2');
+    h2.className = 'section-title';
+    h2.textContent = 'Try this out!';
+
+    const desc = document.createElement('p');
+    desc.id = 'try-this-out-desc';
+    desc.className = 'section-desc';
+    desc.textContent = 'Quick algorithm pick tailored to your setup.';
+
+    headerText.appendChild(h2);
+    headerText.appendChild(desc);
+
+    const actionBtn = document.createElement('button');
+    actionBtn.type = 'button';
+    actionBtn.id = 'try-this-out-apply-btn';
+    actionBtn.className = 'reset-btn';
+    actionBtn.textContent = 'Try it';
+
+    header.appendChild(headerText);
+    header.appendChild(actionBtn);
+    banner.appendChild(header);
+    return banner;
+  }
+
+  function buildRecommendedSection() {
+    const secEl = document.createElement('section');
+    secEl.className = 'section';
+    secEl.id = 'sec-recommended';
+
+    const header = document.createElement('div');
+    header.className = 'section-header';
+
+    const headerText = document.createElement('div');
+    const h2 = document.createElement('h2');
+    h2.className = 'section-title';
+    h2.textContent = 'Recommended for You';
+
+    const desc = document.createElement('p');
+    desc.className = 'section-desc';
+    desc.textContent = `Ranked dynamically from your current toggles, keybinds, locale, and ${detectOS()} environment`;
+
+    headerText.appendChild(h2);
+    headerText.appendChild(desc);
+    header.appendChild(headerText);
+
+    const cardGroup = document.createElement('div');
+    cardGroup.id = 'recommended-cards-list';
+    cardGroup.className = 'card-group';
+
+    secEl.appendChild(header);
+    secEl.appendChild(cardGroup);
+    return secEl;
   }
 
   exportBtn.addEventListener('click', () => {
@@ -497,39 +673,44 @@ function initSettingsApp() {
     saveKeybinds(binds);
   }, true);
 
-  navPills.forEach(pill => {
-    pill.addEventListener('click', () => {
-      navPills.forEach(p => p.classList.remove('active'));
-      pill.classList.add('active');
+  function setActiveTab(view) {
+    const navPills = document.querySelectorAll('.nav-pill');
+    navPills.forEach(p => p.classList.toggle('active', p.dataset.view === view));
 
-      if (recordingAction) {
-        recordingAction = null;
-        syncKeybindsUI();
-      }
+    if (recordingAction) {
+      recordingAction = null;
+      syncKeybindsUI();
+    }
 
-      const view = pill.dataset.view;
-      mainView.classList.toggle('view-hidden', view !== 'main');
-      keybindsView.classList.toggle('view-hidden', view !== 'keybinds');
-      parityView.classList.toggle('view-hidden', view !== 'parity');
-      if (experimentsView) {
-        experimentsView.classList.toggle('view-hidden', view !== 'experiments');
-      }
-      aboutView.classList.toggle('view-hidden', view !== 'about');
-      comingSoon.classList.toggle('view-hidden', view === 'keybinds' || view === 'about' || view === 'experiments');
-
-      if (view === 'about') {
-        updateAboutConfig();
-      }
-
-      if (view === 'main') {
-        const target = document.getElementById(pill.dataset.target);
-        if (target) {
-          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-      } else {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }
+    mainView.classList.toggle('view-hidden', view !== 'main');
+    keybindsView.classList.toggle('view-hidden', view !== 'keybinds');
+    parityView.classList.toggle('view-hidden', view !== 'parity');
+    if (experimentsView) {
+      experimentsView.classList.toggle('view-hidden', view !== 'experiments');
+    }
+    aboutView.classList.toggle('view-hidden', view !== 'about');
+    sectionViews.forEach((el, secId) => {
+      el.classList.toggle('view-hidden', view !== `tab-${secId}`);
     });
+    comingSoon.classList.toggle(
+      'view-hidden',
+      view === 'main' || view === 'keybinds' || view === 'about' || view === 'experiments' || view.startsWith('tab-')
+    );
+
+    if (view === 'about') {
+      updateAboutConfig();
+    }
+    if (view === 'main') {
+      refreshRecommendedSection();
+    }
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  document.addEventListener('click', (e) => {
+    const pill = e.target.closest('.nav-pill');
+    if (!pill || !pill.dataset.view) return;
+    setActiveTab(pill.dataset.view);
   });
 
   function updateDependencies() {
@@ -563,6 +744,7 @@ function initSettingsApp() {
     updateDependencies();
     syncKeybindsUI();
     updateAboutConfig();
+    refreshRecommendedSection();
   }
 
   function createToggleCard(item) {
@@ -652,6 +834,16 @@ function initSettingsApp() {
     headerText.appendChild(desc);
     header.appendChild(headerText);
 
+    secEl.appendChild(header);
+
+    if (section.id === 'sec-experiments' && section.items.length === 0) {
+      const emptyMsg = document.createElement('p');
+      emptyMsg.className = 'section-desc';
+      emptyMsg.textContent = 'there are no current experiments, check later cutie!';
+      secEl.appendChild(emptyMsg);
+      return secEl;
+    }
+
     const cardGroup = document.createElement('div');
     cardGroup.className = 'card-group';
 
@@ -659,7 +851,6 @@ function initSettingsApp() {
       cardGroup.appendChild(createToggleCard(item));
     });
 
-    secEl.appendChild(header);
     secEl.appendChild(cardGroup);
     return secEl;
   }
@@ -693,6 +884,7 @@ function initSettingsApp() {
       localStorage.removeItem(KEYBINDS_STORAGE_KEY);
       syncKeybindsUI();
       updateAboutConfig();
+      refreshRecommendedSection();
     });
 
     header.appendChild(headerText);
@@ -900,8 +1092,16 @@ function initSettingsApp() {
   setTimeout(() => {
     loader.style.display = 'none';
 
+    mainView.appendChild(buildTryThisOutBanner());
+    mainView.appendChild(buildRecommendedSection());
+
     mainSections.forEach(section => {
-      mainView.appendChild(buildSection(section));
+      const targetView = sectionViews.get(section.id);
+      if (targetView) {
+        targetView.appendChild(buildSection(section));
+      } else {
+        mainView.appendChild(buildSection(section));
+      }
     });
 
     keybindsView.appendChild(buildKeybindsSection());
@@ -911,6 +1111,7 @@ function initSettingsApp() {
     }
     aboutView.appendChild(buildAboutSection());
 
+    refreshRecommendedSection();
     updateDependencies();
     syncKeybindsUI();
 
