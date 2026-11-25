@@ -5,16 +5,20 @@ const zlib = require("zlib");
 const fs = require("fs");
 const path = require("path");
 const dns = require("dns");
- 
+const { Readable } = require("stream");
+
+const SOURCE_URL =
+  "https://codeberg.org/ashleyirispuppy/poke/raw/branch/main/p/server.js";
+const PRIVACY_URL = "https://poketube.fun/privacy";
 
 const SmartIPadressProxy = {
-   enabled: true,
-   forceFamily: null,
-   autoSelectFamily: true,
+  enabled: true,
+  forceFamily: null,
+  autoSelectFamily: true,
   autoSelectFamilyAttemptTimeout: 250,
-   connectTimeout: 10000,
-   rememberBrokenIpv6: true,
-  cooldownMs: 10 * 60 * 1000, 
+  connectTimeout: 10000,
+  rememberBrokenIpv6: true,
+  cooldownMs: 10 * 60 * 1000,
 };
 
 const smartIpState = {
@@ -45,10 +49,16 @@ const isIpv6RoutingError = (err) => {
   while (cur && depth < 6) {
     depth++;
     const isV6Addr = typeof cur.address === "string" && cur.address.includes(":");
-    if (ipv6ErrorCodes.has(cur.code) && (isV6Addr || cur.code === "EAFNOSUPPORT" || cur.code === "ENETUNREACH")) {
+    if (
+      ipv6ErrorCodes.has(cur.code) &&
+      (isV6Addr || cur.code === "EAFNOSUPPORT" || cur.code === "ENETUNREACH")
+    ) {
       return true;
     }
-    if (typeof cur.message === "string" && /EHOSTUNREACH|ENETUNREACH|2001:|2606:|2607:|2a00:|::/i.test(cur.message)) {
+    if (
+      typeof cur.message === "string" &&
+      /EHOSTUNREACH|ENETUNREACH|2001:|2606:|2607:|2a00:|::/i.test(cur.message)
+    ) {
       return true;
     }
     if (Array.isArray(cur.errors)) {
@@ -74,18 +84,24 @@ const getUndiciFetch = async () => {
         autoSelectFamilyAttemptTimeout: SmartIPadressProxy.autoSelectFamilyAttemptTimeout,
         timeout: SmartIPadressProxy.connectTimeout,
       },
+      bodyTimeout: 0,
+      headersTimeout: SmartIPadressProxy.connectTimeout,
     });
     smartIpState.ipv4Agent = new undici.Agent({
       connect: {
         family: 4,
         timeout: SmartIPadressProxy.connectTimeout,
       },
+      bodyTimeout: 0,
+      headersTimeout: SmartIPadressProxy.connectTimeout,
     });
     smartIpState.ipv6Agent = new undici.Agent({
       connect: {
         family: 6,
         timeout: SmartIPadressProxy.connectTimeout,
       },
+      bodyTimeout: 0,
+      headersTimeout: SmartIPadressProxy.connectTimeout,
     });
   }
 
@@ -103,12 +119,12 @@ const getUndiciFetch = async () => {
       return undici.fetch(url, { ...opts, dispatcher: smartIpState.ipv6Agent });
     }
 
-     const now = Date.now();
+    const now = Date.now();
     if (SmartIPadressProxy.rememberBrokenIpv6 && now < smartIpState.ipv6BrokenUntil) {
       return undici.fetch(url, { ...opts, dispatcher: smartIpState.ipv4Agent });
     }
 
-     try {
+    try {
       return await undici.fetch(url, { ...opts, dispatcher: smartIpState.dualStackAgent });
     } catch (err) {
       if (isIpv6RoutingError(err)) {
@@ -214,7 +230,7 @@ const sendErrorPage = (res, status, statusText, messageHtml, detailText = "") =>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, code { font: 15px/22px arial, sans-serif; }
-    
+
     html {
       background: #0f0f12;
       color: #e4e4e7;
@@ -224,7 +240,7 @@ const sendErrorPage = (res, status, statusText, messageHtml, detailText = "") =>
       justify-content: center;
       min-height: 100vh;
     }
-    
+
     body {
       display: flex;
       flex-direction: row;
@@ -235,12 +251,12 @@ const sendErrorPage = (res, status, statusText, messageHtml, detailText = "") =>
       width: 100%;
       max-width: 750px;
     }
-    
+
     .error-container {
       flex: 1;
       max-width: 440px;
     }
-    
+
     .mascot-container {
       flex-shrink: 0;
       width: 160px;
@@ -281,7 +297,7 @@ const sendErrorPage = (res, status, statusText, messageHtml, detailText = "") =>
     }
     a { color: #60a5fa; text-decoration: none; }
     a img { border: 0; }
-    
+
     #logo {
       display: inline-block;
       height: 54px;
@@ -290,7 +306,7 @@ const sendErrorPage = (res, status, statusText, messageHtml, detailText = "") =>
       margin-left: -2px;
       margin-bottom: 4px;
     }
-    
+
     @media screen and (max-width: 772px) {
       body {
         flex-direction: column-reverse;
@@ -314,7 +330,7 @@ const sendErrorPage = (res, status, statusText, messageHtml, detailText = "") =>
     <p>${messageHtml} <ins>That’s all we know.</ins></p>
     ${detailBlock}
   </div>
-  
+
   <div class="mascot-container" aria-hidden="true"></div>
 </body>
 </html>`;
@@ -325,7 +341,103 @@ const sendErrorPage = (res, status, statusText, messageHtml, detailText = "") =>
   res.send(html);
 };
 
- 
+const renderIndexPage = () => `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Poke 3rd Party Domain Proxy</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #ffffff;
+      color: #333740;
+      line-height: 1.65;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .hero {
+      background: #5b9bd5;
+      color: #ffffff;
+      text-align: center;
+      padding: 56px 24px 52px;
+    }
+    .mascot-badge {
+      width: 104px;
+      height: 104px;
+      margin: 0 auto 18px;
+      border-radius: 50%;
+      background: #ffffff url("https://poketube.fun/static/poke-mascot-new.webp?v=78") no-repeat center 18% / 78%;
+      border: 4px solid rgba(255, 255, 255, 0.35);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+    }
+    .hero h1 {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      margin-bottom: 6px;
+    }
+    .hero p {
+      font-size: 16px;
+      color: rgba(255, 255, 255, 0.9);
+      font-weight: 400;
+    }
+    .content {
+      max-width: 680px;
+      width: 100%;
+      margin: 48px auto;
+      padding: 0 24px;
+      text-align: center;
+    }
+    .content p {
+      font-size: 16px;
+      color: #3f444e;
+      margin-bottom: 22px;
+    }
+    .content a {
+      color: #2563eb;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      word-break: break-word;
+    }
+    .content a:hover {
+      color: #1d4ed8;
+    }
+    .source-box {
+      margin-top: 28px;
+      padding-top: 20px;
+      border-top: 1px solid #e5e7eb;
+      font-size: 14px;
+      color: #525866;
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="mascot-badge" aria-hidden="true"></div>
+    <h1>Poke 3rd Party Domain Proxy</h1>
+    <p>Private by Design</p>
+  </header>
+
+  <main class="content">
+    <p>
+      Welcome to the Poke's 3rd party domain proxy! per our privacy policy at
+      <a href="${PRIVACY_URL}">poketube.fun/privacy</a>, we don't use third party domains
+      and we use our inhouse proxy service!
+    </p>
+    <p>
+      Media streams, fonts, styles, and whitelisted assets are fetched through Poke's own
+      proxy infrastructure so client requests do not leak directly to external origins!
+    </p>
+    <div class="source-box">
+      Source code: <a href="${SOURCE_URL}">${SOURCE_URL}</a>
+    </div>
+  </main>
+</body>
+</html>`;
+
 const FONTS_DIR = path.join(__dirname, "fonts");
 if (!fs.existsSync(FONTS_DIR)) {
   fs.mkdirSync(FONTS_DIR, { recursive: true });
@@ -350,14 +462,14 @@ const FA_WEBFONTS = [
 
 const FONT_MIME = {
   ".woff2": "font/woff2",
-  ".ttf":   "font/ttf",
-  ".woff":  "font/woff",
-  ".eot":   "application/vnd.ms-fontobject",
+  ".ttf": "font/ttf",
+  ".woff": "font/woff",
+  ".eot": "application/vnd.ms-fontobject",
 };
 
 let FA_CSS_CACHE = null;
 const cdxTimestampCache = {};
- 
+
 const findArchiveTimestamp = async (assetUrl) => {
   if (cdxTimestampCache[assetUrl]) {
     return cdxTimestampCache[assetUrl];
@@ -374,7 +486,7 @@ const findArchiveTimestamp = async (assetUrl) => {
     const res = await uFetch(cdxUrl, {
       headers: {
         "User-Agent": "Mozilla/5.0 (compatible; poketube-proxy/1.0)",
-        "Accept": "application/json",
+        Accept: "application/json",
         "Accept-Encoding": "identity",
       },
       redirect: "follow",
@@ -424,10 +536,11 @@ const downloadFont = async (filename) => {
   try {
     const res = await uFetch(archiveUrl, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "*/*",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        Accept: "*/*",
         "Accept-Encoding": "identity",
-        "Referer": "https://web.archive.org/",
+        Referer: "https://web.archive.org/",
       },
       redirect: "follow",
     });
@@ -446,7 +559,9 @@ const downloadFont = async (filename) => {
     const buf = Buffer.from(await res.arrayBuffer());
 
     if (!validateFontBuffer(buf, filename)) {
-      console.error(`[fonts] Skipping ${filename}: failed binary validation (${buf.length} bytes, first 4: "${buf.toString("ascii", 0, 4)}")`);
+      console.error(
+        `[fonts] Skipping ${filename}: failed binary validation (${buf.length} bytes, first 4: "${buf.toString("ascii", 0, 4)}")`
+      );
       return false;
     }
 
@@ -502,10 +617,11 @@ const loadCss = () => {
       const uFetch = await getUndiciFetch();
       const f = await uFetch(archiveUrl, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-          "Accept": "text/css,*/*;q=0.1",
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          Accept: "text/css,*/*;q=0.1",
           "Accept-Encoding": "identity",
-          "Referer": "https://web.archive.org/",
+          Referer: "https://web.archive.org/",
         },
         redirect: "follow",
       });
@@ -515,8 +631,11 @@ const loadCss = () => {
       const rawBody = Buffer.from(await f.arrayBuffer());
       const encoding = f.headers.get("content-encoding");
       let cssText;
-      try { cssText = (await decompress(rawBody, encoding)).toString("utf8"); }
-      catch (_) { cssText = rawBody.toString("utf8"); }
+      try {
+        cssText = (await decompress(rawBody, encoding)).toString("utf8");
+      } catch (_) {
+        cssText = rawBody.toString("utf8");
+      }
 
       cssText = rewriteCssFontUrls(cssText);
 
@@ -555,10 +674,9 @@ const ensureFontsDownloaded = async () => {
   console.log("[fonts] Font cache check complete");
 };
 
-Promise.all([
-  ensureFontsDownloaded(),
-  loadCss(),
-]).catch((err) => console.error(`[startup] Background init error:\n${formatError(err)}`));
+Promise.all([ensureFontsDownloaded(), loadCss()]).catch((err) =>
+  console.error(`[startup] Background init error:\n${formatError(err)}`)
+);
 
 // ---------------------------------------------------------------------------
 // URL whitelist
@@ -593,8 +711,37 @@ const URL_WHITELIST = [
 ];
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Helpers & Media Streaming Support
 // ---------------------------------------------------------------------------
+
+const MEDIA_EXTENSIONS = new Set([
+  ".mp4",
+  ".m4s",
+  ".m4a",
+  ".m4v",
+  ".webm",
+  ".mp3",
+  ".ogg",
+  ".oga",
+  ".opus",
+  ".wav",
+  ".flac",
+  ".aac",
+  ".ts",
+  ".m3u8",
+  ".mpd",
+]);
+
+const isLikelyMediaRequest = (req, parsedUrl, contentType = "") => {
+  const pathname = parsedUrl.pathname.toLowerCase();
+  const ext = path.extname(pathname);
+  if (MEDIA_EXTENSIONS.has(ext)) return true;
+  if (req.headers.range) return true;
+  if (/^(video|audio)\//i.test(contentType)) return true;
+  if (/application\/(vnd\.apple\.mpegurl|x-mpegurl|dash\+xml)/i.test(contentType)) return true;
+  if (pathname.includes("/videoplayback") || req.searchParams?.has("mime")) return true;
+  return false;
+};
 
 const extractTargetUrl = (originalUrl) => {
   let cleaned = originalUrl.replace(/^\/+/, "");
@@ -606,67 +753,131 @@ const extractTargetUrl = (originalUrl) => {
   return cleaned;
 };
 
-const getSpoofedHeaders = (host) => {
+const getSpoofedHeaders = (host, incomingReq = null) => {
+  const baseHeaders = {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    Accept: "*/*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "identity",
+  };
+
+  if (incomingReq?.headers?.range) {
+    baseHeaders.Range = incomingReq.headers.range;
+  }
+  if (incomingReq?.headers?.["if-range"]) {
+    baseHeaders["If-Range"] = incomingReq.headers["if-range"];
+  }
+
   if (host === "web.archive.org") {
     return {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-      "Accept": "*/*",
-      "Accept-Language": "en-US,en;q=0.9",
-      "Accept-Encoding": "identity",
-      "Referer": "https://web.archive.org/",
+      ...baseHeaders,
+      Referer: "https://web.archive.org/",
     };
   }
   if (host === "site-assets.fontawesome.com") {
     return {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-      "Referer": "https://fontawesome.com/",
-      "Origin": "https://fontawesome.com",
-      "Accept": "text/css,*/*;q=0.1",
-      "Accept-Language": "en-US,en;q=0.9",
-      "Accept-Encoding": "identity",
+      ...baseHeaders,
+      Referer: "https://fontawesome.com/",
+      Origin: "https://fontawesome.com",
+      Accept: "text/css,*/*;q=0.1",
       "Sec-Fetch-Dest": "style",
       "Sec-Fetch-Mode": "no-cors",
       "Sec-Fetch-Site": "same-site",
     };
   }
-  return {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    "Accept": "*/*",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Accept-Encoding": "identity",
-  };
+  return baseHeaders;
 };
 
 const decompress = (buf, encoding) => {
   return new Promise((resolve, reject) => {
     if (!encoding || encoding === "identity") return resolve(buf);
-    if (encoding === "gzip") return zlib.gunzip(buf, (e, r) => e ? reject(e) : resolve(r));
+    if (encoding === "gzip") return zlib.gunzip(buf, (e, r) => (e ? reject(e) : resolve(r)));
     if (encoding === "deflate") {
       return zlib.inflate(buf, (e, r) => {
-        if (e) zlib.inflateRaw(buf, (e2, r2) => e2 ? reject(e2) : resolve(r2));
+        if (e) zlib.inflateRaw(buf, (e2, r2) => (e2 ? reject(e2) : resolve(r2)));
         else resolve(r);
       });
     }
-    if (encoding === "br") return zlib.brotliDecompress(buf, (e, r) => e ? reject(e) : resolve(r));
+    if (encoding === "br") return zlib.brotliDecompress(buf, (e, r) => (e ? reject(e) : resolve(r)));
     resolve(buf);
   });
 };
 
-const fetchAndForward = async (targetUrl, displayUrl, method, res) => {
+const pipeUpstreamBody = (upstreamResponse, res, isMedia) => {
+  return new Promise((resolve, reject) => {
+    if (!upstreamResponse.body) {
+      res.end();
+      return resolve();
+    }
+
+    const nodeStream = Readable.fromWeb(upstreamResponse.body);
+
+    const cleanup = () => {
+      nodeStream.removeAllListeners();
+      res.removeListener("close", onClose);
+    };
+
+    const onClose = () => {
+      if (!nodeStream.destroyed) {
+        nodeStream.destroy();
+      }
+      cleanup();
+      resolve();
+    };
+
+    nodeStream.on("error", (err) => {
+      cleanup();
+      if (!res.headersSent) {
+        reject(err);
+      } else {
+        if (!res.writableEnded) res.end();
+        resolve();
+      }
+    });
+
+    nodeStream.on("end", () => {
+      cleanup();
+      resolve();
+    });
+
+    res.on("close", onClose);
+
+    if (isMedia) {
+      res.setHeader("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400");
+    }
+
+    nodeStream.pipe(res);
+  });
+};
+
+const fetchAndForward = async (targetUrl, displayUrl, req, res) => {
   const uFetch = await getUndiciFetch();
   const url = new URL(targetUrl);
-  const headers = getSpoofedHeaders(url.host);
+  const headers = getSpoofedHeaders(url.host, req);
+  const method = req.method === "HEAD" ? "HEAD" : "GET";
+  const abortController = new AbortController();
 
-  console.log(`==> Fetching ${targetUrl}`);
+  const onReqAbort = () => abortController.abort();
+  req.on("aborted", onReqAbort);
+
+  console.log(`==> Fetching ${targetUrl} (${method})`);
   let f;
   try {
-    f = await uFetch(targetUrl, { method, headers, redirect: "follow" });
+    f = await uFetch(targetUrl, {
+      method,
+      headers,
+      redirect: "follow",
+      signal: abortController.signal,
+    });
   } catch (err) {
+    req.off("aborted", onReqAbort);
     console.error(`==> Fetch failed for ${targetUrl}:\n${formatError(err)}`);
     throw err;
   }
+  req.off("aborted", onReqAbort);
 
-  if (!f.ok) {
+  if (!f.ok && f.status !== 206) {
     console.log(`==> Upstream returned ${f.status} for ${url.host}`);
     return sendErrorPage(
       res,
@@ -677,16 +888,46 @@ const fetchAndForward = async (targetUrl, displayUrl, method, res) => {
     );
   }
 
-  const rawBody = Buffer.from(await f.arrayBuffer());
-  const encoding = f.headers.get("content-encoding");
-  let body;
-  try { body = await decompress(rawBody, encoding); }
-  catch (e) { body = rawBody; }
+  const upstreamContentType = f.headers.get("content-type") || "";
+  const streamMode = isLikelyMediaRequest(req, url, upstreamContentType);
 
-  for (const h of ["content-type", "last-modified", "etag"]) {
+  res.status(f.status);
+
+  const forwardHeaders = streamMode
+    ? ["content-type", "content-length", "content-range", "accept-ranges", "last-modified", "etag"]
+    : ["content-type", "last-modified", "etag"];
+
+  for (const h of forwardHeaders) {
     const v = f.headers.get(h);
     if (v) res.setHeader(h, v);
   }
+
+  if (streamMode) {
+    if (!f.headers.get("accept-ranges")) {
+      res.setHeader("accept-ranges", "bytes");
+    }
+    res.removeHeader("content-encoding");
+    if (method === "HEAD") {
+      return res.end();
+    }
+    return pipeUpstreamBody(f, res, true);
+  }
+
+  if (method === "HEAD") {
+    const cl = f.headers.get("content-length");
+    if (cl) res.setHeader("content-length", cl);
+    return res.end();
+  }
+
+  const rawBody = Buffer.from(await f.arrayBuffer());
+  const encoding = f.headers.get("content-encoding");
+  let body;
+  try {
+    body = await decompress(rawBody, encoding);
+  } catch (e) {
+    body = rawBody;
+  }
+
   res.removeHeader("content-encoding");
   res.setHeader("content-length", body.length);
   res.send(body);
@@ -803,13 +1044,22 @@ app.get(
 );
 
 // ---------------------------------------------------------------------------
-// Route: index
+// Route: index & status
 // ---------------------------------------------------------------------------
 
 app.get("/", (_req, res) => {
+  res.status(200);
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  res.send(renderIndexPage());
+});
+
+app.get("/status", (_req, res) => {
   res.json({
     status: "200",
     version: "1.3.332a-b3-9e",
+    source: SOURCE_URL,
+    privacyPolicy: PRIVACY_URL,
     SmartIPadressProxy: {
       enabled: SmartIPadressProxy.enabled,
       forceFamily: SmartIPadressProxy.forceFamily,
@@ -849,17 +1099,22 @@ app.get("/api", async (req, res) => {
     const errors = [];
     for (const apiUrl of apiUrls) {
       try {
-        const engagement = await uFetch(apiUrl + req.query.v).then((r) => r.json());
+        const engagement = await uFetch(apiUrl + encodeURIComponent(cacheKey || "")).then((r) =>
+          r.json()
+        );
         apiCache[cacheKey] = { data: engagement, timestamp: Date.now() };
         return res.json(engagement);
       } catch (err) {
         console.error(`Error fetching from ${apiUrl}:\n${formatError(err)}`);
-        errors.push(`${apiUrl}: ${err.cause ? `${err.cause.code || err.cause.message}` : err.message}`);
+        errors.push(
+          `${apiUrl}: ${err.cause ? `${err.cause.code || err.cause.message}` : err.message}`
+        );
       }
     }
     res.status(500).json({ error: "All API endpoints failed", errors });
   } catch (err) {
     console.error(`==> /api error:\n${formatError(err)}`);
+    res.status(500).json({ error: "Internal API proxy error" });
   }
 });
 
@@ -868,8 +1123,9 @@ app.get("/api", async (req, res) => {
 // ---------------------------------------------------------------------------
 
 app.get("/bangs", async (req, res) => {
-  const f = await fetch("https://lite.duckduckgo.com/lite/?q=" + req.query.q);
-  res.redirect(f);
+  const target = "https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(req.query.q || "");
+  const f = await fetch(target, { redirect: "follow" });
+  res.redirect(f.url || target);
 });
 
 // ---------------------------------------------------------------------------
@@ -904,12 +1160,16 @@ const proxy = async (req, res) => {
       );
     }
 
-    if (url.host !== "web.archive.org") {
+    if (url.host !== "web.archive.org" && !isLikelyMediaRequest(req, url)) {
       url.searchParams.set("cachefixer", Buffer.from(String(Date.now())).toString("base64"));
     }
 
-    await fetchAndForward(url.toString(), rawUrl, req.method, res);
+    await fetchAndForward(url.toString(), rawUrl, req, res);
   } catch (e) {
+    if (res.headersSent) {
+      if (!res.writableEnded) res.end();
+      return;
+    }
     console.error(`==> Proxy Error for ${rawUrl}:\n${formatError(e)}`);
     return sendErrorPage(
       res,
