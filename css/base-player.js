@@ -2383,7 +2383,7 @@ window.SyncLevel = SyncLevel;
       '  padding: 0 !important;',
       '  background: transparent !important;',
       '  color: #ffffff !important;',
-      '  font-family: poketube flex, "poketube flex", Arial, Helvetica, sans-serif !important;',   
+      '  font-family: poketube flex, "poketube flex", Arial, Helvetica, sans-serif !important;',
       '  font-weight: 400 !important;',
       '  pointer-events: none !important;',
       '  user-select: none !important;',
@@ -8933,7 +8933,7 @@ window.SyncLevel = SyncLevel;
           rootEl.classList.add('alabaster-endscreen-active');
           endscreenOverlay.style.display = 'flex';
           if (typeof syncFullscreenTitleBarVisibility === 'function') {
-            syncFullscreenTitleBarVisibility();
+            syncFullscreenTitleBarVisibility(true);
           }
           compat.raf(function() {
             if (isEndscreenVisible && endscreenOverlay) {
@@ -8956,7 +8956,7 @@ window.SyncLevel = SyncLevel;
             }, 220);
           }
           if (wasVisible && typeof syncFullscreenTitleBarVisibility === 'function') {
-            syncFullscreenTitleBarVisibility();
+            syncFullscreenTitleBarVisibility(true);
           }
         };
 
@@ -9100,7 +9100,7 @@ window.SyncLevel = SyncLevel;
         };
       }
 
-      var syncFullscreenTitleBarVisibility = function() {
+      var syncFullscreenTitleBarVisibility = function(skipEndscreenSync) {
         if (!rootEl) return;
         var isFs = checkIsPlayerFullscreen();
 
@@ -9113,12 +9113,19 @@ window.SyncLevel = SyncLevel;
           syncAutoplayNextBtnUI();
         }
 
-        if (isEndscreenVisible && !isStorageFlagEnabled('play_next_video')) {
-          if (typeof clearUpNextTimer === 'function') clearUpNextTimer();
-          if (isStorageFlagEnabled('disable_endscreen_rec') && typeof hideEndscreen === 'function') {
-            hideEndscreen();
-          } else if (typeof showEndscreen === 'function') {
-            showEndscreen();
+        if (skipEndscreenSync !== true && isEndscreenVisible && !isStorageFlagEnabled('play_next_video')) {
+          if (isStorageFlagEnabled('disable_endscreen_rec')) {
+            if (typeof clearUpNextTimer === 'function') clearUpNextTimer();
+            if (typeof hideEndscreen === 'function') {
+              hideEndscreen();
+              return;
+            }
+          } else if (upnextWrap && upnextWrap.style.display !== 'none') {
+            if (typeof clearUpNextTimer === 'function') clearUpNextTimer();
+            if (typeof showEndscreen === 'function') {
+              showEndscreen();
+              return;
+            }
           }
         }
 
