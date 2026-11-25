@@ -548,12 +548,7 @@ function initSettingsApp() {
     h2.className = 'section-title';
     h2.textContent = 'Recommended for You';
 
-    const desc = document.createElement('p');
-    desc.className = 'section-desc';
-    desc.textContent = `Ranked dynamically from your current toggles, keybinds, locale, and ${detectOS()} environment`;
-
     headerText.appendChild(h2);
-    headerText.appendChild(desc);
     header.appendChild(headerText);
 
     const cardGroup = document.createElement('div');
