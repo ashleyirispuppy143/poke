@@ -487,7 +487,7 @@ function initSettingsApp() {
 
     if (recs[0] && tryOutDesc && tryOutBtn) {
       const top = recs[0];
-      tryOutDesc.textContent = `${top.item.title} — ${top.reason}.`;
+      tryOutDesc.textContent = `${top.item.title} | ${top.reason}.`;
       tryOutBtn.textContent = top.active ? 'Applied ✓' : `Enable "${top.item.title}"`;
       tryOutBtn.onclick = () => {
         const nextVal = !top.active;
