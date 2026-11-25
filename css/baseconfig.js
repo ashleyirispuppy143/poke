@@ -420,23 +420,16 @@ function initSettingsApp() {
     return scored.slice(0, 3);
   }
 
-  function refreshRecommendedSection() {
-    const recList = document.getElementById('recommended-cards-list');
-    if (!recList) return;
+function refreshRecommendedSection() {
+  const recList = document.getElementById('recommended-cards-list');
+  if (!recList) return;
 
-    const recs = getRecommendedSettings();
-    recList.innerHTML = '';
-    recs.forEach(({ item, score, reason }) => {
-      const card = createToggleCard(item);
-      const badge = document.createElement('span');
-      badge.className = 'algo-note';
-      badge.textContent = `Algo match ${Math.max(5, score)}% - ${reason}`;
-      const info = card.querySelector('.setting-info');
-      if (info) info.appendChild(badge);
-      recList.appendChild(card);
-    });
-  }
-
+  const recs = getRecommendedSettings();
+  recList.innerHTML = '';
+  recs.forEach(({ item }) => {
+    recList.appendChild(createToggleCard(item));
+  });
+}
   function buildRecommendedSection() {
     const secEl = document.createElement('section');
     secEl.className = 'section';
