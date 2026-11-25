@@ -90,12 +90,11 @@ function initSettingsApp() {
       id: 'sec-appearance',
       title: 'Appearance & Layout',
       description: 'Control how the player looks n feels!',
-      icon: '<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z"/></svg>',
       items: [
         {
           key: 'ambientState',
           title: 'Ambient mode',
-          subtitle: 'Ambient light mode uses a very cool ahh effect to make watching videos more immersive by casting gentle colors from the video into your screen’s background! and it looks amazing :3 owo',
+          subtitle: 'Ambient light mode uses a very cool ahh effect to make watching videos more immersive by casting gentle colors from the video into your screen\'s background! and it looks amazing :3 owo',
           icon: '<svg viewBox="0 0 24 24"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58a.996.996 0 0 0-1.41 0 .996.996 0 0 0 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37a.996.996 0 0 0-1.41 0 .996.996 0 0 0 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0a.996.996 0 0 0 0-1.41l-1.06-1.06zm1.06-10.96a.996.996 0 0 0 0-1.41.996.996 0 0 0-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36a.996.996 0 0 0 0-1.41.996.996 0 0 0-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z"/></svg>',
           defaultValue: true
         },
@@ -132,7 +131,6 @@ function initSettingsApp() {
       id: 'sec-playback',
       title: 'Playback & Queue',
       description: 'Configure playback of the player!',
-      icon: '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>',
       items: [
         {
           key: 'alabaster_disable_autoplay',
@@ -152,7 +150,6 @@ function initSettingsApp() {
       id: 'sec-recommendations',
       title: 'Recommendations & Endscreen',
       description: 'Manage everything about recommendations!',
-      icon: '<svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>',
       items: [
         {
           key: 'close_full_screen_discover',
@@ -183,7 +180,6 @@ function initSettingsApp() {
       id: 'sec-controls',
       title: 'Gestures & Input Behavior',
       description: 'Adjust All gesture behaviors!',
-      icon: '<svg viewBox="0 0 24 24"><path d="M20 5H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z"/></svg>',
       items: [
         {
           key: 'alabaster_disable_attention_span_fixer',
@@ -194,7 +190,7 @@ function initSettingsApp() {
         {
           key: 'AlabasterDisableNumberKeySeeking',
           title: 'Disable seeking on the number keys',
-          subtitle: 'Prevent pressing number keys (0–9) from jumping to percentage timestamps in the video',
+          subtitle: 'Prevent pressing number keys (0-9) from jumping to percentage timestamps in the video',
           icon: '<svg viewBox="0 0 24 24"><path d="M12 19c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM6 1c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12-8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-6 8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>'
         }
       ]
@@ -203,7 +199,6 @@ function initSettingsApp() {
       id: 'sec-captions',
       title: 'Captions & Subtitles',
       description: 'Manage subtitle settings!',
-      icon: '<svg viewBox="0 0 24 24"><path d="M19 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v1c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1zm7 0h-1.5v-.5h-2v3h2V13H18v1c0 .55-.45 1-1 1h-3c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1z"/></svg>',
       items: [
         {
           key: 'dont_save_subtitle_state',
@@ -244,63 +239,21 @@ function initSettingsApp() {
   const mainView = document.getElementById('main-view');
   const keybindsView = document.getElementById('keybinds-view');
   const parityView = document.getElementById('parity-view');
+  const experimentsView = document.getElementById('experiments-view');
   const aboutView = document.getElementById('about-view');
-
-  let experimentsView = document.getElementById('experiments-view');
-  if (!experimentsView && parityView) {
-    experimentsView = document.createElement('div');
-    experimentsView.id = 'experiments-view';
-    experimentsView.className = 'view-hidden';
-    parityView.insertAdjacentElement('afterend', experimentsView);
-  }
-
   const comingSoon = document.getElementById('coming-soon');
   const exportBtn = document.getElementById('export-settings-btn');
   const importBtn = document.getElementById('import-settings-btn');
   const importInput = document.getElementById('import-settings-input');
   const toastEl = document.getElementById('toast');
-  const navContainer = document.querySelector('.nav-pills') || document.querySelector('nav') || document.querySelector('aside');
 
   const sectionViews = new Map();
-  if (navContainer && mainView) {
-    mainSections.forEach(sec => {
-      const viewId = `tab-${sec.id}`;
-      let viewEl = document.getElementById(viewId);
-      if (!viewEl) {
-        viewEl = document.createElement('div');
-        viewEl.id = viewId;
-        viewEl.className = 'view-hidden';
-        mainView.insertAdjacentElement('afterend', viewEl);
-      }
+  mainSections.forEach(sec => {
+    const viewEl = document.getElementById(`tab-${sec.id}`);
+    if (viewEl) {
       sectionViews.set(sec.id, viewEl);
-
-      if (!navContainer.querySelector(`.nav-pill[data-view="${viewId}"]`)) {
-        const pill = document.createElement('button');
-        pill.type = 'button';
-        pill.className = 'nav-pill';
-        pill.dataset.view = viewId;
-        pill.innerHTML = `${sec.icon || ''}<span>${sec.title}</span>`;
-        navContainer.appendChild(pill);
-      }
-    });
-  }
-
-  const aboutPillSpan = document.querySelector('.nav-pill[data-view="about"] span');
-  if (aboutPillSpan) {
-    aboutPillSpan.textContent = aboutPillSpan.textContent.replace(/Alabaster/i, 'PokePlayer');
-  }
-
-  const parityPill = document.querySelector('.nav-pill[data-view="parity"]');
-  if (parityPill && !document.querySelector('.nav-pill[data-view="experiments"]')) {
-    const expPill = document.createElement('button');
-    expPill.type = 'button';
-    expPill.className = 'nav-pill';
-    expPill.dataset.view = 'experiments';
-    expPill.innerHTML =
-      '<svg viewBox="0 0 24 24"><path d="M7 2v2h1v6.29L3.3 17.6A2.5 2.5 0 0 0 5.42 21h13.16a2.5 2.5 0 0 0 2.12-3.4L16 10.29V4h1V2H7zm3 2h4v6.84l3.82 6.01A.5.5 0 0 1 17.4 18H6.6a.5.5 0 0 1-.42-.77L10 10.84V4z"/></svg>' +
-      '<span>Experiments</span>';
-    parityPill.insertAdjacentElement('afterend', expPill);
-  }
+    }
+  });
 
   let recordingAction = null;
   let toastTimer = null;
@@ -469,8 +422,6 @@ function initSettingsApp() {
 
   function refreshRecommendedSection() {
     const recList = document.getElementById('recommended-cards-list');
-    const tryOutBtn = document.getElementById('try-this-out-apply-btn');
-    const tryOutDesc = document.getElementById('try-this-out-desc');
     if (!recList) return;
 
     const recs = getRecommendedSettings();
@@ -478,61 +429,12 @@ function initSettingsApp() {
     recs.forEach(({ item, score, reason }) => {
       const card = createToggleCard(item);
       const badge = document.createElement('span');
-      badge.className = 'dependency-note';
-      badge.textContent = `Algo match ${Math.max(5, score)}% · ${reason}`;
+      badge.className = 'algo-note';
+      badge.textContent = `Algo match ${Math.max(5, score)}% - ${reason}`;
       const info = card.querySelector('.setting-info');
       if (info) info.appendChild(badge);
       recList.appendChild(card);
     });
-
-    if (recs[0] && tryOutDesc && tryOutBtn) {
-      const top = recs[0];
-      tryOutDesc.textContent = `${top.item.title} | ${top.reason}.`;
-      tryOutBtn.textContent = top.active ? 'Applied ✓' : `Enable "${top.item.title}"`;
-      tryOutBtn.onclick = () => {
-        const nextVal = !top.active;
-        localStorage.setItem(top.item.key, String(nextVal));
-        syncSettings();
-        showToast(
-          nextVal
-            ? `Enabled "${top.item.title}"!`
-            : `Disabled "${top.item.title}".`
-        );
-      };
-    }
-  }
-
-  function buildTryThisOutBanner() {
-    const banner = document.createElement('section');
-    banner.className = 'section';
-    banner.id = 'sec-try-this-out';
-
-    const header = document.createElement('div');
-    header.className = 'section-header';
-
-    const headerText = document.createElement('div');
-    const h2 = document.createElement('h2');
-    h2.className = 'section-title';
-    h2.textContent = 'Try this out!';
-
-    const desc = document.createElement('p');
-    desc.id = 'try-this-out-desc';
-    desc.className = 'section-desc';
-    desc.textContent = 'Quick algorithm pick tailored to your setup.';
-
-    headerText.appendChild(h2);
-    headerText.appendChild(desc);
-
-    const actionBtn = document.createElement('button');
-    actionBtn.type = 'button';
-    actionBtn.id = 'try-this-out-apply-btn';
-    actionBtn.className = 'reset-btn';
-    actionBtn.textContent = 'Try it';
-
-    header.appendChild(headerText);
-    header.appendChild(actionBtn);
-    banner.appendChild(header);
-    return banner;
   }
 
   function buildRecommendedSection() {
@@ -1087,7 +989,6 @@ function initSettingsApp() {
   setTimeout(() => {
     loader.style.display = 'none';
 
-    mainView.appendChild(buildTryThisOutBanner());
     mainView.appendChild(buildRecommendedSection());
 
     mainSections.forEach(section => {
