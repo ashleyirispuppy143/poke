@@ -1,0 +1,1505 @@
+<!--
+
+    This Source Code Form is subject to the terms of the GNU General Public License:
+
+    Copyright (C) 2021-2026 Poke (https://codeberg.org/ashleyirispuppy/poke)
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program. If not, see https://www.gnu.org/licenses/.
+--->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Notifications | Poke</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="/css/poke-icon-logo.svg?v=6" rel="icon">
+  <meta name="theme-color" content="#0f0f0f">
+  <meta name="librejs-license" content="GPL-3.0-or-later">
+  <style>
+    @font-face {
+      font-family: "PokeTube Flex";
+      src: url("/static/robotoflex.ttf?v=29");
+      font-style: normal;
+      font-stretch: 1% 800%;
+      font-display: swap;
+    }
+
+    :root {
+      --psw-bg: #0f0f0f;
+      --psw-surface: #212121;
+      --psw-surface-2: #272727;
+      --psw-surface-hover: #3d3d3d;
+      --psw-border: #303030;
+      --psw-text-primary: #f1f1f1;
+      --psw-text-secondary: #aaaaaa;
+      --psw-blue: #3ea6ff;
+      --psw-blue-bg: rgba(62, 166, 255, 0.14);
+      --psw-red: #ff4e45;
+      --psw-pink: #ffabcc;
+      --psw-green: #4caf7d;
+      --scrollbar-thumb: #717171;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      background-color: var(--psw-bg);
+      color: var(--psw-text-primary);
+      font-family: "PokeTube Flex", "Roboto", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { text-decoration: none; color: inherit; }
+    button { font-family: inherit; }
+
+    ::-webkit-scrollbar { width: 8px; height: 8px; background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #909090; }
+
+    .psw-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      background-color: rgba(15, 15, 15, 0.96);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--psw-border);
+      gap: 12px;
+    }
+
+    .psw-header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .psw-logo {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 8px;
+      border-radius: 8px;
+    }
+    .psw-logo:hover { background: var(--psw-surface); }
+    .psw-logo img { height: 22px; object-fit: contain; }
+
+    .psw-page-label {
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--psw-text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .psw-header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .psw-pill-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      height: 36px;
+      padding: 0 14px;
+      border-radius: 18px;
+      border: 1px solid var(--psw-border);
+      background: var(--psw-surface);
+      color: var(--psw-text-primary);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+    .psw-pill-btn:hover { background: var(--psw-surface-2); }
+    .psw-pill-btn svg { width: 16px; height: 16px; fill: currentColor; flex-shrink: 0; }
+
+    .psw-pill-btn.alerts-on {
+      background: var(--psw-blue-bg);
+      border-color: rgba(62, 166, 255, 0.4);
+      color: var(--psw-blue);
+    }
+    .psw-pill-btn.alerts-off {
+      background: var(--psw-surface);
+      border-color: var(--psw-border);
+      color: var(--psw-text-secondary);
+    }
+    .psw-pill-btn.alerts-blocked {
+      background: rgba(255, 78, 69, 0.12);
+      border-color: rgba(255, 78, 69, 0.35);
+      color: var(--psw-red);
+    }
+
+    .psw-icon-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: none;
+      background: transparent;
+      color: var(--psw-text-primary);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .psw-icon-btn:hover { background: var(--psw-surface-2); }
+    .psw-icon-btn svg { width: 20px; height: 20px; fill: currentColor; }
+
+    .page-container {
+      max-width: 820px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 20px 16px 48px;
+    }
+
+    .psw-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .psw-chips {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .psw-chip {
+      height: 32px;
+      padding: 0 12px;
+      border-radius: 8px;
+      border: none;
+      background: var(--psw-surface-2);
+      color: var(--psw-text-primary);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s, color 0.15s;
+    }
+    .psw-chip:hover { background: var(--psw-surface-hover); }
+    .psw-chip.active {
+      background: var(--psw-text-primary);
+      color: var(--psw-bg);
+    }
+
+    .chip-count {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.15);
+    }
+    .psw-chip.active .chip-count {
+      background: rgba(0, 0, 0, 0.18);
+    }
+
+    .psw-toolbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .psw-action-btn {
+      height: 32px;
+      padding: 0 12px;
+      border-radius: 16px;
+      border: 1px solid var(--psw-border);
+      background: transparent;
+      color: var(--psw-text-primary);
+      font-size: 12.5px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .psw-action-btn:hover { background: var(--psw-surface-2); }
+    .psw-action-btn.danger:hover {
+      background: rgba(255, 78, 69, 0.16);
+      border-color: rgba(255, 78, 69, 0.4);
+      color: var(--psw-red);
+    }
+
+    .status-strip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 10px 14px;
+      margin-bottom: 12px;
+      border-radius: 12px;
+      background: #181818;
+      border: 1px solid var(--psw-border);
+      font-size: 12.5px;
+      color: var(--psw-text-secondary);
+    }
+
+    .status-banner {
+      display: none;
+      margin-bottom: 12px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      line-height: 1.45;
+      background: rgba(255, 78, 69, 0.12);
+      border: 1px solid rgba(255, 78, 69, 0.35);
+      color: #ffb4ab;
+    }
+    .status-banner.visible { display: block; }
+
+    .psw-notif-card {
+      background: var(--psw-surface);
+      border: 1px solid var(--psw-border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .psw-section-header {
+      padding: 12px 16px 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--psw-text-secondary);
+      background: #1a1a1a;
+      border-top: 1px solid var(--psw-border);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .psw-section-header:first-child { border-top: none; }
+
+    .psw-notif-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px 16px;
+      transition: background 0.12s;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      position: relative;
+    }
+    .psw-notif-row:last-child { border-bottom: none; }
+    .psw-notif-row:hover { background: var(--psw-surface-2); }
+    .psw-notif-row.unread { background: rgba(62, 166, 255, 0.06); }
+    .psw-notif-row.unread:hover { background: rgba(62, 166, 255, 0.11); }
+
+    .psw-unread-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--psw-blue);
+      flex-shrink: 0;
+      margin-top: 21px;
+      visibility: hidden;
+    }
+    .psw-notif-row.unread .psw-unread-dot { visibility: visible; }
+
+    .psw-notif-link {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .psw-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: #303030;
+      flex-shrink: 0;
+    }
+
+    .psw-avatar-fallback {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #333;
+      color: var(--psw-text-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .psw-notif-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .psw-notif-title {
+      font-size: 14px;
+      line-height: 1.4;
+      color: var(--psw-text-primary);
+      margin: 0 0 6px;
+      font-weight: 400;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      word-break: break-word;
+    }
+    .psw-notif-row.unread .psw-notif-title { font-weight: 500; }
+
+    .psw-notif-title strong {
+      font-weight: 600;
+    }
+
+    .psw-notif-time {
+      font-size: 12px;
+      color: var(--psw-text-secondary);
+    }
+
+    .psw-thumb {
+      width: 112px;
+      height: 63px;
+      border-radius: 6px;
+      object-fit: cover;
+      background: #000;
+      flex-shrink: 0;
+    }
+
+    .psw-row-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .psw-notif-row:hover .psw-row-actions,
+    .psw-notif-row:focus-within .psw-row-actions { opacity: 1; }
+
+    .psw-dismiss-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: none;
+      background: transparent;
+      color: var(--psw-text-secondary);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+    .psw-dismiss-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--psw-text-primary);
+    }
+
+    .psw-state-box {
+      padding: 56px 24px;
+      text-align: center;
+      color: var(--psw-text-secondary);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .psw-state-box svg {
+      width: 56px;
+      height: 56px;
+      fill: #555;
+    }
+
+    .psw-state-box h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--psw-text-primary);
+    }
+
+    .psw-state-box p {
+      margin: 0;
+      font-size: 14px;
+      max-width: 420px;
+      line-height: 1.5;
+    }
+
+    .psw-primary-btn {
+      margin-top: 6px;
+      height: 36px;
+      padding: 0 18px;
+      border-radius: 18px;
+      border: none;
+      background: var(--psw-blue);
+      color: #0f0f0f;
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .psw-primary-btn:hover { filter: brightness(1.08); }
+
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid var(--psw-border);
+      border-top-color: var(--psw-blue);
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 640px) {
+      .psw-header { padding: 0 10px; }
+      .psw-page-label { display: none; }
+      .page-container { padding: 12px 8px 36px; }
+      .psw-notif-row { padding: 12px 10px; gap: 8px; }
+      .psw-notif-link { gap: 10px; }
+      .psw-avatar, .psw-avatar-fallback { width: 38px; height: 38px; font-size: 15px; }
+      .psw-thumb { width: 86px; height: 48px; }
+      .psw-row-actions { opacity: 1; }
+      .psw-pill-btn .hide-sm { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="psw-header">
+    <div class="psw-header-left">
+      <a href="/" class="psw-logo" title="Home">
+        <img src="/css/logo-poke.svg" alt="Poke">
+      </a>
+      <span class="psw-page-label">Notifications</span>
+    </div>
+
+    <div class="psw-header-right">
+      <button type="button" class="psw-pill-btn alerts-off" id="browserAlertsToggleBtn" title="Toggle browser notifications">
+        <svg viewBox="0 0 24 24" id="browserAlertsIcon">
+          <path d="M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
+        </svg>
+        <span id="browserAlertsLabel">Browser Alerts: Off</span>
+      </button>
+
+      <a href="/account-create" class="psw-pill-btn" id="myAccountLink" title="Manage subscriptions & settings">
+        <svg viewBox="0 0 24 24">
+          <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.02 7.02 0 0 0-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.37 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/>
+        </svg>
+        <span class="hide-sm">Subscriptions</span>
+      </a>
+    </div>
+  </header>
+
+  <main class="page-container">
+    <div class="psw-toolbar" id="toolbar" style="display:none;">
+      <div class="psw-chips">
+        <button type="button" class="psw-chip active" data-filter="all">
+          All <span class="chip-count" id="allCount">0</span>
+        </button>
+        <button type="button" class="psw-chip" data-filter="unread">
+          Unread <span class="chip-count" id="unreadCount">0</span>
+        </button>
+      </div>
+
+      <div class="psw-toolbar-actions">
+        <button type="button" class="psw-action-btn" id="refreshBtn">Refresh</button>
+        <button type="button" class="psw-action-btn" id="markAllReadBtn">Mark all read</button>
+        <button type="button" class="psw-action-btn danger" id="clearInboxBtn">Clear inbox</button>
+      </div>
+    </div>
+
+    <div class="status-banner" id="alertsBanner"></div>
+
+    <div class="status-strip" id="statusStrip" style="display:none;">
+      <span id="statusText">Checking your subscriptions...</span>
+      <span id="metaCountText"></span>
+    </div>
+
+    <section class="psw-notif-card" id="notifCard">
+      <div class="psw-state-box">
+        <div class="spinner"></div>
+        <p>Loading your notifications...</p>
+      </div>
+    </section>
+  </main>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const USER_ID = (localStorage.getItem('UserID') || urlParams.get('ID') || '').trim();
+
+  const SW_URL = '/poke-notifs-sw.js';
+  const IDB_NAME = 'poke_notifs_db';
+  const IDB_STORE = 'state';
+
+  const BELL_ON_PATH = 'M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z';
+  const BELL_OFF_PATH = 'M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-2.79-1.4-5.16-3.78-6.06L12 2.72V4a1.5 1.5 0 0 0-3 0v.68c-.28.07-.56.16-.82.27L3.27 2 2 3.27l4.17 4.17A6.47 6.47 0 0 0 6 11v5l-2 2v1h13.73l2 2L21 19.73 18 16.73V16z';
+
+  const toolbar = document.getElementById('toolbar');
+  const statusStrip = document.getElementById('statusStrip');
+  const statusText = document.getElementById('statusText');
+  const metaCountText = document.getElementById('metaCountText');
+  const alertsBanner = document.getElementById('alertsBanner');
+  const notifCard = document.getElementById('notifCard');
+  const myAccountLink = document.getElementById('myAccountLink');
+  const browserAlertsToggleBtn = document.getElementById('browserAlertsToggleBtn');
+  const browserAlertsIcon = document.getElementById('browserAlertsIcon');
+  const browserAlertsLabel = document.getElementById('browserAlertsLabel');
+  const refreshBtn = document.getElementById('refreshBtn');
+  const markAllReadBtn = document.getElementById('markAllReadBtn');
+  const clearInboxBtn = document.getElementById('clearInboxBtn');
+  const allCountEl = document.getElementById('allCount');
+  const unreadCountEl = document.getElementById('unreadCount');
+  const filterChips = document.querySelectorAll('.psw-chip[data-filter]');
+
+  if (!USER_ID) {
+    browserAlertsToggleBtn.style.display = 'none';
+    notifCard.innerHTML = `
+      <div class="psw-state-box">
+        <svg viewBox="0 0 24 24"><path d="${BELL_ON_PATH}"/></svg>
+        <h2>Sign in to see your notifications</h2>
+        <p>We couldn't find a Poke account ID in your browser yet. Jump into My Poke to sign in or make one!</p>
+        <a href="/my-acc" class="psw-primary-btn">Go to My Poke</a>
+      </div>
+    `;
+    return;
+  }
+
+  myAccountLink.href = `/my-acc?ID=${encodeURIComponent(USER_ID)}`;
+
+  const NOTIF_PREFS_KEY = `poke_notif_prefs_${USER_ID}`;
+  const NOTIF_READ_KEY = `poke_notif_read_${USER_ID}`;
+  const NOTIF_ALERTED_KEY = `poke_notif_alerted_${USER_ID}`;
+  const NOTIF_DISMISSED_KEY = `poke_notif_dismissed_${USER_ID}`;
+  const NOTIF_KNOWN_CHANNELS_KEY = `poke_notif_known_channels_${USER_ID}`;
+  const NOTIF_BASELINE_MS_KEY = `poke_notif_channel_baseline_${USER_ID}`;
+  const NOTIF_INTERVAL_KEY = `poke_notif_interval_mins_${USER_ID}`;
+  const DESKTOP_ALERTS_ENABLED_KEY = `poke_notif_desktop_enabled_${USER_ID}`;
+
+  let currentFilter = 'all';
+  let swRegistration = null;
+  let subsList = [];
+  let subsMap = new Map();
+  let currentSubIds = new Set();
+  let cachedNotifications = [];
+  let isCheckingFeeds = false;
+  let checkIntervalTimer = null;
+  const sessionAlertedIds = new Set();
+
+  function loadJsonStorage(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function saveJsonStorage(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {}
+  }
+
+  function openNotifDb() {
+    return new Promise((resolve, reject) => {
+      if (!('indexedDB' in window)) return reject(new Error('No IndexedDB'));
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          db.createObjectStore(IDB_STORE);
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function idbGet(key) {
+    try {
+      const db = await openNotifDb();
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, 'readonly');
+        const req = tx.objectStore(IDB_STORE).get(key);
+        req.onsuccess = () => resolve(req.result ?? null);
+        req.onerror = () => reject(req.error);
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async function idbSet(key, value) {
+    try {
+      const db = await openNotifDb();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        tx.objectStore(IDB_STORE).put(value, key);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch {}
+  }
+
+  function getSavedIntervalMinutes() {
+    const val = parseInt(localStorage.getItem(NOTIF_INTERVAL_KEY), 10);
+    return Number.isFinite(val) && val >= 1 && val <= 1440 ? val : 30;
+  }
+
+  function getDesktopAlertsEnabled() {
+    if (!('Notification' in window)) return false;
+    if (Notification.permission !== 'granted') return false;
+    const raw = localStorage.getItem(DESKTOP_ALERTS_ENABLED_KEY);
+    return raw !== 'false';
+  }
+
+  function setDesktopAlertsEnabled(enabled) {
+    try {
+      localStorage.setItem(DESKTOP_ALERTS_ENABLED_KEY, enabled ? 'true' : 'false');
+    } catch {}
+  }
+
+  let checkIntervalMinutes = getSavedIntervalMinutes();
+  let notifPrefs = loadJsonStorage(NOTIF_PREFS_KEY, {});
+  let readVideoIds = new Set(loadJsonStorage(NOTIF_READ_KEY, []));
+  let alertedVideoIds = new Set(loadJsonStorage(NOTIF_ALERTED_KEY, []));
+  let dismissedVideoIds = new Set(loadJsonStorage(NOTIF_DISMISSED_KEY, []));
+  let knownChannelIds = new Set(loadJsonStorage(NOTIF_KNOWN_CHANNELS_KEY, []));
+  let channelBaselineMs = loadJsonStorage(NOTIF_BASELINE_MS_KEY, {});
+  if (!channelBaselineMs || typeof channelBaselineMs !== 'object') channelBaselineMs = {};
+
+  function mergeAndSaveSet(key, localSet, maxLen = 3000) {
+    const stored = loadJsonStorage(key, []);
+    if (Array.isArray(stored)) stored.forEach(id => localSet.add(id));
+    const merged = Array.from(localSet).slice(-maxLen);
+    localSet.clear();
+    merged.forEach(id => localSet.add(id));
+    saveJsonStorage(key, merged);
+  }
+
+  function mergeAndSaveBaselines(localMap) {
+    const stored = loadJsonStorage(NOTIF_BASELINE_MS_KEY, {});
+    if (stored && typeof stored === 'object') {
+      Object.entries(stored).forEach(([chId, ms]) => {
+        if ((!currentSubIds.size || currentSubIds.has(chId)) && typeof ms === 'number' && ms > (localMap[chId] || 0)) {
+          localMap[chId] = ms;
+        }
+      });
+    }
+    const pruned = {};
+    Object.entries(localMap).forEach(([chId, ms]) => {
+      if ((!currentSubIds.size || currentSubIds.has(chId)) && typeof ms === 'number' && ms > 0) {
+        pruned[chId] = ms;
+      }
+    });
+    Object.keys(localMap).forEach(k => delete localMap[k]);
+    Object.assign(localMap, pruned);
+    saveJsonStorage(NOTIF_BASELINE_MS_KEY, localMap);
+  }
+
+  function syncStateFromStorage() {
+    checkIntervalMinutes = getSavedIntervalMinutes();
+    notifPrefs = loadJsonStorage(NOTIF_PREFS_KEY, {});
+
+    const storedRead = loadJsonStorage(NOTIF_READ_KEY, []);
+    if (Array.isArray(storedRead)) storedRead.forEach(id => readVideoIds.add(id));
+
+    const storedAlerted = loadJsonStorage(NOTIF_ALERTED_KEY, []);
+    if (Array.isArray(storedAlerted)) storedAlerted.forEach(id => alertedVideoIds.add(id));
+
+    const storedDismissed = loadJsonStorage(NOTIF_DISMISSED_KEY, []);
+    if (Array.isArray(storedDismissed)) dismissedVideoIds = new Set(storedDismissed);
+
+    const storedKnown = loadJsonStorage(NOTIF_KNOWN_CHANNELS_KEY, []);
+    if (Array.isArray(storedKnown)) {
+      storedKnown.forEach(id => {
+        if (!currentSubIds.size || currentSubIds.has(id)) knownChannelIds.add(id);
+      });
+    }
+
+    const latestBaselines = loadJsonStorage(NOTIF_BASELINE_MS_KEY, {});
+    if (latestBaselines && typeof latestBaselines === 'object') {
+      Object.entries(latestBaselines).forEach(([chId, ms]) => {
+        if ((!currentSubIds.size || currentSubIds.has(chId)) && typeof ms === 'number' && ms > (channelBaselineMs[chId] || 0)) {
+          channelBaselineMs[chId] = ms;
+        }
+      });
+    }
+  }
+
+  function buildSwConfigSnapshot(lastCheckMs = 0) {
+    return {
+      userId: USER_ID,
+      origin: window.location.origin,
+      checkIntervalMinutes,
+      desktopAlertsEnabled: getDesktopAlertsEnabled(),
+      channels: subsList.map(c => ({ id: c.id, name: c.name, avatar: c.avatar })),
+      notifPrefs,
+      readVideoIds: Array.from(readVideoIds).slice(-3000),
+      alertedVideoIds: Array.from(alertedVideoIds).slice(-3000),
+      dismissedVideoIds: Array.from(dismissedVideoIds).slice(-3000),
+      knownChannelIds: Array.from(knownChannelIds).filter(id => !currentSubIds.size || currentSubIds.has(id)),
+      channelBaselineMs,
+      lastCheckMs
+    };
+  }
+
+  async function pullSwStateIntoLocal() {
+    const swCfg = await idbGet('config');
+    if (!swCfg || swCfg.userId !== USER_ID) return;
+
+    if (Array.isArray(swCfg.readVideoIds)) swCfg.readVideoIds.forEach(id => readVideoIds.add(id));
+    if (Array.isArray(swCfg.alertedVideoIds)) {
+      swCfg.alertedVideoIds.forEach(id => {
+        alertedVideoIds.add(id);
+        sessionAlertedIds.add(id);
+      });
+    }
+    if (Array.isArray(swCfg.knownChannelIds)) {
+      swCfg.knownChannelIds.forEach(id => {
+        if (!currentSubIds.size || currentSubIds.has(id)) knownChannelIds.add(id);
+      });
+    }
+    if (swCfg.channelBaselineMs && typeof swCfg.channelBaselineMs === 'object') {
+      Object.entries(swCfg.channelBaselineMs).forEach(([chId, ms]) => {
+        if ((!currentSubIds.size || currentSubIds.has(chId)) && typeof ms === 'number' && ms > (channelBaselineMs[chId] || 0)) {
+          channelBaselineMs[chId] = ms;
+        }
+      });
+    }
+    persistNotifState(false);
+  }
+
+  async function pushStateToSw(lastCheckMs = 0) {
+    const snapshot = buildSwConfigSnapshot(lastCheckMs);
+    const activeWorker = swRegistration?.active || navigator.serviceWorker?.controller;
+    if (activeWorker) {
+      try {
+        activeWorker.postMessage({ type: 'SYNC_CONFIG', config: snapshot });
+        return;
+      } catch {}
+    }
+    await idbSet('config', snapshot);
+  }
+
+  function persistNotifState(alsoSyncSw = true, lastCheckMs = 0) {
+    mergeAndSaveSet(NOTIF_READ_KEY, readVideoIds);
+    mergeAndSaveSet(NOTIF_ALERTED_KEY, alertedVideoIds);
+    const knownPruned = Array.from(knownChannelIds).filter(id => !currentSubIds.size || currentSubIds.has(id));
+    knownChannelIds = new Set(knownPruned);
+    saveJsonStorage(NOTIF_KNOWN_CHANNELS_KEY, knownPruned);
+    mergeAndSaveBaselines(channelBaselineMs);
+    if (alsoSyncSw) pushStateToSw(lastCheckMs);
+  }
+
+  function isChannelNotifEnabled(channelId) {
+    return notifPrefs[channelId] !== false;
+  }
+
+  function baselineChannelEntries(channelId, allEntries, ok) {
+    if (!ok) return false;
+    const isNewChannel = !knownChannelIds.has(channelId);
+    const needsBaseline = !channelBaselineMs[channelId];
+    if (!isNewChannel && !needsBaseline) return false;
+
+    let maxPubMs = 0;
+    allEntries.forEach(item => {
+      alertedVideoIds.add(item.videoId);
+      sessionAlertedIds.add(item.videoId);
+      if (isNewChannel) readVideoIds.add(item.videoId);
+      if (item.publishedMs > maxPubMs) maxPubMs = item.publishedMs;
+    });
+
+    channelBaselineMs[channelId] = maxPubMs > 0 ? maxPubMs : Date.now();
+    knownChannelIds.add(channelId);
+    return true;
+  }
+
+  function isOlderThanChannelBaseline(item) {
+    const baseline = channelBaselineMs[item.channelId];
+    return Boolean(baseline && item.publishedMs > 0 && item.publishedMs <= baseline);
+  }
+
+  function isItemUnread(item) {
+    if (readVideoIds.has(item.videoId)) return false;
+    if (isOlderThanChannelBaseline(item)) return false;
+    return true;
+  }
+
+  function shouldDesktopAlertItem(item) {
+    if (!getDesktopAlertsEnabled()) return false;
+    if (sessionAlertedIds.has(item.videoId)) return false;
+    if (alertedVideoIds.has(item.videoId)) return false;
+    if (readVideoIds.has(item.videoId)) return false;
+    if (dismissedVideoIds.has(item.videoId)) return false;
+    if (isOlderThanChannelBaseline(item)) return false;
+    return true;
+  }
+
+  function updateBrowserAlertsUI() {
+    alertsBanner.classList.remove('visible');
+    if (!('Notification' in window)) {
+      browserAlertsToggleBtn.style.display = 'none';
+      return;
+    }
+
+    browserAlertsToggleBtn.classList.remove('alerts-on', 'alerts-off', 'alerts-blocked');
+
+    if (Notification.permission === 'denied') {
+      browserAlertsToggleBtn.classList.add('alerts-blocked');
+      browserAlertsIcon.innerHTML = `<path d="${BELL_OFF_PATH}"/>`;
+      browserAlertsLabel.textContent = 'Browser Alerts: Blocked';
+      return;
+    }
+
+    if (getDesktopAlertsEnabled()) {
+      browserAlertsToggleBtn.classList.add('alerts-on');
+      browserAlertsIcon.innerHTML = `<path d="${BELL_ON_PATH}"/>`;
+      browserAlertsLabel.textContent = 'Browser Alerts: On';
+    } else {
+      browserAlertsToggleBtn.classList.add('alerts-off');
+      browserAlertsIcon.innerHTML = `<path d="${BELL_OFF_PATH}"/>`;
+      browserAlertsLabel.textContent = 'Browser Alerts: Off';
+    }
+  }
+
+  function markVisibleInboxAsAlerted() {
+    if (!cachedNotifications.length) return;
+    cachedNotifications.forEach(n => {
+      alertedVideoIds.add(n.videoId);
+      sessionAlertedIds.add(n.videoId);
+    });
+    mergeAndSaveSet(NOTIF_ALERTED_KEY, alertedVideoIds);
+    pushStateToSw();
+  }
+
+  browserAlertsToggleBtn.addEventListener('click', async () => {
+    if (!('Notification' in window)) return;
+
+    if (Notification.permission === 'denied') {
+      alertsBanner.textContent = 'Browser notifications are blocked for this site! Click the lock/tune icon in your address bar to allow them, then tap this button again.';
+      alertsBanner.classList.add('visible');
+      updateBrowserAlertsUI();
+      return;
+    }
+
+    if (Notification.permission === 'default') {
+      const perm = await Notification.requestPermission();
+      if (perm === 'granted') {
+        setDesktopAlertsEnabled(true);
+        markVisibleInboxAsAlerted();
+        await pushStateToSw();
+        if (swRegistration) registerPeriodicSyncIfAvailable(swRegistration);
+      } else {
+        setDesktopAlertsEnabled(false);
+        if (perm === 'denied') {
+          alertsBanner.textContent = 'Browser notifications were blocked. You can re-enable them anpswime in your browser site settings.';
+          alertsBanner.classList.add('visible');
+        }
+      }
+      updateBrowserAlertsUI();
+      return;
+    }
+
+    const nextEnabled = !getDesktopAlertsEnabled();
+    setDesktopAlertsEnabled(nextEnabled);
+    if (nextEnabled) {
+      markVisibleInboxAsAlerted();
+      if (swRegistration) registerPeriodicSyncIfAvailable(swRegistration);
+    }
+    await pushStateToSw();
+    updateBrowserAlertsUI();
+  });
+
+  function rewriteVideoLink(href, videoId) {
+    const origin = window.location.origin;
+    if (href) {
+      if (/^https?:\/\/(www\.|m\.)?youtube\.com\/watch/i.test(href)) {
+        return href.replace(/^https?:\/\/(www\.|m\.)?youtube\.com/i, origin);
+      }
+      const shortsMatch = href.match(/^https?:\/\/(www\.|m\.)?youtube\.com\/shorts\/([^/?&#]+)/i);
+      if (shortsMatch) {
+        return `${origin}/watch?v=${encodeURIComponent(shortsMatch[2])}`;
+      }
+      if (/^https?:\/\/(www\.|m\.)?youtube\.com\//i.test(href)) {
+        return href.replace(/^https?:\/\/(www\.|m\.)?youtube\.com/i, origin);
+      }
+    }
+    return videoId ? `${origin}/watch?v=${encodeURIComponent(videoId)}` : '#';
+  }
+
+  function getXmlTagText(parent, localName) {
+    const nsNodes = parent.getElementsBpswagNameNS('*', localName);
+    if (nsNodes && nsNodes.length > 0) return (nsNodes[0].textContent || '').trim();
+    const nodes = parent.getElementsBpswagName(localName);
+    if (nodes && nodes.length > 0) return (nodes[0].textContent || '').trim();
+    return '';
+  }
+
+  function getXmlThumbnail(entry) {
+    const nsNodes = entry.getElementsBpswagNameNS('*', 'thumbnail');
+    if (nsNodes && nsNodes.length > 0) return nsNodes[0].getAttribute('url') || '';
+    const nodes = entry.getElementsBpswagName('media:thumbnail');
+    if (nodes && nodes.length > 0) return nodes[0].getAttribute('url') || '';
+    return '';
+  }
+
+  async function fetchChannelFeedResult(channelId) {
+    try {
+      const res = await fetch(`/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`);
+      if (!res.ok) return { ok: false, allEntries: [], entries: [] };
+      const xmlText = await res.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(xmlText, 'text/xml');
+      if (doc.querySelector('parsererror')) return { ok: false, allEntries: [], entries: [] };
+
+      const feedTitle = (doc.querySelector('feed > title')?.textContent || '').trim();
+      const rawEntries = Array.from(doc.getElementsBpswagName('entry'));
+      const subInfo = subsMap.get(channelId);
+      const fallbackName = subInfo?.name || feedTitle || 'Unknown Channel';
+      const channelAvatar = subInfo?.avatar || '';
+
+      const allParsed = rawEntries.map(entry => {
+        const rawId = getXmlTagText(entry, 'id');
+        const videoId = (getXmlTagText(entry, 'videoId') || rawId.replace(/^psw:video:/, '')).trim();
+        const title = (entry.querySelector('title')?.textContent || 'Untitled Video').trim();
+        const authorName = (entry.querySelector('author > name')?.textContent || fallbackName).trim();
+        const linkEl = entry.querySelector('link[rel="alternate"]') || entry.querySelector('link');
+        const rawHref = linkEl ? (linkEl.getAttribute('href') || '').trim() : '';
+        const publishedStr = (entry.querySelector('published')?.textContent || entry.querySelector('updated')?.textContent || '').trim();
+        const publishedMs = publishedStr ? Date.parse(publishedStr) : 0;
+        const thumbnail = getXmlThumbnail(entry);
+
+        return {
+          videoId,
+          channelId,
+          channelName: authorName,
+          channelAvatar,
+          title,
+          url: rewriteVideoLink(rawHref, videoId),
+          publishedStr,
+          publishedMs: Number.isNaN(publishedMs) ? 0 : publishedMs,
+          thumbnail
+        };
+      }).filter(item => item.videoId);
+
+      return { ok: true, allEntries: allParsed, entries: allParsed.slice(0, 5) };
+    } catch {
+      return { ok: false, allEntries: [], entries: [] };
+    }
+  }
+
+  function formatRelativeTime(ms) {
+    if (!ms) return '';
+    const diffSec = Math.floor((Date.now() - ms) / 1000);
+    if (diffSec < 60) return 'just now';
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? '' : 's'} ago`;
+    const diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24) return `${diffHr} hour${diffHr === 1 ? '' : 's'} ago`;
+    const diffDay = Math.floor(diffHr / 24);
+    if (diffDay < 7) return `${diffDay} day${diffDay === 1 ? '' : 's'} ago`;
+    const diffWk = Math.floor(diffDay / 7);
+    if (diffDay < 30) return `${diffWk} week${diffWk === 1 ? '' : 's'} ago`;
+    const diffMo = Math.floor(diffDay / 30);
+    if (diffMo < 12) return `${diffMo} month${diffMo === 1 ? '' : 's'} ago`;
+    return new Date(ms).toLocaleDateString();
+  }
+
+  function getTimeGroupLabel(ms) {
+    if (!ms) return 'Older';
+    const diffMs = Date.now() - ms;
+    const dayMs = 24 * 60 * 60 * 1000;
+    if (diffMs < dayMs) return 'Today';
+    if (diffMs < 7 * dayMs) return 'This week';
+    return 'Older';
+  }
+
+  async function fireDesktopNotification(item) {
+    const tag = `poke-video-${item.videoId}`;
+    const icon = item.thumbnail || item.channelAvatar || '/css/poke-icon-logo.svg?v=6';
+
+    if (swRegistration && swRegistration.showNotification) {
+      try {
+        await swRegistration.showNotification(item.channelName, {
+          body: item.title,
+          icon,
+          tag,
+          data: { url: item.url, videoId: item.videoId, isTest: false }
+        });
+        return;
+      } catch {}
+    }
+
+    const n = new Notification(item.channelName, {
+      body: item.title,
+      icon,
+      tag
+    });
+    n.onclick = () => {
+      window.focus();
+      window.open(item.url, '_blank', 'noopener,noreferrer');
+      n.close();
+    };
+  }
+
+  function triggerDesktopNotifications(items) {
+    if (!getDesktopAlertsEnabled()) return;
+    syncStateFromStorage();
+
+    const fresh = items.filter(item => shouldDesktopAlertItem(item));
+    if (!fresh.length) return;
+
+    fresh.forEach(item => {
+      alertedVideoIds.add(item.videoId);
+      sessionAlertedIds.add(item.videoId);
+      if (item.publishedMs > (channelBaselineMs[item.channelId] || 0)) {
+        channelBaselineMs[item.channelId] = item.publishedMs;
+      }
+    });
+    mergeAndSaveSet(NOTIF_ALERTED_KEY, alertedVideoIds);
+    mergeAndSaveBaselines(channelBaselineMs);
+    pushStateToSw(Date.now());
+
+    fresh.slice(0, 3).forEach(item => fireDesktopNotification(item));
+  }
+
+  function updateDocumentTitle(unreadCount) {
+    document.title = unreadCount > 0 ? `(${unreadCount}) Notifications | Poke` : 'Notifications | Poke';
+  }
+
+  function updateMetaHeader() {
+    const enabledCount = subsList.filter(c => isChannelNotifEnabled(c.id)).length;
+    metaCountText.textContent = `${enabledCount}/${subsList.length} channels enabled • auto-checks every ${checkIntervalMinutes}m`;
+  }
+
+  function createNotifRow(item) {
+    const unread = isItemUnread(item);
+    const row = document.createElement('div');
+    row.className = `psw-notif-row${unread ? ' unread' : ''}`;
+
+    const dot = document.createElement('span');
+    dot.className = 'psw-unread-dot';
+
+    const link = document.createElement('a');
+    link.className = 'psw-notif-link';
+    link.href = item.url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+
+    if (item.channelAvatar) {
+      const avatar = document.createElement('img');
+      avatar.className = 'psw-avatar';
+      avatar.src = item.channelAvatar;
+      avatar.alt = '';
+      avatar.loading = 'lazy';
+      link.appendChild(avatar);
+    } else {
+      const fb = document.createElement('div');
+      fb.className = 'psw-avatar-fallback';
+      fb.textContent = (item.channelName || '?').charAt(0).toUpperCase();
+      link.appendChild(fb);
+    }
+
+    const body = document.createElement('div');
+    body.className = 'psw-notif-body';
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'psw-notif-title';
+    const chanStrong = document.createElement('strong');
+    chanStrong.textContent = item.channelName;
+    titleEl.appendChild(chanStrong);
+    titleEl.appendChild(document.createTextNode(` uploaded: ${item.title}`));
+
+    const timeEl = document.createElement('div');
+    timeEl.className = 'psw-notif-time';
+    timeEl.textContent = formatRelativeTime(item.publishedMs);
+
+    body.appendChild(titleEl);
+    body.appendChild(timeEl);
+    link.appendChild(body);
+
+    const thumb = document.createElement('img');
+    thumb.className = 'psw-thumb';
+    thumb.src = item.thumbnail || '';
+    thumb.alt = '';
+    thumb.loading = 'lazy';
+    link.appendChild(thumb);
+
+    link.addEventListener('click', () => {
+      readVideoIds.add(item.videoId);
+      alertedVideoIds.add(item.videoId);
+      sessionAlertedIds.add(item.videoId);
+      mergeAndSaveSet(NOTIF_READ_KEY, readVideoIds);
+      mergeAndSaveSet(NOTIF_ALERTED_KEY, alertedVideoIds);
+      pushStateToSw();
+      renderNotifications();
+    });
+
+    const actions = document.createElement('div');
+    actions.className = 'psw-row-actions';
+
+    const dismissBtn = document.createElement('button');
+    dismissBtn.type = 'button';
+    dismissBtn.className = 'psw-dismiss-btn';
+    dismissBtn.title = 'Hide this notification';
+    dismissBtn.textContent = '✖';
+    dismissBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dismissedVideoIds.add(item.videoId);
+      readVideoIds.add(item.videoId);
+      alertedVideoIds.add(item.videoId);
+      sessionAlertedIds.add(item.videoId);
+      saveJsonStorage(NOTIF_DISMISSED_KEY, Array.from(dismissedVideoIds).slice(-3000));
+      mergeAndSaveSet(NOTIF_READ_KEY, readVideoIds);
+      mergeAndSaveSet(NOTIF_ALERTED_KEY, alertedVideoIds);
+      cachedNotifications = cachedNotifications.filter(n => n.videoId !== item.videoId);
+      pushStateToSw();
+      renderNotifications();
+    });
+
+    actions.appendChild(dismissBtn);
+
+    row.appendChild(dot);
+    row.appendChild(link);
+    row.appendChild(actions);
+    return row;
+  }
+
+  function renderNotifications() {
+    updateMetaHeader();
+
+    const unreadItems = cachedNotifications.filter(n => isItemUnread(n));
+    allCountEl.textContent = String(cachedNotifications.length);
+    unreadCountEl.textContent = String(unreadItems.length);
+    updateDocumentTitle(unreadItems.length);
+
+    const listToShow = currentFilter === 'unread' ? unreadItems : cachedNotifications;
+
+    notifCard.innerHTML = '';
+
+    if (!subsList.length) {
+      notifCard.innerHTML = `
+        <div class="psw-state-box">
+          <svg viewBox="0 0 24 24"><path d="${BELL_ON_PATH}"/></svg>
+          <h2>No subscriptions yet</h2>
+          <p>Subscribe to channels on Poke and their new uploads will show up right here!</p>
+          <a href="${myAccountLink.href}" class="psw-primary-btn">Manage Subscriptions</a>
+        </div>
+      `;
+      return;
+    }
+
+    if (!listToShow.length) {
+      const box = document.createElement('div');
+      box.className = 'psw-state-box';
+      box.innerHTML = `<svg viewBox="0 0 24 24"><path d="${BELL_ON_PATH}"/></svg>`;
+
+      const h2 = document.createElement('h2');
+      h2.textContent = currentFilter === 'unread'
+        ? "You're all caught up!"
+        : "Your notifications live here";
+
+      const p = document.createElement('p');
+      p.textContent = currentFilter === 'unread'
+        ? "No unread uploads right now!! Switch to All to see older videos :>"
+        : "Nothing new in here right now!! Either everyone's quiet or you're all caught up :>";
+
+      box.appendChild(h2);
+      box.appendChild(p);
+
+      if (currentFilter === 'all' && dismissedVideoIds.size > 0) {
+        const restoreBtn = document.createElement('button');
+        restoreBtn.type = 'button';
+        restoreBtn.className = 'psw-action-btn';
+        restoreBtn.textContent = 'Bring back cleared uploads';
+        restoreBtn.addEventListener('click', () => {
+          dismissedVideoIds.clear();
+          saveJsonStorage(NOTIF_DISMISSED_KEY, []);
+          pushStateToSw();
+          checkAllNotificationFeeds();
+        });
+        box.appendChild(restoreBtn);
+      }
+
+      notifCard.appendChild(box);
+      return;
+    }
+
+    const groups = new Map();
+    listToShow.forEach(item => {
+      const label = getTimeGroupLabel(item.publishedMs);
+      if (!groups.has(label)) groups.set(label, []);
+      groups.get(label).push(item);
+    });
+
+    ['Today', 'This week', 'Older'].forEach(label => {
+      const items = groups.get(label);
+      if (!items || !items.length) return;
+
+      const header = document.createElement('div');
+      header.className = 'psw-section-header';
+      header.textContent = label;
+      notifCard.appendChild(header);
+
+      items.forEach(item => notifCard.appendChild(createNotifRow(item)));
+    });
+  }
+
+  async function loadSubscriptionsFromApi() {
+    try {
+      const res = await fetch(`/api/get-channel-subs?ID=${encodeURIComponent(USER_ID)}`, {
+        cache: 'no-store'
+      });
+      if (!res.ok) throw new Error('Failed to load subscriptions');
+      const data = await res.json();
+      if (!data || typeof data !== 'object' || data.error) {
+        subsList = [];
+      } else {
+        subsList = Object.entries(data).map(([id, info]) => ({
+          id,
+          name: info?.channelName || 'Unknown Channel',
+          avatar: info?.avatar || ''
+        }));
+      }
+      subsMap = new Map(subsList.map(c => [c.id, c]));
+      currentSubIds = new Set(subsList.map(c => c.id));
+      return true;
+    } catch {
+      notifCard.innerHTML = `
+        <div class="psw-state-box">
+          <svg viewBox="0 0 24 24"><path d="${BELL_OFF_PATH}"/></svg>
+          <h2>Couldn't load your subscriptions</h2>
+          <p>Make sure you're signed in properly and try refreshing.</p>
+          <button type="button" class="psw-primary-btn" id="retryLoadBtn">Try again</button>
+        </div>
+      `;
+      document.getElementById('retryLoadBtn')?.addEventListener('click', () => boot());
+      return false;
+    }
+  }
+
+  async function checkAllNotificationFeeds() {
+    if (isCheckingFeeds) return;
+    isCheckingFeeds = true;
+    statusText.textContent = 'Checking feeds...';
+
+    syncStateFromStorage();
+    await pullSwStateIntoLocal();
+
+    const enabledChannels = subsList.filter(c => isChannelNotifEnabled(c.id));
+    if (!enabledChannels.length) {
+      cachedNotifications = [];
+      statusText.textContent = subsList.length
+        ? 'All channel notifications are turned off in Subscriptions'
+        : 'No subscribed channels';
+      renderNotifications();
+      isCheckingFeeds = false;
+      return;
+    }
+
+    const collected = [];
+    let baselinedAny = false;
+    const batchSize = 5;
+    for (let i = 0; i < enabledChannels.length; i += batchSize) {
+      const batch = enabledChannels.slice(i, i + batchSize);
+      const results = await Promise.all(
+        batch.map(async ch => ({ channelId: ch.id, ...(await fetchChannelFeedResult(ch.id)) }))
+      );
+      syncStateFromStorage();
+      results.forEach(({ channelId, ok, allEntries, entries }) => {
+        if (baselineChannelEntries(channelId, allEntries, ok)) {
+          baselinedAny = true;
+        }
+        collected.push(...entries);
+      });
+    }
+
+    const nowMs = Date.now();
+    if (baselinedAny) {
+      persistNotifState(true, nowMs);
+    } else {
+      pushStateToSw(nowMs);
+    }
+
+    const dedup = new Map();
+    collected.forEach(item => {
+      if (!dismissedVideoIds.has(item.videoId) && !dedup.has(item.videoId)) {
+        dedup.set(item.videoId, item);
+      }
+    });
+
+    cachedNotifications = Array.from(dedup.values())
+      .sort((a, b) => b.publishedMs - a.publishedMs)
+      .slice(0, 60);
+
+    if (document.visibilityState === 'hidden') {
+      triggerDesktopNotifications(cachedNotifications);
+    } else {
+      markVisibleInboxAsAlerted();
+    }
+
+    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    statusText.textContent = `Last checked at ${nowTime}!`;
+    renderNotifications();
+    isCheckingFeeds = false;
+  }
+
+  function startAutoCheckSchedule() {
+    if (checkIntervalTimer) clearInterval(checkIntervalTimer);
+    checkIntervalTimer = setInterval(() => checkAllNotificationFeeds(), checkIntervalMinutes * 60 * 1000);
+    updateMetaHeader();
+  }
+
+  async function registerPeriodicSyncIfAvailable(reg) {
+    if (!reg || !('periodicSync' in reg)) return false;
+    try {
+      const status = await navigator.permissions.query({ name: 'periodic-background-sync' });
+      if (status.state === 'granted') {
+        await reg.periodicSync.register('poke-check-feeds', {
+          minInterval: Math.max(5, checkIntervalMinutes) * 60 * 1000
+        });
+        return true;
+      }
+    } catch {}
+    return false;
+  }
+
+  async function initServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    try {
+      const reg = await navigator.serviceWorker.register(SW_URL, { scope: '/' });
+      swRegistration = await navigator.serviceWorker.ready;
+      if (getDesktopAlertsEnabled()) {
+        await registerPeriodicSyncIfAvailable(swRegistration || reg);
+      }
+      await pullSwStateIntoLocal();
+      await pushStateToSw();
+    } catch {}
+  }
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', async (event) => {
+      const msg = event.data || {};
+      if (msg.type === 'SW_STATE_UPDATED') {
+        await pullSwStateIntoLocal();
+        renderNotifications();
+      }
+    });
+  }
+
+  window.addEventListener('storage', (e) => {
+    if (
+      e.key === NOTIF_PREFS_KEY ||
+      e.key === NOTIF_READ_KEY ||
+      e.key === NOTIF_ALERTED_KEY ||
+      e.key === NOTIF_DISMISSED_KEY ||
+      e.key === NOTIF_KNOWN_CHANNELS_KEY ||
+      e.key === NOTIF_BASELINE_MS_KEY ||
+      e.key === NOTIF_INTERVAL_KEY ||
+      e.key === DESKTOP_ALERTS_ENABLED_KEY
+    ) {
+      const prevInterval = checkIntervalMinutes;
+      syncStateFromStorage();
+      updateBrowserAlertsUI();
+      if (e.key === NOTIF_INTERVAL_KEY && checkIntervalMinutes !== prevInterval) {
+        startAutoCheckSchedule();
+      }
+      if (e.key === NOTIF_PREFS_KEY) {
+        checkAllNotificationFeeds();
+      } else {
+        cachedNotifications = cachedNotifications.filter(n => !dismissedVideoIds.has(n.videoId));
+        renderNotifications();
+      }
+    }
+  });
+
+  filterChips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      filterChips.forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      currentFilter = chip.dataset.filter;
+      renderNotifications();
+    });
+  });
+
+  refreshBtn.addEventListener('click', async () => {
+    await loadSubscriptionsFromApi();
+    await checkAllNotificationFeeds();
+  });
+
+  markAllReadBtn.addEventListener('click', () => {
+    cachedNotifications.forEach(n => {
+      readVideoIds.add(n.videoId);
+      alertedVideoIds.add(n.videoId);
+      sessionAlertedIds.add(n.videoId);
+    });
+    mergeAndSaveSet(NOTIF_READ_KEY, readVideoIds);
+    mergeAndSaveSet(NOTIF_ALERTED_KEY, alertedVideoIds);
+    pushStateToSw();
+    renderNotifications();
+  });
+
+  clearInboxBtn.addEventListener('click', () => {
+    cachedNotifications.forEach(n => {
+      dismissedVideoIds.add(n.videoId);
+      readVideoIds.add(n.videoId);
+      alertedVideoIds.add(n.videoId);
+      sessionAlertedIds.add(n.videoId);
+    });
+    saveJsonStorage(NOTIF_DISMISSED_KEY, Array.from(dismissedVideoIds).slice(-3000));
+    mergeAndSaveSet(NOTIF_READ_KEY, readVideoIds);
+    mergeAndSaveSet(NOTIF_ALERTED_KEY, alertedVideoIds);
+    pushStateToSw();
+    cachedNotifications = [];
+    renderNotifications();
+  });
+
+  async function boot() {
+    updateBrowserAlertsUI();
+    const ok = await loadSubscriptionsFromApi();
+    if (!ok) return;
+
+    toolbar.style.display = 'flex';
+    statusStrip.style.display = 'flex';
+
+    await initServiceWorker();
+    await checkAllNotificationFeeds();
+    startAutoCheckSchedule();
+  }
+
+  boot();
+});
+</script>
+</body>
+</html>
