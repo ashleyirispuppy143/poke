@@ -2941,62 +2941,6 @@ document.addEventListener("DOMContentLoaded", () => {
     history.replaceState(null, '', newUrl);
   }
 }
-    
-<% if (Array.isArray(VideoData.recommendedVideos) && VideoData.recommendedVideos.length > 1) { %> 
-        
-let checkbox = document.getElementById("continue");
-
-checkbox.addEventListener('change', function(e) {
-  if (checkbox.checked) {
-    console.log("[AUTOPLAY] enabled");
-    document.getElementById('video').addEventListener('ended', autoplaynextvideo, false);
-    let url = window.location.hostname + "/watch?v=<%- VideoData?.recommendedVideos[0]?.videoId %>";
-   
-    function autoplaynextvideo(e) {
-      location.href = "/watch?v=<%- VideoData?.recommendedVideos[0]?.videoId%>&autoplay=<%-btoa("1f739d935676111cfff4b4693e3816e664797050" + VideoData?.recommendedVideos[0].videoId) %>";
-    }
-  }
-  if (/[?&]autoplay=/.test(location.search)) {
-    if (!checkbox.checked) {
-      removeParam("autoplay");
-    }    
-  }
-  
-  if (/[?&]autoplay=/.test(location.search)) {
-    if (checkbox.checked) {
-        fetch("https://" + window.location.hostname + "/watch?v=<%- VideoData?.recommendedVideos[0].videoId%>").then(() => {})
-      }    
-  }
-});
-  
-if (/[?&]autoplay=/.test(location.search)) {
-  checkbox.checked = true;
-  console.log("[AUTOPLAY] enabled");
-  let url = window.location.hostname + "/watch?v=<%- VideoData?.recommendedVideos[0].videoId%>";
-  document.body.style.cursor = "wait"; // set cursor to "wait" before the fetch request starts
-  fetch(url)
-    .then(response => response.json())
-    .then(data => {
-      // do something with the data
-      document.body.style.cursor = "default"; // set cursor back to "default" after the fetch request completes
-    })
-    .catch(error => {
-      console.error(error);
-      document.body.style.cursor = "default"; // set cursor back to "default" after the fetch request completes
-    });
-  document.getElementById('video').addEventListener('ended', autoplaynextvideo, false);
-  if (/[?&]autoplay=/.test(location.search)) {
-    if (checkbox.checked) {
-        fetch("https://" + window.location.hostname + "/watch?v=<%- VideoData?.recommendedVideos[0].videoId%>").then(() => {})
-      }    
-  }
-  function autoplaynextvideo(e) {
-    location.href = "/watch?v=<%- VideoData?.recommendedVideos[0].videoId%>&autoplay=<%-btoa("1f739d935676111cfff4b4693e3816e664797050" + VideoData?.recommendedVideos[0].videoId) %>";
-  }
-}
- <% } %>
-  
- 
 </script>
      <script>
 var lastTheaterMode = null;
