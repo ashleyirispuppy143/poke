@@ -78,6 +78,9 @@ app.get("/pride", (req, res) => {
 app.get("/policies", (req, res) => {
   renderTemplate(res, req, "terms.ejs");
 });
+  app.get("/notifications", (req, res) => {
+  renderTemplate(res, req, "notifications.ejs");
+});
 app.get("/legal-yada-yada", (req, res) => {
 res.redirect("/policies")
 });
