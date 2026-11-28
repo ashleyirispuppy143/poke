@@ -544,7 +544,7 @@ app.get("/api/subtitles", async (req, res) => {
   const fromLang = req.query.from_language || "auto";
 
   if (!id || !l) {
-    return res.status(400).send("Missing 'v' (video ID) or 'h' (label) query parameter");
+    return res.status(400).send("Missing video id and/or label param :<");
   }
 
   const rawCacheKey = `${id}-${l}`;
