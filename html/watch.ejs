@@ -5083,23 +5083,6 @@ const vid = document.getElementById("video");
 <body>
 
     <div id="error-container">
-        <div class="donate-card">
-            <p class="donate-title">Help keep Poke operating</p>
-            <p class="donate-subtitle">
-                Poke depends on servers to keep videos loading smoothly. Donations help us keep the project alive and reliable.
-            </p>
-
-            <div class="donate-buttons">
-                <a href="https://liberapay.com/poke_software_initiative/donate" target="_blank" rel="noopener noreferrer" class="donate-btn">
-                    Donate on Liberapay
-                </a>
-
-                <a href="https://ko-fi.com/pokeinitiative" target="_blank" rel="noopener noreferrer" class="donate-btn donate-btn-secondary">
-                    Donate on Ko-fi
-                </a>
-            </div>
-        </div>
-
         <img class="error-image" src="<%- media_proxy_url %>/proxy?url=https://www.youtube.com/img/desktop/unavailable/unavailable_video_dark_theme.png" alt="Video Unavailable">
         
         <h1>Video unavailable</h1>
@@ -5113,9 +5096,9 @@ const vid = document.getElementById("video");
         <ul class="reasons-list">
             <li class="prob-high"><strong>Server Blocked:</strong> YouTube has temporarily blocked our servers or applied regional restrictions.</li>
             <li class="prob-high"><strong>Invalid Link:</strong> The <strong>video ID</strong> is incorrect, incomplete, or the original video was deleted.</li>
+            <li class="prob-high"><strong>Server Reboot:</strong> Our backend (<strong>Companion</strong>) is restarting. Trying again in 60s usually fixes this.</li>
             <li class="prob-high"><strong>Not Live Yet:</strong> It's a <strong>Premiere</strong> or livestream that hasn't officially started.</li>
             <li class="prob-high"><strong>Extraction Error:</strong> There is an <strong>upstream bug</strong> affecting video playback (check <a href="https://github.com/iv-org/invidious/issues" target="_blank">Invidious</a>).</li>
-            <li class="prob-med"><strong>Server Reboot:</strong> Our backend (<strong>Companion</strong>) is restarting. Trying again in 60s usually fixes this.</li>
             <li class="prob-med"><strong>Visibility:</strong> The video is <strong>Private</strong> or requires a <strong>Channel Membership</strong>.</li>
             <li class="prob-low"><strong>YouTube Outage:</strong> YouTube itself is experiencing issues (check <a href="https://downdetector.com/status/youtube/" target="_blank">Downdetector</a>).</li>
             <li class="prob-none">It's <strong>literally 1984...</strong></li>
