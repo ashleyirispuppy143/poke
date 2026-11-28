@@ -53,6 +53,8 @@ window.SyncLevel = SyncLevel;
   const qs = new URLSearchParams(window.location.search);
   const qua = qs.get("quality") || "";
 
+  const ALL_LANGS = [{"code":"auto","name":"Detect Language"},{"code":"ab","name":"Abkhaz"},{"code":"ace","name":"Acehnese"},{"code":"ach","name":"Acholi"},{"code":"aa","name":"Afar"},{"code":"af","name":"Afrikaans"},{"code":"sq","name":"Albanian"},{"code":"alz","name":"Alur"},{"code":"am","name":"Amharic"},{"code":"ar","name":"Arabic"},{"code":"hy","name":"Armenian"},{"code":"as","name":"Assamese"},{"code":"av","name":"Avar"},{"code":"awa","name":"Awadhi"},{"code":"ay","name":"Aymara"},{"code":"az","name":"Azerbaijani"},{"code":"ban","name":"Balinese"},{"code":"bal","name":"Baluchi"},{"code":"bm","name":"Bambara"},{"code":"bci","name":"Baoulé"},{"code":"ba","name":"Bashkir"},{"code":"eu","name":"Basque"},{"code":"btx","name":"Batak Karo"},{"code":"bts","name":"Batak Simalungun"},{"code":"bbc","name":"Batak Toba"},{"code":"be","name":"Belarusian"},{"code":"bem","name":"Bemba"},{"code":"bn","name":"Bengali"},{"code":"bew","name":"Betawi"},{"code":"bho","name":"Bhojpuri"},{"code":"bik","name":"Bikol"},{"code":"bs","name":"Bosnian"},{"code":"br","name":"Breton"},{"code":"bg","name":"Bulgarian"},{"code":"bua","name":"Buryat"},{"code":"yue","name":"Cantonese"},{"code":"ca","name":"Catalan"},{"code":"ceb","name":"Cebuano"},{"code":"ch","name":"Chamorro"},{"code":"ce","name":"Chechen"},{"code":"ny","name":"Chichewa"},{"code":"zh-CN","name":"Chinese (Simplified)"},{"code":"zh-TW","name":"Chinese (Traditional)"},{"code":"chk","name":"Chuukese"},{"code":"cv","name":"Chuvash"},{"code":"co","name":"Corsican"},{"code":"crh","name":"Crimean Tatar (Cyrillic)"},{"code":"crh-Latn","name":"Crimean Tatar (Latin)"},{"code":"hr","name":"Croatian"},{"code":"cs","name":"Czech"},{"code":"da","name":"Danish"},{"code":"fa-AF","name":"Dari"},{"code":"dv","name":"Dhivehi"},{"code":"din","name":"Dinka"},{"code":"doi","name":"Dogri"},{"code":"dov","name":"Dombe"},{"code":"nl","name":"Dutch"},{"code":"dyu","name":"Dyula"},{"code":"dz","name":"Dzongkha"},{"code":"en","name":"English"},{"code":"eo","name":"Esperanto"},{"code":"et","name":"Estonian"},{"code":"ee","name":"Ewe"},{"code":"fo","name":"Faroese"},{"code":"fj","name":"Fijian"},{"code":"tl","name":"Filipino"},{"code":"fi","name":"Finnish"},{"code":"fon","name":"Fon"},{"code":"fr","name":"French"},{"code":"fr-CA","name":"French (Canada)"},{"code":"fy","name":"Frisian"},{"code":"fur","name":"Friulian"},{"code":"ff","name":"Fulani"},{"code":"gaa","name":"Ga"},{"code":"gl","name":"Galician"},{"code":"ka","name":"Georgian"},{"code":"de","name":"German"},{"code":"el","name":"Greek"},{"code":"gn","name":"Guarani"},{"code":"gu","name":"Gujarati"},{"code":"ht","name":"Haitian Creole"},{"code":"cnh","name":"Hakha Chin"},{"code":"ha","name":"Hausa"},{"code":"haw","name":"Hawaiian"},{"code":"iw","name":"Hebrew"},{"code":"hil","name":"Hiligaynon"},{"code":"hi","name":"Hindi"},{"code":"hmn","name":"Hmong"},{"code":"hu","name":"Hungarian"},{"code":"hrx","name":"Hunsrik"},{"code":"iba","name":"Iban"},{"code":"is","name":"Icelandic"},{"code":"ig","name":"Igbo"},{"code":"ilo","name":"Ilocano"},{"code":"id","name":"Indonesian"},{"code":"iu-Latn","name":"Inuktut (Latin)"},{"code":"iu","name":"Inuktut (Syllabics)"},{"code":"ga","name":"Irish"},{"code":"it","name":"Italian"},{"code":"jam","name":"Jamaican Patois"},{"code":"ja","name":"Japanese"},{"code":"jw","name":"Javanese"},{"code":"kac","name":"Jingpo"},{"code":"kl","name":"Kalaallisut"},{"code":"kn","name":"Kannada"},{"code":"kr","name":"Kanuri"},{"code":"pam","name":"Kapampangan"},{"code":"kk","name":"Kazakh"},{"code":"kha","name":"Khasi"},{"code":"km","name":"Khmer"},{"code":"cgg","name":"Kiga"},{"code":"kg","name":"Kikongo"},{"code":"rw","name":"Kinyarwanda"},{"code":"ktu","name":"Kituba"},{"code":"trp","name":"Kokborok"},{"code":"kv","name":"Komi"},{"code":"gom","name":"Konkani"},{"code":"ko","name":"Korean (PROK)"},{"code":"kri","name":"Krio"},{"code":"ku","name":"Kurdish (Kurmanji)"},{"code":"ckb","name":"Kurdish (Sorani)"},{"code":"ky","name":"Kyrgyz"},{"code":"lo","name":"Lao"},{"code":"ltg","name":"Latgalian"},{"code":"la","name":"Latin"},{"code":"lv","name":"Latvian"},{"code":"lij","name":"Ligurian"},{"code":"li","name":"Limburgish"},{"code":"ln","name":"Lingala"},{"code":"lt","name":"Lithuanian"},{"code":"lmo","name":"Lombard"},{"code":"lg","name":"Luganda"},{"code":"luo","name":"Luo"},{"code":"lb","name":"Luxembourgish"},{"code":"mk","name":"Macedonian"},{"code":"mad","name":"Madurese"},{"code":"mai","name":"Maithili"},{"code":"mak","name":"Makassar"},{"code":"mg","name":"Malagasy"},{"code":"ms","name":"Malay"},{"code":"ms-Arab","name":"Malay (Jawi)"},{"code":"ml","name":"Malayalam"},{"code":"mt","name":"Maltese"},{"code":"mam","name":"Mam"},{"code":"gv","name":"Manx"},{"code":"mi","name":"Maori"},{"code":"mr","name":"Marathi"},{"code":"mh","name":"Marshallese"},{"code":"mwr","name":"Marwadi"},{"code":"mfe","name":"Mauritian Creole"},{"code":"chm","name":"Meadow Mari"},{"code":"mni-Mtei","name":"Meiteilon (Manipuri)"},{"code":"min","name":"Minang"},{"code":"lus","name":"Mizo"},{"code":"mn","name":"Mongolian"},{"code":"my","name":"Myanmar (Burmese)"},{"code":"bm-Nkoo","name":"NKo"},{"code":"nhe","name":"Nahuatl (Eastern Huasteca)"},{"code":"ndc-ZW","name":"Ndau"},{"code":"nr","name":"Ndebele (South)"},{"code":"new","name":"Nepalbhasa (Newari)"},{"code":"ne","name":"Nepali"},{"code":"no","name":"Norwegian"},{"code":"nus","name":"Nuer"},{"code":"oc","name":"Occitan"},{"code":"or","name":"Odia (Oriya)"},{"code":"om","name":"Oromo"},{"code":"os","name":"Ossetian"},{"code":"pag","name":"Pangasinan"},{"code":"pap","name":"Papiamento"},{"code":"ps","name":"Pashto"},{"code":"fa","name":"Persian"},{"code":"pl","name":"Polish"},{"code":"pt","name":"Portuguese (Brazil)"},{"code":"pt-PT","name":"Portuguese (Portugal)"},{"code":"pa","name":"Punjabi (Gurmukhi)"},{"code":"pa-Arab","name":"Punjabi (Shahmukhi)"},{"code":"qu","name":"Quechua"},{"code":"kek","name":"Qʼeqchiʼ"},{"code":"rom","name":"Romani"},{"code":"ro","name":"Romanian"},{"code":"rn","name":"Rundi"},{"code":"ru","name":"Russian"},{"code":"se","name":"Sami (North)"},{"code":"sm","name":"Samoan"},{"code":"sg","name":"Sango"},{"code":"sa","name":"Sanskrit"},{"code":"sat-Latn","name":"Santali (Latin)"},{"code":"sat","name":"Santali (Ol Chiki)"},{"code":"gd","name":"Scots Gaelic"},{"code":"nso","name":"Sepedi"},{"code":"sr","name":"Serbian"},{"code":"st","name":"Sesotho"},{"code":"crs","name":"Seychellois Creole"},{"code":"shn","name":"Shan"},{"code":"sn","name":"Shona"},{"code":"scn","name":"Sicilian"},{"code":"szl","name":"Silesian"},{"code":"sd","name":"Sindhi"},{"code":"si","name":"Sinhala"},{"code":"sk","name":"Slovak"},{"code":"sl","name":"Slovenian"},{"code":"so","name":"Somali"},{"code":"es","name":"Spanish"},{"code":"su","name":"Sundanese"},{"code":"sus","name":"Susu"},{"code":"sw","name":"Swahili"},{"code":"ss","name":"Swati"},{"code":"sv","name":"Swedish"},{"code":"ty","name":"Tahitian"},{"code":"tg","name":"Tajik"},{"code":"ber-Latn","name":"Tamazight"},{"code":"ber","name":"Tamazight (Tifinagh)"},{"code":"ta","name":"Tamil"},{"code":"tt","name":"Tatar"},{"code":"te","name":"Telugu"},{"code":"tet","name":"Tetum"},{"code":"th","name":"Thai"},{"code":"bo","name":"Tibetan"},{"code":"ti","name":"Tigrinya"},{"code":"tiv","name":"Tiv"},{"code":"tpi","name":"Tok Pisin"},{"code":"to","name":"Tongan"},{"code":"lua","name":"Tshiluba"},{"code":"ts","name":"Tsonga"},{"code":"tn","name":"Tswana"},{"code":"tcy","name":"Tulu"},{"code":"tum","name":"Tumbuka"},{"code":"tr","name":"Turkish"},{"code":"tk","name":"Turkmen"},{"code":"tyv","name":"Tuvan"},{"code":"ak","name":"Twi"},{"code":"udm","name":"Udmurt"},{"code":"uk","name":"Ukrainian"},{"code":"ur","name":"Urdu"},{"code":"ug","name":"Uyghur"},{"code":"uz","name":"Uzbek"},{"code":"ve","name":"Venda"},{"code":"vec","name":"Venetian"},{"code":"vi","name":"Vietnamese"},{"code":"war","name":"Waray"},{"code":"cy","name":"Welsh"},{"code":"wo","name":"Wolof"},{"code":"xh","name":"Xhosa"},{"code":"sah","name":"Yakut"},{"code":"yi","name":"Yiddish"},{"code":"yo","name":"Yoruba"},{"code":"yua","name":"Yucatec Maya"},{"code":"zap","name":"Zapotec"},{"code":"zu","name":"Zulu"}];
+
   const STORAGE_KEYS = [
     { id: 'volume', key: 'alabaster_volume', legacy: null },
     { id: 'muted', key: 'alabaster_muted', legacy: null },
@@ -2522,6 +2524,7 @@ window.SyncLevel = SyncLevel;
       '  position: absolute !important;',
       '  top: 14px !important;',
       '  left: 14px !important;',
+      '  max-width: calc(100% - 28px) !important;',
       '  z-index: 43 !important;',
       '  display: flex !important;',
       '  flex-direction: column !important;',
@@ -2562,6 +2565,9 @@ window.SyncLevel = SyncLevel;
       '.alabaster-cc-toast-lang {',
       '  padding: 4px 10px 2px 10px !important;',
       '  border-radius: 6px 6px 6px 0 !important;',
+      '  max-width: 100% !important;',
+      '  overflow: hidden !important;',
+      '  text-overflow: ellipsis !important;',
       '}',
       '.alabaster-cc-toast-hint {',
       '  padding: 2px 10px 4px 10px !important;',
@@ -2591,6 +2597,52 @@ window.SyncLevel = SyncLevel;
       '.video-js .alabaster-subtitles-settings-row, .alabaster-subtitles-settings-row {',
       '  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;',
       '  margin-bottom: 4px !important;',
+      '}',
+      '.video-js .alabaster-autotranslate-row, .alabaster-autotranslate-row {',
+      '  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;',
+      '  margin-bottom: 4px !important;',
+      '}',
+      '.video-js .alabaster-autotranslate-sticky, .alabaster-autotranslate-sticky {',
+      '  position: sticky !important;',
+      '  top: -8px !important;',
+      '  z-index: 2 !important;',
+      '  background: rgba(24, 20, 18, 0.98) !important;',
+      '  padding-top: 8px !important;',
+      '  margin-top: -8px !important;',
+      '}',
+      '.video-js .alabaster-autotranslate-search-wrap, .alabaster-autotranslate-search-wrap {',
+      '  padding: 6px 14px 8px 14px !important;',
+      '  box-sizing: border-box !important;',
+      '  width: 100% !important;',
+      '}',
+      '.video-js .alabaster-autotranslate-search, .alabaster-autotranslate-search {',
+      '  width: 100% !important;',
+      '  height: 32px !important;',
+      '  padding: 0 10px !important;',
+      '  box-sizing: border-box !important;',
+      '  border-radius: 8px !important;',
+      '  border: 1px solid rgba(255, 255, 255, 0.14) !important;',
+      '  background: rgba(255, 255, 255, 0.07) !important;',
+      '  color: #f1f1f1 !important;',
+      '  font-family: "poketube flex", "PokeTube Flex", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;',
+      '  font-size: 13px !important;',
+      '  font-weight: 400 !important;',
+      '  outline: none !important;',
+      '  user-select: text !important;',
+      '  transition: border-color 0.14s ease, background 0.14s ease !important;',
+      '}',
+      '.video-js .alabaster-autotranslate-search:focus, .alabaster-autotranslate-search:focus {',
+      '  border-color: rgba(255, 255, 255, 0.35) !important;',
+      '  background: rgba(255, 255, 255, 0.1) !important;',
+      '}',
+      '.video-js .alabaster-autotranslate-search::placeholder, .alabaster-autotranslate-search::placeholder {',
+      '  color: #9e9e9e !important;',
+      '}',
+      '.video-js .alabaster-autotranslate-empty, .alabaster-autotranslate-empty {',
+      '  padding: 16px 18px !important;',
+      '  font-size: 13px !important;',
+      '  color: #9e9e9e !important;',
+      '  text-align: center !important;',
       '}',
       '.video-js .alabaster-fs-settings-popup, .alabaster-fs-settings-popup {',
       '  position: absolute !important;',
@@ -4893,11 +4945,15 @@ window.SyncLevel = SyncLevel;
         var subtitlesPanel = document.createElement('div');
         subtitlesPanel.className = 'alabaster-settings-panel';
 
+        var autoTranslatePanel = document.createElement('div');
+        autoTranslatePanel.className = 'alabaster-settings-panel';
+
         var showSettingsPanel = function(targetPanel) {
-          [mainPanel, speedPanel, audioPanel, subtitlesPanel].forEach(function(p) {
+          [mainPanel, speedPanel, audioPanel, subtitlesPanel, autoTranslatePanel].forEach(function(p) {
             if (p === targetPanel) p.classList.add('is-active');
             else p.classList.remove('is-active');
           });
+          if (fsSettingsPopup) fsSettingsPopup.scrollTop = 0;
         };
 
         var getActiveAudioState = function() {
@@ -4941,6 +4997,9 @@ window.SyncLevel = SyncLevel;
         var hasUserToggledCaptions = false;
         var hasRestoredSavedSubtitle = false;
         var ccToastTimer = 0;
+        var autoTranslatedTrackEl = null;
+        var autoTranslatedTrack = null;
+        var isAddingAutoTranslateTrack = false;
 
         var ccToastEl = document.createElement('div');
         ccToastEl.className = 'alabaster-cc-toast';
@@ -4997,6 +5056,227 @@ window.SyncLevel = SyncLevel;
           return out;
         };
 
+        var getOriginalCaptionTracks = function() {
+          var tracks = getCaptionTracks();
+          var out = [];
+          for (var i = 0; i < tracks.length; i++) {
+            if (!tracks[i]._alabasterAutoTranslated) {
+              out.push(tracks[i]);
+            }
+          }
+          return out;
+        };
+
+        var getVideoElementNode = function() {
+          return (rootEl && rootEl.querySelector('video')) || document.querySelector('video.video-js, video');
+        };
+
+        var findCaptionTrackSrcUrl = function(track) {
+          if (!track) return '';
+          if (typeof track._alabasterSrc === 'string' && track._alabasterSrc.trim()) return track._alabasterSrc.trim();
+          if (typeof track.src === 'string' && track.src.trim()) return track.src.trim();
+          var vNode = getVideoElementNode();
+          if (vNode) {
+            var domTracks = vNode.querySelectorAll('track');
+            for (var i = 0; i < domTracks.length; i++) {
+              var dt = domTracks[i];
+              if (dt.track === track) {
+                var directSrc = (dt.getAttribute('src') || dt.src || '').trim();
+                if (directSrc) return directSrc;
+              }
+            }
+            for (var j = 0; j < domTracks.length; j++) {
+              var dt2 = domTracks[j];
+              var sameLabel = String(dt2.label || dt2.getAttribute('label') || '').trim() === String(track.label || '').trim();
+              var sameLang = String(dt2.srclang || dt2.getAttribute('srclang') || '').trim() === String(track.language || '').trim();
+              if (sameLabel && sameLang) {
+                var matchedSrc = (dt2.getAttribute('src') || dt2.src || '').trim();
+                if (matchedSrc) return matchedSrc;
+              }
+            }
+          }
+          if (typeof player.remoteTextTrackEls === 'function') {
+            try {
+              var rEls = player.remoteTextTrackEls();
+              if (rEls && rEls.length) {
+                for (var k = 0; k < rEls.length; k++) {
+                  var el = rEls[k];
+                  if (el && el.track === track && el.src) return String(el.src).trim();
+                }
+              }
+            } catch (_) {}
+          }
+          return '';
+        };
+
+        var extractCaptionTrackMeta = function(track) {
+          var srcUrl = findCaptionTrackSrcUrl(track);
+          var hVal = '';
+          var vidVal = '';
+          if (srcUrl) {
+            try {
+              var parsed = new URL(srcUrl, window.location.href);
+              hVal = (parsed.searchParams.get('h') || '').trim();
+              vidVal = (parsed.searchParams.get('v') || '').trim();
+            } catch (_) {}
+          }
+          if (!hVal && track) {
+            hVal = String(track.label || track.language || '').trim();
+          }
+          if (!vidVal) {
+            vidVal = (qs.get('v') || qs.get('id') || '').trim();
+          }
+          if (!vidVal) {
+            var vNode = getVideoElementNode();
+            if (vNode) {
+              var allDomTracks = vNode.querySelectorAll('track');
+              for (var i = 0; i < allDomTracks.length; i++) {
+                var tSrc = (allDomTracks[i].getAttribute('src') || allDomTracks[i].src || '').trim();
+                if (!tSrc) continue;
+                try {
+                  var pUrl = new URL(tSrc, window.location.href);
+                  var pv = (pUrl.searchParams.get('v') || '').trim();
+                  if (pv) {
+                    vidVal = pv;
+                    break;
+                  }
+                } catch (_) {}
+              }
+            }
+          }
+          if (!vidVal) {
+            var pathMatch = (window.location.pathname || '').match(/\/(?:watch|embed|v)\/([a-zA-Z0-9_-]{11})/);
+            if (pathMatch && pathMatch[1]) vidVal = pathMatch[1];
+          }
+          if (!vidVal) {
+            var ogUrl = compat.getMeta('meta[property="og:url"]') || compat.getMeta('meta[property="og:image"]') || compat.getMeta('meta[name="twitter:image"]') || '';
+            var metaMatch = ogUrl.match(/[?&]v=([a-zA-Z0-9_-]{11})/) || ogUrl.match(/\/vi\/([a-zA-Z0-9_-]{11})\//);
+            if (metaMatch && metaMatch[1]) vidVal = metaMatch[1];
+          }
+          return {
+            h: hVal,
+            v: vidVal,
+            src: srcUrl
+          };
+        };
+
+        var langCodeAliases = {
+          he: 'iw',
+          iw: 'iw',
+          jv: 'jw',
+          jw: 'jw',
+          fil: 'tl',
+          tl: 'tl',
+          in: 'id',
+          id: 'id',
+          ji: 'yi',
+          yi: 'yi',
+          nb: 'no',
+          nn: 'no',
+          no: 'no'
+        };
+
+        var normalizeLangCodeForCompare = function(rawCode) {
+          var norm = String(rawCode || '').trim().toLowerCase().replace(/_/g, '-');
+          if (!norm) return { full: '', base: '' };
+          var parts = norm.split('-');
+          var base = langCodeAliases[parts[0]] || parts[0];
+          if (base === 'zh') {
+            if (norm === 'zh-hans' || norm === 'zh-cn' || norm === 'zh-sg' || norm.indexOf('zh-hans-') === 0) {
+              return { full: 'zh-cn', base: 'zh' };
+            }
+            if (norm === 'zh-hant' || norm === 'zh-tw' || norm === 'zh-hk' || norm === 'zh-mo' || norm.indexOf('zh-hant-') === 0) {
+              return { full: 'zh-tw', base: 'zh' };
+            }
+            return { full: 'zh', base: 'zh' };
+          }
+          parts[0] = base;
+          return { full: parts.join('-'), base: base };
+        };
+
+        var allLangCodeSet = {};
+        var allLangBaseNameCounts = {};
+        for (var lIdx = 0; lIdx < ALL_LANGS.length; lIdx++) {
+          var lEntry = ALL_LANGS[lIdx];
+          if (!lEntry || !lEntry.code || lEntry.code === 'auto') continue;
+          var normL = normalizeLangCodeForCompare(lEntry.code);
+          if (normL.full) allLangCodeSet[normL.full] = true;
+          var lBaseName = String(lEntry.name || '').toLowerCase().split('(')[0].trim();
+          if (lBaseName) {
+            allLangBaseNameCounts[lBaseName] = (allLangBaseNameCounts[lBaseName] || 0) + 1;
+          }
+        }
+
+        var cleanCaptionDisplayName = function(raw) {
+          return String(raw || '')
+            .replace(/\((?:auto[- ]?generated|cc|closed captions?|subtitles?)\)/gi, '')
+            .replace(/\s*[-–—]\s*(?:auto[- ]?generated|cc|closed captions?)\s*$/gi, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+        };
+
+        var isSameLanguageAsTrack = function(sourceTrack, sourceH, targetLang) {
+          if (!targetLang || !targetLang.code || targetLang.code === 'auto') return true;
+          if (!sourceTrack) return false;
+
+          var tgtCode = normalizeLangCodeForCompare(targetLang.code);
+          var srcCode = normalizeLangCodeForCompare(sourceTrack.language);
+
+          if (srcCode.full && tgtCode.full) {
+            if (srcCode.full === tgtCode.full) return true;
+            if (srcCode.base && srcCode.base === tgtCode.base) {
+              if (srcCode.base === 'zh') {
+                if (srcCode.full === 'zh-cn' && tgtCode.full === 'zh-cn') return true;
+                if (srcCode.full === 'zh-tw' && tgtCode.full === 'zh-tw') return true;
+              } else if (srcCode.full === 'pt-br' && tgtCode.full === 'pt') {
+                return true;
+              } else if (srcCode.full === 'fr-fr' && tgtCode.full === 'fr') {
+                return true;
+              } else if (tgtCode.full === tgtCode.base && !allLangCodeSet[srcCode.full]) {
+                return true;
+              }
+            }
+          }
+
+          var tgtName = String(targetLang.name || '').trim().toLowerCase();
+          var tgtBase = tgtName.split('(')[0].trim();
+          var tgtBaseUnique = allLangBaseNameCounts[tgtBase] === 1;
+
+          var srcCandidates = [];
+          var rawLabelClean = cleanCaptionDisplayName(sourceTrack.label);
+          var rawHClean = cleanCaptionDisplayName(sourceH);
+          if (rawLabelClean) srcCandidates.push(rawLabelClean.toLowerCase());
+          if (rawHClean && srcCandidates.indexOf(rawHClean.toLowerCase()) === -1) {
+            srcCandidates.push(rawHClean.toLowerCase());
+          }
+          if (srcCode.full && typeof Intl !== 'undefined' && typeof Intl.DisplayNames === 'function') {
+            try {
+              var dnEn = new Intl.DisplayNames(['en'], { type: 'language' });
+              var resolvedFull = dnEn.of(srcCode.full);
+              var resolvedBase = dnEn.of(srcCode.base);
+              if (resolvedFull && srcCandidates.indexOf(resolvedFull.toLowerCase()) === -1) {
+                srcCandidates.push(resolvedFull.toLowerCase());
+              }
+              if (resolvedBase && srcCandidates.indexOf(resolvedBase.toLowerCase()) === -1) {
+                srcCandidates.push(resolvedBase.toLowerCase());
+              }
+            } catch (_) {}
+          }
+
+          for (var i = 0; i < srcCandidates.length; i++) {
+            var cand = srcCandidates[i];
+            if (!cand) continue;
+            if (cand === tgtName) return true;
+            if (tgtCode.full === 'zh-cn' && cand.indexOf('chinese') !== -1 && cand.indexOf('simplified') !== -1) return true;
+            if (tgtCode.full === 'zh-tw' && cand.indexOf('chinese') !== -1 && cand.indexOf('traditional') !== -1) return true;
+            var candBase = cand.split('(')[0].split('-')[0].trim();
+            if (tgtBaseUnique && candBase && candBase === tgtBase) return true;
+            if (!tgtBaseUnique && cand === tgtBase && tgtName === tgtBase) return true;
+          }
+
+          return false;
+        };
+
         var getDeviceDisplayLanguage = function() {
           try {
             if (navigator.language && String(navigator.language).trim()) {
@@ -5024,7 +5304,7 @@ window.SyncLevel = SyncLevel;
         };
 
         var findSystemLanguageTrack = function(tracks) {
-          var arr = tracks || getCaptionTracks();
+          var arr = tracks || getOriginalCaptionTracks();
           if (!arr || !arr.length) return null;
           var rawDevLang = getDeviceDisplayLanguage();
           if (!rawDevLang) return null;
@@ -5099,7 +5379,7 @@ window.SyncLevel = SyncLevel;
         };
 
         var getDefaultCaptionTrack = function(tracks) {
-          var arr = tracks || getCaptionTracks();
+          var arr = tracks || getOriginalCaptionTracks();
           if (!arr || !arr.length) return null;
           if (isStorageFlagEnabled('sub_default_system_lang')) {
             var sysTrack = findSystemLanguageTrack(arr);
@@ -5114,6 +5394,31 @@ window.SyncLevel = SyncLevel;
             if (arr[i].mode === 'showing') return arr[i];
           }
           return null;
+        };
+
+        var getBaseSourceCaptionTrack = function() {
+          var active = getActiveCaptionTrack();
+          if (!active) return null;
+          if (active._alabasterAutoTranslated && active._alabasterSourceTrack) {
+            return active._alabasterSourceTrack;
+          }
+          return active;
+        };
+
+        var removeAutoTranslatedTrack = function() {
+          if (autoTranslatedTrack) {
+            try { autoTranslatedTrack.mode = 'disabled'; } catch (_) {}
+          }
+          if (autoTranslatedTrackEl && typeof player.removeRemoteTextTrack === 'function') {
+            try { player.removeRemoteTextTrack(autoTranslatedTrackEl); } catch (_) {}
+          } else if (autoTranslatedTrack && typeof player.removeRemoteTextTrack === 'function') {
+            try { player.removeRemoteTextTrack(autoTranslatedTrack); } catch (_) {}
+          }
+          if (autoTranslatedTrackEl && autoTranslatedTrackEl.parentNode) {
+            try { autoTranslatedTrackEl.parentNode.removeChild(autoTranslatedTrackEl); } catch (_) {}
+          }
+          autoTranslatedTrackEl = null;
+          autoTranslatedTrack = null;
         };
 
         var selectCaptionTrack = function(targetTrack, fromUserAction) {
@@ -5150,6 +5455,78 @@ window.SyncLevel = SyncLevel;
           if (typeof syncYoutubeCaptionsUI === 'function') syncYoutubeCaptionsUI();
         };
 
+        var applyAutoTranslate = function(targetLang) {
+          if (!targetLang || !targetLang.code || targetLang.code === 'auto') return;
+          var sourceTrack = getBaseSourceCaptionTrack();
+          if (!sourceTrack) return;
+
+          var meta = extractCaptionTrackMeta(sourceTrack);
+          var sourceH = meta.h || String(sourceTrack.label || sourceTrack.language || '').trim();
+          var videoId = meta.v;
+          if (!sourceH || !videoId) return;
+          if (isSameLanguageAsTrack(sourceTrack, sourceH, targetLang)) return;
+
+          var translateUrl = '/api/subtitles?v=' + encodeURIComponent(videoId) + '&h=' + encodeURIComponent(sourceH) + '&translate=' + encodeURIComponent(targetLang.code);
+          var sourceDisplayLang = String(sourceTrack.label || sourceH || sourceTrack.language || '').trim();
+          var translatedLabel = targetLang.name + ' (Auto translated from ' + sourceDisplayLang + ')';
+
+          if (autoTranslatedTrack && autoTranslatedTrack._alabasterSrc === translateUrl) {
+            selectCaptionTrack(autoTranslatedTrack, true);
+            setSettingsPopupState(false);
+            return;
+          }
+
+          hasUserToggledCaptions = true;
+          hasRestoredSavedSubtitle = true;
+          isAddingAutoTranslateTrack = true;
+
+          var newTrack = null;
+          try {
+            removeAutoTranslatedTrack();
+            if (typeof player.addRemoteTextTrack === 'function') {
+              var addedEl = player.addRemoteTextTrack({
+                kind: sourceTrack.kind || 'subtitles',
+                label: translatedLabel,
+                srclang: targetLang.code,
+                language: targetLang.code,
+                src: translateUrl,
+                default: false
+              }, false);
+              autoTranslatedTrackEl = addedEl || null;
+              newTrack = (addedEl && addedEl.track) ? addedEl.track : addedEl;
+            } else {
+              var vNode = getVideoElementNode();
+              if (vNode) {
+                var domTrack = document.createElement('track');
+                domTrack.kind = sourceTrack.kind || 'subtitles';
+                domTrack.label = translatedLabel;
+                domTrack.srclang = targetLang.code;
+                domTrack.src = translateUrl;
+                vNode.appendChild(domTrack);
+                autoTranslatedTrackEl = domTrack;
+                newTrack = domTrack.track;
+              }
+            }
+            if (newTrack) {
+              newTrack._alabasterAutoTranslated = true;
+              newTrack._alabasterSourceTrack = sourceTrack;
+              newTrack._alabasterSourceLabel = sourceDisplayLang;
+              newTrack._alabasterSourceH = sourceH;
+              newTrack._alabasterTargetCode = targetLang.code;
+              newTrack._alabasterTargetName = targetLang.name;
+              newTrack._alabasterSrc = translateUrl;
+              autoTranslatedTrack = newTrack;
+            }
+          } finally {
+            isAddingAutoTranslateTrack = false;
+          }
+
+          if (newTrack) {
+            selectCaptionTrack(newTrack, true);
+            setSettingsPopupState(false);
+          }
+        };
+
         toggleCaptionsByUser = function() {
           var tracks = getCaptionTracks();
           if (!tracks.length) return false;
@@ -5157,7 +5534,7 @@ window.SyncLevel = SyncLevel;
           if (active) {
             selectCaptionTrack(null, true);
           } else {
-            var nextTrack = (lastSelectedCaptionTrack && tracks.indexOf(lastSelectedCaptionTrack) !== -1) ? lastSelectedCaptionTrack : getDefaultCaptionTrack(tracks);
+            var nextTrack = (lastSelectedCaptionTrack && tracks.indexOf(lastSelectedCaptionTrack) !== -1) ? lastSelectedCaptionTrack : getDefaultCaptionTrack(getOriginalCaptionTracks());
             selectCaptionTrack(nextTrack, true);
           }
           return true;
@@ -5756,13 +6133,146 @@ window.SyncLevel = SyncLevel;
         ].join('');
         subtitlesPanel.appendChild(subtitlesSettingsRow);
 
+        var autoTranslateRow = document.createElement('div');
+        autoTranslateRow.className = 'alabaster-settings-item alabaster-autotranslate-row';
+        autoTranslateRow.setAttribute('role', 'button');
+        autoTranslateRow.tabIndex = 0;
+        autoTranslateRow.style.setProperty('display', 'none', 'important');
+        var autoTranslateValueLabel = document.createElement('span');
+        autoTranslateValueLabel.style.cssText = 'max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        var autoTranslateRightWrap = document.createElement('div');
+        autoTranslateRightWrap.className = 'alabaster-settings-item-right';
+        autoTranslateRightWrap.appendChild(autoTranslateValueLabel);
+        autoTranslateRightWrap.insertAdjacentHTML('beforeend', '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>');
+        autoTranslateRow.innerHTML = [
+          '<div class="alabaster-settings-item-left">',
+          '  <span class="alabaster-settings-icon">',
+          '    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
+          '      <path d="M5 8l6 6"></path>',
+          '      <path d="M4 14l6-6 2-3"></path>',
+          '      <path d="M2 5h12"></path>',
+          '      <path d="M7 2h1"></path>',
+          '      <path d="M22 22l-5-10-5 10"></path>',
+          '      <path d="M14 18h6"></path>',
+          '    </svg>',
+          '  </span>',
+          '  <span class="alabaster-settings-label">Auto-translate</span>',
+          '</div>'
+        ].join('');
+        autoTranslateRow.appendChild(autoTranslateRightWrap);
+        subtitlesPanel.appendChild(autoTranslateRow);
+
         var subtitlesListWrap = document.createElement('div');
         subtitlesPanel.appendChild(subtitlesListWrap);
 
+        var autoTranslateSticky = document.createElement('div');
+        autoTranslateSticky.className = 'alabaster-autotranslate-sticky';
+
+        var autoTranslateHeader = document.createElement('div');
+        autoTranslateHeader.className = 'alabaster-settings-subheader';
+        var autoTranslateBackBtn = document.createElement('div');
+        autoTranslateBackBtn.className = 'alabaster-settings-back-btn';
+        autoTranslateBackBtn.setAttribute('role', 'button');
+        autoTranslateBackBtn.tabIndex = 0;
+        autoTranslateBackBtn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>';
+        var autoTranslateSubTitle = document.createElement('span');
+        autoTranslateSubTitle.className = 'alabaster-settings-subtitle';
+        autoTranslateSubTitle.textContent = 'Auto-translate';
+        autoTranslateHeader.appendChild(autoTranslateBackBtn);
+        autoTranslateHeader.appendChild(autoTranslateSubTitle);
+
+        var autoTranslateSearchWrap = document.createElement('div');
+        autoTranslateSearchWrap.className = 'alabaster-autotranslate-search-wrap';
+        var autoTranslateSearchInput = document.createElement('input');
+        autoTranslateSearchInput.type = 'text';
+        autoTranslateSearchInput.className = 'alabaster-autotranslate-search';
+        autoTranslateSearchInput.placeholder = 'Search languages...';
+        autoTranslateSearchInput.setAttribute('aria-label', 'Search languages');
+        autoTranslateSearchWrap.appendChild(autoTranslateSearchInput);
+
+        autoTranslateSticky.appendChild(autoTranslateHeader);
+        autoTranslateSticky.appendChild(autoTranslateSearchWrap);
+        autoTranslatePanel.appendChild(autoTranslateSticky);
+
+        var autoTranslateListWrap = document.createElement('div');
+        autoTranslatePanel.appendChild(autoTranslateListWrap);
+
+        var rebuildAutoTranslateList = function(queryText) {
+          var sourceTrack = getBaseSourceCaptionTrack();
+          var activeTrack = getActiveCaptionTrack();
+          var activeCode = (activeTrack && activeTrack._alabasterAutoTranslated) ? activeTrack._alabasterTargetCode : '';
+          var sourceMeta = sourceTrack ? extractCaptionTrackMeta(sourceTrack) : { h: '', v: '' };
+          var query = String(queryText || '').trim().toLowerCase();
+
+          autoTranslateListWrap.innerHTML = '';
+          if (!sourceTrack) return;
+
+          var matchedCount = 0;
+          for (var i = 0; i < ALL_LANGS.length; i++) {
+            var langItem = ALL_LANGS[i];
+            if (!langItem || !langItem.code || langItem.code === 'auto') continue;
+            if (isSameLanguageAsTrack(sourceTrack, sourceMeta.h, langItem)) continue;
+            if (query && langItem.name.toLowerCase().indexOf(query) === -1 && langItem.code.toLowerCase().indexOf(query) === -1) {
+              continue;
+            }
+            matchedCount++;
+            (function(lang) {
+              var isSelected = Boolean(activeCode && activeCode === lang.code);
+              var row = document.createElement('div');
+              row.className = 'alabaster-audio-option-item' + (isSelected ? ' is-selected' : '');
+              row.setAttribute('role', 'button');
+              row.tabIndex = 0;
+              var checkSpan = document.createElement('span');
+              checkSpan.className = 'alabaster-audio-check';
+              checkSpan.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#9e9e9e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+              var lblSpan = document.createElement('span');
+              lblSpan.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;';
+              lblSpan.textContent = lang.name;
+              row.appendChild(checkSpan);
+              row.appendChild(lblSpan);
+              row.addEventListener('click', function(evt) {
+                evt.preventDefault();
+                evt.stopPropagation();
+                applyAutoTranslate(lang);
+              });
+              autoTranslateListWrap.appendChild(row);
+            })(langItem);
+          }
+
+          if (matchedCount === 0) {
+            var emptyEl = document.createElement('div');
+            emptyEl.className = 'alabaster-autotranslate-empty';
+            emptyEl.textContent = 'No languages found';
+            autoTranslateListWrap.appendChild(emptyEl);
+          }
+        };
+
+        autoTranslateSearchInput.addEventListener('input', function(evt) {
+          evt.stopPropagation();
+          rebuildAutoTranslateList(autoTranslateSearchInput.value);
+        });
+        ['keydown', 'keyup', 'keypress'].forEach(function(evName) {
+          autoTranslateSearchInput.addEventListener(evName, function(evt) {
+            if (evt.key !== 'Escape') {
+              evt.stopPropagation();
+            }
+          }, false);
+        });
+
         var rebuildSubtitlesList = function() {
-          var tracks = getCaptionTracks();
-          var activeTrack = getActiveCaptionTrack(tracks);
+          var origTracks = getOriginalCaptionTracks();
+          var activeTrack = getActiveCaptionTrack();
+          var isAutoTranslatedActive = Boolean(activeTrack && activeTrack._alabasterAutoTranslated);
           subtitlesListWrap.innerHTML = '';
+
+          if (activeTrack) {
+            autoTranslateRow.style.removeProperty('display');
+            autoTranslateValueLabel.textContent = isAutoTranslatedActive ? (activeTrack._alabasterTargetName || '') : '';
+            autoTranslateValueLabel.style.color = isAutoTranslatedActive ? '#ffffff' : '';
+          } else {
+            autoTranslateRow.style.setProperty('display', 'none', 'important');
+            autoTranslateValueLabel.textContent = '';
+          }
 
           var makeOptRow = function(labelText, isSelected, onChoose) {
             var row = document.createElement('div');
@@ -5789,26 +6299,28 @@ window.SyncLevel = SyncLevel;
             selectCaptionTrack(null, true);
           });
 
-          for (var i = 0; i < tracks.length; i++) {
+          for (var i = 0; i < origTracks.length; i++) {
             (function(tr, idx) {
               var trLabel = tr.label || tr.language || ('Subtitle ' + (idx + 1));
               makeOptRow(trLabel, tr === activeTrack, function() {
                 selectCaptionTrack(tr, true);
               });
-            })(tracks[i], i);
+            })(origTracks[i], i);
           }
         };
 
         syncYoutubeCaptionsUI = function() {
+          if (isAddingAutoTranslateTrack) return;
           var ytCapsEnabled = !isStorageFlagEnabled('disable_yt_captions');
           if (rootEl) {
             rootEl.classList.toggle('alabaster-yt-captions', ytCapsEnabled);
           }
+          var origTracks = getOriginalCaptionTracks();
           var tracks = getCaptionTracks();
           var saveSubsEnabled = ytCapsEnabled && !isStorageFlagEnabled('disable_save_subtitle');
           var autoSubsEnabled = isStorageFlagEnabled('enable_auto_subtitle');
 
-          if (!hasUserToggledCaptions && tracks.length > 0) {
+          if (!hasUserToggledCaptions && origTracks.length > 0) {
             if (saveSubsEnabled && !hasRestoredSavedSubtitle) {
               try {
                 var savedSubEnabled = getStorageValue('sub_enabled');
@@ -5821,28 +6333,28 @@ window.SyncLevel = SyncLevel;
                   var i;
 
                   if (savedLabel) {
-                    for (i = 0; i < tracks.length; i++) {
-                      if (String(tracks[i].label || '').trim().toLowerCase() === savedLabel) {
-                        matchedTrack = tracks[i];
+                    for (i = 0; i < origTracks.length; i++) {
+                      if (String(origTracks[i].label || '').trim().toLowerCase() === savedLabel) {
+                        matchedTrack = origTracks[i];
                         break;
                       }
                     }
                   }
                   if (!matchedTrack && savedLang) {
-                    for (i = 0; i < tracks.length; i++) {
-                      if (String(tracks[i].language || '').trim().toLowerCase() === savedLang) {
-                        matchedTrack = tracks[i];
+                    for (i = 0; i < origTracks.length; i++) {
+                      if (String(origTracks[i].language || '').trim().toLowerCase() === savedLang) {
+                        matchedTrack = origTracks[i];
                         break;
                       }
                     }
                   }
                   if (!matchedTrack && (savedBaseLang || savedBaseLabel)) {
-                    for (i = 0; i < tracks.length; i++) {
-                      var trLang = String(tracks[i].language || '').trim().toLowerCase();
+                    for (i = 0; i < origTracks.length; i++) {
+                      var trLang = String(origTracks[i].language || '').trim().toLowerCase();
                       var trBaseLang = trLang ? trLang.split(/[-_]/)[0] : '';
-                      var trBaseLabel = String(tracks[i].label || '').trim().toLowerCase().split('(')[0].trim();
+                      var trBaseLabel = String(origTracks[i].label || '').trim().toLowerCase().split('(')[0].trim();
                       if ((savedBaseLang && trBaseLang && trBaseLang === savedBaseLang) || (savedBaseLabel && trBaseLabel && trBaseLabel === savedBaseLabel)) {
-                        matchedTrack = tracks[i];
+                        matchedTrack = origTracks[i];
                         break;
                       }
                     }
@@ -5863,7 +6375,7 @@ window.SyncLevel = SyncLevel;
             }
 
             if (autoSubsEnabled && !hasRestoredSavedSubtitle) {
-              var autoTrack = findSystemLanguageTrack(tracks);
+              var autoTrack = findSystemLanguageTrack(origTracks);
               if (autoTrack && getActiveCaptionTrack(tracks) !== autoTrack) {
                 selectCaptionTrack(autoTrack, false);
                 return;
@@ -5876,16 +6388,18 @@ window.SyncLevel = SyncLevel;
             lastSelectedCaptionTrack = activeTrack;
           }
 
-          if (ytCapsEnabled && tracks.length > 0) {
+          if (ytCapsEnabled && origTracks.length > 0) {
             subtitlesMenuRow.style.removeProperty('display');
           } else {
             subtitlesMenuRow.style.setProperty('display', 'none', 'important');
-            if (subtitlesPanel.classList.contains('is-active')) {
+            if (subtitlesPanel.classList.contains('is-active') || autoTranslatePanel.classList.contains('is-active')) {
               showSettingsPanel(mainPanel);
             }
           }
 
-          subtitlesValueLabel.textContent = activeTrack ? (activeTrack.label || activeTrack.language || 'On') : 'Off';
+          var activeDisplayText = activeTrack ? (activeTrack.label || activeTrack.language || 'On') : 'Off';
+          subtitlesValueLabel.textContent = activeDisplayText;
+          subtitlesValueLabel.title = activeDisplayText;
 
           var barNode = player.controlBar && player.controlBar.el && player.controlBar.el();
           if (barNode) {
@@ -5897,6 +6411,13 @@ window.SyncLevel = SyncLevel;
 
           if (subtitlesPanel.classList.contains('is-active')) {
             rebuildSubtitlesList();
+          } else if (autoTranslatePanel.classList.contains('is-active')) {
+            if (!activeTrack) {
+              rebuildSubtitlesList();
+              showSettingsPanel(subtitlesPanel);
+            } else {
+              rebuildAutoTranslateList(autoTranslateSearchInput.value);
+            }
           }
 
           positionCustomButtons();
@@ -5906,11 +6427,8 @@ window.SyncLevel = SyncLevel;
         fsSettingsPopup.appendChild(speedPanel);
         fsSettingsPopup.appendChild(audioPanel);
         fsSettingsPopup.appendChild(subtitlesPanel);
+        fsSettingsPopup.appendChild(autoTranslatePanel);
         rootEl.appendChild(fsSettingsPopup);
-
-        var getVideoElementNode = function() {
-          return (rootEl && rootEl.querySelector('video')) || document.querySelector('video.video-js, video');
-        };
 
         var isLoopCurrentlyEnabled = function() {
           var vNode = getVideoElementNode();
@@ -6017,6 +6535,15 @@ window.SyncLevel = SyncLevel;
           showSettingsPanel(subtitlesPanel);
         });
 
+        autoTranslateRow.addEventListener('click', function(evt) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          if (!getBaseSourceCaptionTrack()) return;
+          autoTranslateSearchInput.value = '';
+          rebuildAutoTranslateList('');
+          showSettingsPanel(autoTranslatePanel);
+        });
+
         speedBackBtn.addEventListener('click', function(evt) {
           evt.preventDefault();
           evt.stopPropagation();
@@ -6033,6 +6560,13 @@ window.SyncLevel = SyncLevel;
           evt.preventDefault();
           evt.stopPropagation();
           showSettingsPanel(mainPanel);
+        });
+
+        autoTranslateBackBtn.addEventListener('click', function(evt) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          rebuildSubtitlesList();
+          showSettingsPanel(subtitlesPanel);
         });
 
         subtitlesSettingsRow.addEventListener('click', function(evt) {
@@ -6651,41 +7185,6 @@ window.SyncLevel = SyncLevel;
             return out;
           }
 
-          function findTrackSrcUrl(track) {
-            if (!track) return '';
-            if (typeof track.src === 'string' && track.src.trim()) return track.src.trim();
-            var vNode = getVideoElementNode();
-            if (vNode) {
-              var domTracks = vNode.querySelectorAll('track');
-              for (var i = 0; i < domTracks.length; i++) {
-                var dt = domTracks[i];
-                if (dt.track === track) {
-                  return (dt.src || dt.getAttribute('src') || '').trim();
-                }
-              }
-              for (var j = 0; j < domTracks.length; j++) {
-                var dt2 = domTracks[j];
-                var sameLabel = String(dt2.label || dt2.getAttribute('label') || '').trim() === String(track.label || '').trim();
-                var sameLang = String(dt2.srclang || dt2.getAttribute('srclang') || '').trim() === String(track.language || '').trim();
-                if (sameLabel && sameLang) {
-                  return (dt2.src || dt2.getAttribute('src') || '').trim();
-                }
-              }
-            }
-            if (typeof player.remoteTextTrackEls === 'function') {
-              try {
-                var rEls = player.remoteTextTrackEls();
-                if (rEls && rEls.length) {
-                  for (var k = 0; k < rEls.length; k++) {
-                    var el = rEls[k];
-                    if (el && el.track === track && el.src) return String(el.src).trim();
-                  }
-                }
-              } catch (_) {}
-            }
-            return '';
-          }
-
           function loadCuesForTrack(track) {
             if (!track) return Promise.resolve([]);
             var immediate = extractCuesFromTrackObject(track);
@@ -6700,7 +7199,7 @@ window.SyncLevel = SyncLevel;
               if (afterMode.length > 0) return Promise.resolve(afterMode);
             }
 
-            var srcUrl = findTrackSrcUrl(track);
+            var srcUrl = findCaptionTrackSrcUrl(track);
             return new Promise(function(resolve) {
               var done = false;
               var pollTimer = 0;
@@ -8120,6 +8619,7 @@ window.SyncLevel = SyncLevel;
         player.on('loadedmetadata', syncYoutubeCaptionsUI);
         player.on('dispose', function() {
           if (ccToastTimer) clearTimeout(ccToastTimer);
+          removeAutoTranslatedTrack();
           if (textTrackListRef && typeof textTrackListRef.removeEventListener === 'function') {
             textTrackListRef.removeEventListener('change', syncYoutubeCaptionsUI);
             textTrackListRef.removeEventListener('addtrack', syncYoutubeCaptionsUI);
