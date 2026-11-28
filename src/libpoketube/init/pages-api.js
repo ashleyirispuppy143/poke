@@ -1,4 +1,5 @@
 const { modules, version } = require("../libpoketube-initsys.js");
+const { translate } = require("../translate-backend.js");
 
 function getJson(str) {
   try {
@@ -458,60 +459,153 @@ app.get("/api/getYoutubeUrl", async function (req, res) {
 });  
   
 
-app.get("/api/subtitles", async (req, res) => {
-  const subtitleCache = new Map();
+const subtitleCache = new Map();
 const oneHourMs = 3600 * 1000;
+
+function getCached(key) {
+  const item = subtitleCache.get(key);
+  if (!item) return null;
+  if (Date.now() < item.expiresAt) return item;
+  subtitleCache.delete(key);
+  return null;
+}
+
+async function translateVtt(vttText, targetLang, sourceLang = "auto") {
+  const blocks = vttText.replace(/\r\n/g, "\n").split(/\n\n+/);
+  const cueMeta = [];
+  const cueTexts = [];
+
+  for (let i = 0; i < blocks.length; i++) {
+    const lines = blocks[i].split("\n");
+    const timeLineIdx = lines.findIndex((line) => line.includes("-->"));
+
+    if (timeLineIdx !== -1) {
+      const dialogue = lines
+        .slice(timeLineIdx + 1)
+        .join(" ")
+        .replace(/<[^>]+>/g, "")
+        .trim();
+
+      if (dialogue) {
+        cueMeta.push({ blockIdx: i, headerLines: lines.slice(0, timeLineIdx + 1) });
+        cueTexts.push(dialogue);
+      }
+    } else if (i === 0) {
+      blocks[i] = blocks[i].replace(/^Language:\s*.+$/m, `Language: ${targetLang}`);
+    }
+  }
+
+  const maxChunkChars = 4000;
+  const translatedTexts = [];
+  let batch = [];
+  let batchLen = 0;
+
+  async function flushBatch() {
+    if (batch.length === 0) return;
+    const res = await translate(batch.join("\n"), sourceLang, targetLang);
+    const split = (res.translatedText || "").split("\n");
+
+    if (split.length === batch.length) {
+      translatedTexts.push(...split);
+    } else {
+       for (const line of batch) {
+        const single = await translate(line, sourceLang, targetLang);
+        translatedTexts.push(single.translatedText || line);
+      }
+    }
+
+    batch = [];
+    batchLen = 0;
+  }
+
+  for (const text of cueTexts) {
+    if (batchLen + text.length + 1 > maxChunkChars && batch.length > 0) {
+      await flushBatch();
+    }
+    batch.push(text);
+    batchLen += text.length + 1;
+  }
+  await flushBatch();
+
+  for (let i = 0; i < cueMeta.length; i++) {
+    const { blockIdx, headerLines } = cueMeta[i];
+    blocks[blockIdx] = [...headerLines, translatedTexts[i]].join("\n");
+  }
+
+  return blocks.join("\n\n");
+}
+
+app.get("/api/subtitles", async (req, res) => {
   const { fetch } = await import("undici");
 
   const id = req.query.v;
   const l = req.query.h;
+  const toLang = req.query.translate || req.query.to_language;
+  const fromLang = req.query.from_language || "auto";
 
   if (!id || !l) {
     return res.status(400).send("Missing 'v' (video ID) or 'h' (label) query parameter");
   }
 
-  const cacheKey = `${id}-${l}`;
-  const now = Date.now();
+  const rawCacheKey = `${id}-${l}`;
+  const finalCacheKey = toLang ? `${id}-${l}-${toLang}` : rawCacheKey;
 
-  if (subtitleCache.has(cacheKey)) {
-    const cachedItem = subtitleCache.get(cacheKey);
-    if (now < cachedItem.expiresAt) {
-      res.setHeader("Content-Type", cachedItem.contentType);
-      res.setHeader("Cache-Control", "public, max-age=3600");
-      return res.send(cachedItem.body);
-    }
-    subtitleCache.delete(cacheKey);
+  const cachedFinal = getCached(finalCacheKey);
+  if (cachedFinal) {
+    res.setHeader("Content-Type", cachedFinal.contentType);
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    return res.send(cachedFinal.body);
   }
 
   try {
-    const baseUrl = config.videourl.replace(/\/+$/, "");
-    const url = `${baseUrl}/companion/api/v1/captions/${encodeURIComponent(id)}?label=${encodeURIComponent(l)}`;
+    let rawVtt;
+    let contentType = "text/vtt; charset=utf-8";
 
-    const f = await fetch(url, {
-      headers: {
-        "User-Agent": config.useragent,
-      },
-    });
+    const cachedRaw = getCached(rawCacheKey);
+    if (cachedRaw) {
+      rawVtt = cachedRaw.body;
+      contentType = cachedRaw.contentType;
+    } else {
+      const baseUrl = config.videourl.replace(/\/+$/, "");
+      const url = `${baseUrl}/companion/api/v1/captions/${encodeURIComponent(id)}?label=${encodeURIComponent(l)}`;
 
-    if (!f.ok) {
-      const errorText = await f.text();
-      return res.status(f.status).send(`Upstream error ${f.status}: ${errorText}`);
+      const f = await fetch(url, {
+        headers: {
+          "User-Agent": config.useragent,
+        },
+      });
+
+      if (!f.ok) {
+        const errorText = await f.text();
+        return res.status(f.status).send(`Upstream error ${f.status}: ${errorText}`);
+      }
+
+      rawVtt = await f.text();
+      contentType = f.headers.get("content-type") || contentType;
+
+      subtitleCache.set(rawCacheKey, {
+        body: rawVtt,
+        contentType,
+        expiresAt: Date.now() + oneHourMs,
+      });
     }
 
-    const body = await f.text();
-    const contentType = f.headers.get("content-type") || "text/vtt; charset=utf-8";
+    let finalBody = rawVtt;
 
-    subtitleCache.set(cacheKey, {
-      body,
-      contentType,
-      expiresAt: now + oneHourMs,
-    });
+    if (toLang) {
+      finalBody = await translateVtt(rawVtt, toLang, fromLang);
+      subtitleCache.set(finalCacheKey, {
+        body: finalBody,
+        contentType,
+        expiresAt: Date.now() + oneHourMs,
+      });
+    }
 
     res.setHeader("Content-Type", contentType);
     res.setHeader("Cache-Control", "public, max-age=3600");
-    res.send(body);
+    res.send(finalBody);
   } catch (err) {
-    console.error("Subtitle fetch error:", err);
+    console.error("Subtitle error:", err);
     res.status(500).send(`Server error: ${err.message}`);
   }
 });
