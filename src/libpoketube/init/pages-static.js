@@ -769,7 +769,31 @@ app.get("/api/tenor", async function (req, res) {
     }
 });
   
+app.get("/api/translate", async function (req, res) {
+  const { input, from_language, to_language } = req.query;
 
+  if (!input) {
+    return res.status(400).json({ error: "Missing 'input' query parameter" });
+  }
+
+  try {
+    const result = await translate(input, from_language, to_language);
+
+    return res.json({
+      text: input,
+      translation: result.translatedText,
+      from_language: from_language || null,
+      to_language: to_language || null,
+      detected_language: result.sourceLanguage,
+      pronunciation: result.pronunciation,
+      definitions: result.definitions,
+      translations: result.translations
+    });
+  } catch (err) {
+    console.error("Translation error:", err);
+    return res.status(500).json({ error: "Translation failed" });
+  }
+});
 
   app.get("/map", function (req, res) {
     renderTemplate(res, req, "map.ejs");
